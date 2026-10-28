@@ -3,6 +3,7 @@ import { isNative } from "./broker";
 import { characters } from "./lunaModel";
 import type { Mood } from "../../../packages/shared-schemas/index.ts";
 import { updatePreferences, usePreferences } from "./preferences";
+import { startSpeechDownload, useSpeechDownload } from "./speechDownloads";
 
 const SAMPLES: [Mood, string, string][] = [
   [
@@ -56,6 +57,18 @@ export function CharacterVoice({
   const preferences = usePreferences();
   const [own, setOwn] = useState<boolean | null>(null);
   const [systemSpeech, setSystemSpeech] = useState(false);
+  const download = useSpeechDownload();
+  const [installError, setInstallError] = useState("");
+  async function installVoice() {
+    setInstallError("");
+    try {
+      await startSpeechDownload("kokoro:v1");
+      const { invoke } = await import("@tauri-apps/api/core");
+      setOwn(!!(await invoke("character_voice", { character })));
+    } catch (error) {
+      setInstallError(String(error));
+    }
+  }
   useEffect(() => {
     if (isNative)
       void import("@tauri-apps/api/core")
@@ -119,12 +132,40 @@ export function CharacterVoice({
             ? "Uses the voice service built into your device. Availability depends on your system."
             : "Runs on your device when the character voice engine is installed. Choose Gemini for expressive streaming speech."}
       </p>
+      {preferences.voiceProvider === "local" && own === false && (
+        <div className="setup-callout">
+          <strong>Install your companion’s speaking voice</strong>
+          <p>
+            Parakeet listens to you. Kokoro makes your companion speak. Download
+            the voice engine and model once to use it offline.
+          </p>
+          <button
+            type="button"
+            disabled={!isNative || !!download?.active}
+            onClick={() => void installVoice()}
+          >
+            {download?.active && download.engine === "kokoro:v1"
+              ? "Installing local voice…"
+              : "Install local voice · 360 MB"}
+          </button>
+        </div>
+      )}
+      {installError && (
+        <p role="alert" className="error">
+          {installError}
+        </p>
+      )}
       <div className="mood-previews">
         {SAMPLES.map(([mood, label, line]) => (
           <button
             key={mood}
             type="button"
-            disabled={!isNative || preview.speaking || preview.preparing}
+            disabled={
+              !isNative ||
+              preview.speaking ||
+              preview.preparing ||
+              (preferences.voiceProvider === "local" && own !== true)
+            }
             onClick={() => {
               preview.prepare();
               void preview.speak(line, volume, mood);

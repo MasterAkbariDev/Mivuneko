@@ -16,9 +16,11 @@ const CharacterScene = lazy(() =>
 export function CompanionVisual({
   mood = "idle",
   mouth = 0,
+  emotion: speechEmotion,
 }: {
   mood?: Mood;
   mouth?: number;
+  emotion?: Mood;
 }) {
   const p = usePreferences();
   const [model, setModel] = useState<ArrayBuffer | null>(null);
@@ -74,7 +76,9 @@ export function CompanionVisual({
     p.petMode === "sleep"
       ? "sleeping"
       : p.petExpression === "auto"
-        ? mood
+        ? mood === "speaking"
+          ? (speechEmotion ?? "happy")
+          : mood
         : (p.petExpression as Mood);
   const state = withMouth(
     characterFor(

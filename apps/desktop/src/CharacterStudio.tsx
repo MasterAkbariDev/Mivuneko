@@ -3,10 +3,12 @@ import { PetSettings } from "./PetSettings";
 import { updatePreferences, usePreferences } from "./preferences";
 import type { CharacterId } from "../../../packages/shared-schemas/preferences.ts";
 import { ModelSettings } from "./ModelSettings";
+import { usePetSession } from "./session";
 import { CompanionVisual } from "./CompanionVisual";
 
 export function CharacterStudio() {
   const p = usePreferences();
+  const session = usePetSession();
   return (
     <section className="character-studio" aria-label="Character studio">
       <div className="character-studio-head">
@@ -21,7 +23,11 @@ export function CharacterStudio() {
           className="character-live-preview"
           aria-label="Live character preview"
         >
-          <CompanionVisual />
+          <CompanionVisual
+            mood={session.mood}
+            mouth={session.mouth}
+            emotion={session.emotion}
+          />
         </div>
       </div>
       <ModelSettings />

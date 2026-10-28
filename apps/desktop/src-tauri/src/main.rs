@@ -193,15 +193,16 @@ fn embedded_pack(character: &str) -> Option<&'static str> {
 }
 fn tts_root(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
     let voice = voice_json(app);
-    let models_dir = voice["model"].as_str().and_then(|m| {
-        std::path::Path::new(m)
-            .parent()
-            .map(std::path::Path::to_path_buf)
-    })?;
     voice["tts"]
         .as_str()
         .map(std::path::PathBuf::from)
-        .or_else(|| models_dir.parent().map(|d| d.join("tts")))
+        .or_else(|| {
+            let model = voice["model"].as_str()?;
+            std::path::Path::new(model)
+                .parent()?
+                .parent()
+                .map(|p| p.join("tts"))
+        })
 }
 fn voice_pack(app: &tauri::AppHandle, character: &str) -> Option<serde_json::Value> {
     let embedded = embedded_pack(character)?;
@@ -279,7 +280,36 @@ fn tts_config(app: &tauri::AppHandle) -> Option<desktop_core::TtsConfig> {
         .flatten()
         .map(|e| e.path())
         .find(|p| p.is_dir() && p.join("model.onnx").is_file())?;
-    let worker = root.join("luna-tts");
+    fn search(dir: &std::path::Path, name: &str, depth: u8) -> Option<std::path::PathBuf> {
+        if depth == 0 {
+            return None;
+        }
+        for entry in std::fs::read_dir(dir).ok()?.flatten() {
+            let path = entry.path();
+            if path.file_name()?.to_str()? == name && path.is_file() {
+                return Some(path);
+            }
+            if path.is_dir() {
+                if let Some(found) = search(&path, name, depth - 1) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
+    let worker = if root.join("luna-tts").is_file() {
+        root.join("luna-tts")
+    } else {
+        search(
+            &root.join("runtime"),
+            if cfg!(windows) {
+                "sherpa-onnx-offline-tts.exe"
+            } else {
+                "sherpa-onnx-offline-tts"
+            },
+            6,
+        )?
+    };
     worker.is_file().then_some(desktop_core::TtsConfig {
         worker,
         model_dir,

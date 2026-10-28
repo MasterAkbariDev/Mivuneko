@@ -330,6 +330,77 @@ fn install_parakeet(
     report("Ready to use", 1, 1);
     Ok(())
 }
+fn install_kokoro(
+    root: &Path,
+    client: &reqwest::blocking::Client,
+    report: impl Fn(&str, u64, u64),
+) -> Result<(), String> {
+    let (platform, hash) = if cfg!(all(windows, target_arch = "x86_64")) {
+        (
+            "win-x64-shared-MT-Release",
+            "dc703575a68594435f53dec93df775ff4913af851a196c0537163f21d8d2364e",
+        )
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        (
+            "osx-arm64-shared",
+            "5e874d3c9b3d6b8c71f7c09e3a9fb9ae846c3009129d302b398d1f7aedb69f84",
+        )
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        (
+            "osx-x64-shared",
+            "100315fbb174de2d7fec92b67d28c4128499daf3a6f47b4da6350252680d178f",
+        )
+    } else {
+        return Err("Automatic character voice setup is unavailable on this device".into());
+    };
+    let folder = root.join("speech/kokoro");
+    fs::create_dir_all(&folder).map_err(|_| "Cannot prepare voice storage")?;
+    let runtime = folder.join("runtime");
+    let models = folder.join("x-kokoro-multi-lang-v1_0");
+    let server = if cfg!(windows) {
+        "sherpa-onnx-offline-tts.exe"
+    } else {
+        "sherpa-onnx-offline-tts"
+    };
+    if !runtime.join(".ready").is_file() || find(&runtime, server, 6).is_none() {
+        let archive = folder.join("runtime.tar.bz2");
+        download(client,&format!("https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-v2.0.1-{platform}.tar.bz2"),&archive,Some(hash),100*1024*1024,|n,t|report("Downloading character voice engine",n,t))?;
+        report("Installing character voice engine", 0, 0);
+        extract_bz2(&archive, &runtime)?;
+        check()?;
+        fs::write(runtime.join(".ready"), platform)
+            .map_err(|_| "Cannot finish voice installation")?;
+    }
+    if !models.join(".ready").is_file() {
+        let archive = folder.join("model.tar.bz2");
+        download(client,"https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2",&archive,Some("60703707bc05ccd48d60e1eb723f38b07d6e474795a0b6a588d7220400e0f7a4"),500*1024*1024,|n,t|report("Downloading Kokoro voice model",n,t))?;
+        report("Installing Kokoro voice model", 0, 0);
+        extract_bz2(&archive, &models)?;
+        check()?;
+        for name in ["model.onnx", "voices.bin", "tokens.txt"] {
+            find(&models, name, 6).ok_or("Voice model package is incomplete")?;
+        }
+        fs::write(models.join(".ready"), "kokoro-v1")
+            .map_err(|_| "Cannot finish voice installation")?;
+    }
+    check()?;
+    let path = root.join("voice.json");
+    let mut config: serde_json::Value = fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .filter(|v: &serde_json::Value| v.is_object())
+        .unwrap_or_else(|| serde_json::json!({}));
+    config["tts"] = serde_json::json!(folder);
+    let temp = root.join("voice.json.part");
+    fs::write(
+        &temp,
+        serde_json::to_vec_pretty(&config).map_err(|_| "Cannot prepare voice settings")?,
+    )
+    .map_err(|_| "Cannot save voice settings")?;
+    fs::rename(temp, path).map_err(|_| "Cannot activate character voice")?;
+    report("Ready to use", 1, 1);
+    Ok(())
+}
 fn build(command: &mut std::process::Command) -> Result<(), String> {
     use std::process::Stdio;
     for key in [
@@ -381,7 +452,9 @@ pub fn install_into(
         .try_lock()
         .map_err(|_| "Another model is already being installed")?;
     CANCEL.store(false, Ordering::Relaxed);
-    let name = if engine == "parakeet:tdt-0.6b-v2" {
+    let name = if engine == "kokoro:v1" {
+        "kokoro"
+    } else if engine == "parakeet:tdt-0.6b-v2" {
         "parakeet"
     } else {
         engine
@@ -414,6 +487,9 @@ pub fn install_into(
         }
     }
     let client = builder.build().map_err(|_| "Cannot prepare downloads")?;
+    if name == "kokoro" {
+        return install_kokoro(&root, &client, report);
+    }
     if name == "parakeet" {
         return install_parakeet(&root, &client, report);
     }

@@ -217,3 +217,7 @@ DYLD_LIBRARY_PATH=${R}lib ${R}bin/sherpa-onnx-offline-tts --kokoro-model=${K}mod
 - Blend recipes and mood labels were chosen by reading about the voices, not by a listening study; expect to tune them.
 - Parakeet is English only. Whisper handles other languages.
 - Measured numbers above come from one throttled Intel Mac and will differ elsewhere.
+
+## Install local character speech
+
+Parakeet and Whisper recognize microphone input; they do not synthesize speech. Select **Settings → Voice & input → Local character voice · Kokoro**, then **Install local voice**. The app downloads the pinned sherpa-onnx runtime with TTS and Kokoro v1.0 model, verifies SHA-256 and configures `voice.json`. Prebuilt runtime downloads support Windows x64 and both Mac architectures. Windows uses the bundled offline TTS executable; existing resident workers remain supported. Mood blends and speaker selection apply to both paths. The installed voice becomes available without restarting. Native Windows synthesis and full playback were verified with Parakeet selected; per-phrase model startup currently adds latency on the CLI path.

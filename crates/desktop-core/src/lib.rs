@@ -99,6 +99,42 @@ impl VoiceWorker {
         if !config.worker.is_file() || !config.model_dir.is_dir() {
             return Err("Character voice engine is not installed".into());
         }
+        if config.worker.file_stem().and_then(|s| s.to_str()) == Some("sherpa-onnx-offline-tts") {
+            let temp = tempfile::tempdir().map_err(|_| "Cannot prepare character speech")?;
+            let output = temp.path().join("speech.wav");
+            let m = &config.model_dir;
+            let mut command = Command::new(&config.worker);
+            command
+                .arg(format!("--kokoro-model={}", m.join("model.onnx").display()))
+                .arg(format!(
+                    "--kokoro-voices={}",
+                    config
+                        .voices
+                        .as_deref()
+                        .unwrap_or(&m.join("voices.bin"))
+                        .display()
+                ))
+                .arg(format!(
+                    "--kokoro-tokens={}",
+                    m.join("tokens.txt").display()
+                ))
+                .arg(format!(
+                    "--kokoro-data-dir={}",
+                    m.join("espeak-ng-data").display()
+                ))
+                .arg(format!(
+                    "--kokoro-lexicon={}",
+                    m.join("lexicon-us-en.txt").display()
+                ))
+                .arg(format!("--sid={speaker}"))
+                .arg(format!("--speed={speed}"))
+                .arg("--num-threads=4")
+                .arg(format!("--output-filename={}", output.display()))
+                .arg("--")
+                .arg(text);
+            self.run(command, Duration::from_secs(90), self.ticket())?;
+            return std::fs::read(output).map_err(|_| "Character voice returned no audio".into());
+        }
         let mut slot = self.tts.lock().map_err(|_| "Voice engine state poisoned")?;
         if let Some(t) = slot.as_mut() {
             if t.model != config.model_dir

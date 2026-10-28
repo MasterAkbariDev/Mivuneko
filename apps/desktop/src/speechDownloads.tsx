@@ -108,9 +108,11 @@ export function SpeechDownloadDock() {
         <span className="download-icon">↓</span>
         <div>
           <strong>
-            {download.engine.startsWith("parakeet")
-              ? "Parakeet"
-              : "Speech recognition"}
+            {download.engine.startsWith("kokoro")
+              ? "Character voice"
+              : download.engine.startsWith("parakeet")
+                ? "Parakeet"
+                : "Speech recognition"}
           </strong>
           <small>{download.stage}</small>
         </div>

@@ -1191,3 +1191,49 @@ input.range-control::-moz-range-thumb {
   border-radius: 50%;
   background: #e3d9ff;
 }
+
+/* Render at the displayed size: no bitmap stretching or double pet scaling. */
+.character-scene {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+.character-scene > div {
+  width: 100%;
+  height: 100%;
+}
+.character-scene canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+.vrm-visual {
+  height: 100%;
+}
+.pet-minimal .character-scene {
+  transform: none;
+}
+.character-live-preview {
+  width: 300px;
+  height: 360px;
+  overflow: visible;
+}
+.character-live-preview .character-scene {
+  width: 100%;
+  height: 100%;
+}
+.companion-card .vrm-visual {
+  height: 320px;
+}
+.vrm-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+@media (max-width: 1000px) {
+  .character-live-preview {
+    width: 180px;
+    height: 240px;
+  }
+}

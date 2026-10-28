@@ -414,3 +414,96 @@ test("stopping while Gemini is preparing prevents late audio from playing", asyn
   await expect(happy).toBeEnabled();
   expect(await page.evaluate(() => (window as any).__audioStarts)).toEqual([]);
 });
+
+test("local voice setup installs Kokoro and enables previews without restarting", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any;
+    let ready = false;
+    const previous = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+      if (command === "character_voice")
+        return ready ? { engine: "kokoro", speed: 1, gain: 1 } : null;
+      if (command === "install_voice_engine" && args.engine === "kokoro:v1") {
+        ready = true;
+        w.__calls.push({ command, args });
+        return;
+      }
+      return previous(command, args);
+    };
+  });
+  await page.goto("/?view=chat&tab=Settings");
+  await expect(
+    page
+      .locator(".mood-previews")
+      .getByRole("button", { name: "Happy", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Install local voice · 360 MB", exact: true })
+    .click();
+  await expect(
+    page
+      .locator(".mood-previews")
+      .getByRole("button", { name: "Happy", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByText("Luna's own voice", { exact: true }),
+  ).toBeVisible();
+});
+test("VRM gestures move real bones and deform facial meshes at high resolution", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  await page.goto("/?view=chat&tab=Characters");
+  await page.getByRole("button", { name: /Haru · 3D/ }).click();
+  await expect(
+    page.locator('.character-scene[data-model-ready="true"]'),
+  ).toBeVisible({ timeout: 30000 });
+  const result = await page.evaluate(async () => {
+    const modelModule = "/src/vrmModel.ts",
+      motionModule = "/src/vrmMotion.ts";
+    const { loadVrm } = await import(modelModule);
+    const { animateVrm } = await import(motionModule);
+    const vrm = await loadVrm(
+      await (await fetch("/models/haru.vrm")).arrayBuffer(),
+    );
+    const state = {
+      expression: "idle",
+      activity: "idle",
+      body: "idle",
+      mouth: 0,
+      intensity: 1,
+    };
+    animateVrm(vrm, state, 0, 1, true);
+    const arm = vrm.humanoid.getNormalizedBoneNode("rightUpperArm");
+    const neutral = arm.quaternion.clone();
+    animateVrm(vrm, { ...state, expression: "happy" }, 1, 1, false);
+    const gesture = neutral.angleTo(arm.quaternion);
+    const expression = vrm.expressionManager.getExpression("angry");
+    vrm.expressionManager.setValue("angry", 1);
+    vrm.update(0.016);
+    let morphed = false;
+    vrm.scene.traverse((object: any) => {
+      if (object.morphTargetInfluences?.some((value: number) => value > 0.9))
+        morphed = true;
+    });
+    const canvas = document.querySelector(
+      ".character-scene canvas",
+    ) as HTMLCanvasElement;
+    return {
+      gesture,
+      morphed,
+      weight: expression.weight,
+      ratio: canvas.width / canvas.getBoundingClientRect().width,
+    };
+  });
+  expect(result.gesture).toBeGreaterThan(0.5);
+  expect(result.morphed).toBe(true);
+  expect(result.weight).toBe(1);
+  expect(result.ratio).toBeGreaterThanOrEqual(1.9);
+  await page
+    .getByLabel("Pet expression", { exact: true })
+    .selectOption("angry");
+  await page.screenshot({ path: "test-results/haru-gesture.png" });
+});

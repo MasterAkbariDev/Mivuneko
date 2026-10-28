@@ -53,3 +53,9 @@ macOS source build remains to be checked on a Mac with CMake and the Xcode tools
 Parakeet was also installed from the app installer on Windows and transcribed the same public sample with no Whisper fallback: 3.05 seconds cold and 0.86 seconds warm in one run. These are device-specific observations. Gemini streaming delivered first audio in 1.29 seconds through the configured proxy.
 
 The standalone Windows release was checked with the packaged CSP: embedded VRM textures load, Parakeet is detected and transcribes through native IPC, and Gemini streaming speech plays to completion without browser or app errors. Native first-audio measurements were 1.31 and 1.68 seconds in two proxy-backed checks. The connection policy permits local blob resources needed by embedded model textures.
+
+## Rendering and motion
+
+The renderer resizes its drawing buffer to the displayed canvas, uses 2–3× pixel density and fits the complete body plus head effects into the camera. Pet zoom resizes the canvas instead of stretching it twice. No geometric placeholder character is constructed. Loading shows a text indicator.
+
+The bundled VRM has facial morphs but contains no animation clips. The website’s separate motion library is not embedded in that file. Mivuneko supplies authored humanoid gestures (waving, happy, angry, sad, surprised, curious), walking, seated poses and dancing with blended bone rotations. Facial presets blend independently from the optional icons and remain active while speaking. VRM gaze and spring bones still update. Browser checks verify actual skeleton rotation and mesh morph deformation; native checks cover textured rendering, enlarged canvas resolution and local voice playback.

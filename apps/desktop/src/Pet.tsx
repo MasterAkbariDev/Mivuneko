@@ -508,7 +508,11 @@ export function Pet() {
             .catch((e) => setError(String(e)));
         }}
       >
-        <CompanionVisual mood={mood} mouth={session.mouth} />
+        <CompanionVisual
+          mood={mood}
+          mouth={session.mouth}
+          emotion={session.emotion}
+        />
       </div>
       {error && (
         <p className="error" role="alert">

@@ -181,7 +181,7 @@ export function useVoice(
   ): Promise<boolean> {
     const character = preferences.character;
     const { invoke } = await import("@tauri-apps/api/core");
-    if (!packs.current.has(character))
+    if (!packs.current.get(character))
       packs.current.set(
         character,
         await invoke<VoicePack | null>("character_voice", { character }).catch(

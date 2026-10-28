@@ -21,7 +21,11 @@ export function CompanionCard({ onSettings }: { onSettings: () => void }) {
     <section className="companion-card" aria-label="Your companion">
       <div className="companion-art">
         <div className="companion-orbit" aria-hidden="true" />
-        <CompanionVisual mood={session.mood} mouth={session.mouth} />
+        <CompanionVisual
+          mood={session.mood}
+          mouth={session.mouth}
+          emotion={session.emotion}
+        />
       </div>
       <div className="companion-card-copy">
         <h2>
