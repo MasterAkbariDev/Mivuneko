@@ -1,0 +1,5 @@
+# Merge into a new dedicated Hermes profile, not your existing unrestricted agent.
+platform_toolsets:
+  api_server: []
+# Enable the server via API_SERVER_ENABLED, API_SERVER_HOST, API_SERVER_PORT,
+# API_SERVER_MODEL_NAME and a private API_SERVER_KEY in that profile's own .env.

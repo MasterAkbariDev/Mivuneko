@@ -1,0 +1,24 @@
+sequenceDiagram
+ actor U as User
+ participant UI as Avatar UI
+ participant STT as Local STT
+ participant H as Hermes
+ participant MCP as MCP Gateway
+ participant OS as OS Broker
+ U->>UI: "Open Telegram"
+ UI->>STT: Audio (if voice)
+ STT-->>UI: Transcript
+ UI->>H: Intent + allowed tools
+ H->>MCP: list_apps(query="Telegram")
+ MCP->>OS: Query installed apps
+ OS-->>MCP: App IDs
+ MCP-->>H: Matching apps
+ H->>UI: Request launch approval
+ UI->>U: Allow once / Deny
+ U-->>UI: Allow once
+ UI->>MCP: Approved launch_app(app_id)
+ MCP->>OS: Launch app
+ OS-->>MCP: Launch result
+ MCP-->>H: Result
+ H-->>UI: Status + expression + speech text
+ UI-->>U: "Telegram is open!"

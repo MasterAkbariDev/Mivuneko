@@ -1,0 +1,38 @@
+{
+  "id": "mivuneko.luna.2d",
+  "name": "Luna",
+  "format": "sprite-2d",
+  "source": "apps/desktop/src/lunaModel.ts",
+  "renderer": "apps/desktop/src/Luna.tsx",
+  "atlases": [
+    "apps/desktop/public/characters/luna-atlas.png",
+    "apps/desktop/public/characters/luna-expressions.png"
+  ],
+  "grid": { "columns": 3, "rows": 2, "cellWidth": 512, "cellHeight": 512 },
+  "modes": ["auto", "cozy", "playful", "focus", "sleep", "dance"],
+  "poses": [
+    "idle",
+    "happy",
+    "surprised",
+    "angry",
+    "sleeping",
+    "speaking",
+    "thinking",
+    "listening",
+    "shy",
+    "sad",
+    "celebrating",
+    "dancing"
+  ],
+  "effects": [
+    "hearts",
+    "sparkles",
+    "dreams",
+    "thoughts",
+    "listening",
+    "anger",
+    "rain"
+  ],
+  "status": "original-generated-artwork",
+  "licenseNotes": "See licenses/luna-artwork.md. Not a Live2D/Cubism rig."
+}

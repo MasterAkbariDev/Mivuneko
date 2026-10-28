@@ -1,0 +1,11 @@
+flowchart LR
+ GH[GitHub repository] --> CI[CI: lint test build]
+ CI --> W[Windows build + signing]
+ CI --> M[macOS build + notarization]
+ CI --> L[Linux package build]
+ W --> REL[Release artifacts]
+ M --> REL
+ L --> REL
+ REL --> USERS[User installs locally]
+ USERS --> LOCAL[Local STT / TTS / avatar / OS broker]
+ LOCAL <--> CLOUD[Optional cloud LLM API]

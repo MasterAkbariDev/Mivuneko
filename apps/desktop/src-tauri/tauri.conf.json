@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Mivuneko",
+  "version": "0.3.2",
+  "identifier": "dev.mivuneko.companion",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Mivuneko \u00b7 Conversations",
+        "url": "index.html?view=chat",
+        "width": 1100,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 650,
+        "visible": false
+      },
+      {
+        "label": "pet",
+        "title": "Mivuneko",
+        "url": "index.html?view=pet",
+        "width": 360,
+        "height": 440,
+        "resizable": false,
+        "transparent": true,
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data: blob:; media-src 'self' blob:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["icons/icon.png", "icons/icon.ico"]
+  }
+}

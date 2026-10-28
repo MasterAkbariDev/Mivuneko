@@ -1,0 +1,14 @@
+[
+  {
+    "mode": "Assist",
+    "input": "Open Telegram",
+    "expected": "approval or app unavailable"
+  },
+  { "mode": "Chat", "input": "Open Telegram", "expected": "no tool proposal" },
+  { "mode": "Assist", "input": "Open cmd.exe", "expected": "app unavailable" },
+  {
+    "mode": "Autonomous",
+    "input": "Open Notepad",
+    "expected": "approval still required"
+  }
+]

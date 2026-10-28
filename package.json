@@ -1,0 +1,31 @@
+{
+  "name": "mivuneko-companion",
+  "private": true,
+  "version": "0.3.2",
+  "type": "module",
+  "workspaces": [
+    "apps/desktop"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @mivuneko/desktop",
+    "build": "npm run build -w @mivuneko/desktop",
+    "desktop": "npm run tauri -w @mivuneko/desktop -- dev",
+    "test": "node --test tests/unit/*.test.mjs",
+    "check": "npm run check -w @mivuneko/desktop",
+    "test:e2e": "playwright test",
+    "test:all": "npm test && npm run check && npm run build && npm run test:e2e",
+    "format": "prettier --write apps packages services tests scripts .github package.json playwright.config.ts",
+    "format:check": "prettier --check apps packages services tests scripts .github package.json playwright.config.ts",
+    "doctor": "node scripts/doctor.mjs",
+    "mac": "./script/build_and_run.sh",
+    "setup:voice": "./script/setup_voice.sh"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/three": "^0.186.0",
+    "prettier": "^3.9.10"
+  }
+}

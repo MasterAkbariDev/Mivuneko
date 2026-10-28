@@ -1,0 +1,15 @@
+stateDiagram-v2
+ [*] --> Idle
+ Idle --> Listening: mic / push-to-talk
+ Listening --> Thinking: utterance complete
+ Thinking --> Speaking: response ready
+ Thinking --> Confused: clarification needed
+ Thinking --> Concerned: sensitive action
+ Speaking --> Happy: positive completion
+ Speaking --> Idle: response finished
+ Confused --> Listening: clarification
+ Concerned --> Thinking: approved
+ Concerned --> Idle: denied
+ Happy --> Idle: animation complete
+ Idle --> Sleeping: inactivity
+ Sleeping --> Idle: wake

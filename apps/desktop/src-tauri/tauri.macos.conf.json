@@ -1,0 +1,40 @@
+{
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Mivuneko \u00b7 Conversations",
+        "url": "index.html?view=chat",
+        "width": 1100,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 650,
+        "visible": false
+      },
+      {
+        "label": "pet",
+        "title": "Mivuneko",
+        "url": "index.html?view=pet",
+        "width": 360,
+        "height": 440,
+        "resizable": false,
+        "transparent": true,
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visibleOnAllWorkspaces": true
+      }
+    ]
+  },
+  "bundle": {
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "infoPlist": "Info.plist"
+    },
+    "icon": ["icons/icon.icns", "icons/icon.png"],
+    "active": true,
+    "targets": ["app"]
+  }
+}

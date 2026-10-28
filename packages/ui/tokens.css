@@ -1,0 +1,16 @@
+:root {
+  --bg: #151619;
+  --surface: #1b1c20;
+  --elevated: #25262c;
+  --primary: #f18f79;
+  --accent: #c6b2e7;
+  --text: #f4ece6;
+  --muted: #a6a0a1;
+  --danger: #f4a0aa;
+  --warning: #e2bc80;
+  --success: #8bd4a3;
+  --border: #ffffff10;
+  --font: "Manrope Variable", "Segoe UI", sans-serif;
+  --radius: 16px;
+  color-scheme: dark;
+}

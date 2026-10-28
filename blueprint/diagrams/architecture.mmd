@@ -1,0 +1,17 @@
+flowchart TD
+ U[User voice / text] --> UI[Tauri React desktop shell]
+ UI --> AV[Avatar renderer and emotion state machine]
+ UI --> STT[Local STT whisper.cpp]
+ STT --> AD[Agent adapter]
+ UI --> AD
+ AD --> H[Hermes Agent]
+ H <--> LLM[Cloud LLM provider router]
+ H --> G[MCP capability gateway]
+ G --> P{Permission policy}
+ P --> OS[Native OS broker]
+ OS --> AP[App discovery / launch]
+ OS --> AX[Accessibility tree / actions]
+ OS --> SC[Consent-based screenshot fallback]
+ H --> TTS[Local Kokoro / Piper TTS]
+ TTS --> UI
+ H <--> MEM[Opt-in memory SQLite]
