@@ -4,4 +4,6 @@ Mivuneko includes Luna, an unofficial Miku fan-art companion, Kiko the fox, and 
 
 In Settings, choose a character, companion mode, expression, size, captions, motion and effects. The pet and Conversations window share these preferences. Old prototype and VRM selections fall back to Luna. Previously imported user VRM data is not deleted by this migration.
 
+Voices: each character can own a voice pack (blended Kokoro voices per mood); see [VOICE.md](VOICE.md) for the format and how to change it.
+
 See [character sources](CHARACTER_SOURCES.md) and [asset provenance](../licenses/README.md) before distributing character art.

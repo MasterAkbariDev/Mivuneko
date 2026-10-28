@@ -4,6 +4,8 @@ import { usePreferences, updatePreferences } from "./preferences";
 import { characters } from "./lunaModel";
 import { useVoice } from "./useVoice";
 import { useState } from "react";
+import { SpeechSettings } from "./SpeechSettings";
+import { CharacterVoice } from "./CharacterVoice";
 export function PetSettings() {
   const p = usePreferences();
   const [voiceError, setVoiceError] = useState("");
@@ -14,6 +16,7 @@ export function PetSettings() {
   );
   return (
     <div className="pet-settings">
+      <h3 className="settings-heading">Companion</h3>
       <CompanionControls />
       <label className="setting">
         Character
@@ -46,6 +49,7 @@ export function PetSettings() {
           <option value="roaming">Roam screen edge</option>
         </select>
       </label>
+      <h3 className="settings-heading">Voice</h3>
       <label className="setting">
         Voice
         <select
@@ -70,76 +74,13 @@ export function PetSettings() {
           ? "Open mic starts only when you press Start open mic in Conversations. Audio is processed locally; it pauses during replies. Local speech uses macOS voices."
           : "Voice is a preview in the browser; no microphone is opened or audio generated."}{" "}
       </p>
-      {p.voiceProvider === "local" && (
-        <>
-          <label className="setting">
-            Character voice style
-            <select
-              aria-label="Local voice style"
-              value={p.localVoiceStyle}
-              onChange={(e) =>
-                updatePreferences({
-                  localVoiceStyle: e.target.value as typeof p.localVoiceStyle,
-                })
-              }
-            >
-              <option value="natural">Natural · gentle English</option>
-              <option value="bright">Bright · lively English</option>
-              <option value="multilingual">
-                Multilingual · choose language
-              </option>
-            </select>
-          </label>
-          {p.localVoiceStyle === "multilingual" && (
-            <label className="setting">
-              Speech language
-              <select
-                aria-label="Speech language"
-                value={p.localVoiceLanguage}
-                onChange={(e) =>
-                  updatePreferences({
-                    localVoiceLanguage: e.target
-                      .value as typeof p.localVoiceLanguage,
-                  })
-                }
-              >
-                <option value="en">English</option>
-                <option value="ja">Japanese</option>
-                <option value="fr">French</option>
-                <option value="es">Spanish</option>
-                <option value="de">German</option>
-              </select>
-            </label>
-          )}
-          <p className="hint">
-            Each character has its own macOS voice. Language selection changes
-            the voice; it does not translate text. Gemini voice is configured
-            separately.
-          </p>
-        </>
-      )}
-      <button
-        type="button"
-        disabled={!isNative || preview.speaking}
-        onClick={() => {
-          setVoiceError("");
-          preview.prepare();
-          void preview.speak(
-            p.localVoiceStyle === "multilingual"
-              ? {
-                  en: "Hello! It is lovely to meet you.",
-                  ja: "こんにちは。お会いできて嬉しいです。",
-                  fr: "Bonjour, je suis ravie de vous rencontrer.",
-                  es: "Hola, encantada de conocerte.",
-                  de: "Hallo, schön, dich kennenzulernen.",
-                }[p.localVoiceLanguage]
-              : "Hello! It is lovely to meet you.",
-            p.volume,
-          );
-        }}
-      >
-        Preview voice
-      </button>
+      <SpeechSettings />
+      <h3 className="settings-heading">Voice output</h3>
+      <CharacterVoice
+        character={p.character}
+        preview={preview}
+        volume={p.volume}
+      />
       {voiceError && (
         <p className="error" role="alert">
           {voiceError}

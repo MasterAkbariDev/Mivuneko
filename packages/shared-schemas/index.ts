@@ -36,6 +36,8 @@ export interface Broker {
 export interface AgentReply {
   mood?: Mood;
   text: string;
+  // Short, plain sentence(s) to speak aloud instead of the formatted text.
+  speech?: string;
   appQuery?: string;
 }
 export interface Agent {

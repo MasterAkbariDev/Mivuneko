@@ -9,8 +9,16 @@ const binary = process.argv[2];
 if (!binary) throw Error("Pass the absolute whisper-cli path");
 const revision = "5359861c739e955e79d9a303bcbc70fb988958b1";
 const modelSize = process.argv[3] ?? "base";
-if (!["tiny", "base"].includes(modelSize))
-  throw Error("Choose a Whisper model: tiny or base");
+// Approximate size ceilings (bytes); the SHA-256 from the pinned revision is the real check.
+const sizeLimits = {
+  tiny: 200,
+  base: 200,
+  "base.en": 200,
+  "small.en-q5_1": 260,
+  "large-v3-turbo-q5_0": 700,
+};
+if (!(modelSize in sizeLimits))
+  throw Error(`Choose a Whisper model: ${Object.keys(sizeLimits).join(", ")}`);
 const name = `ggml-${modelSize}.bin`;
 const metadata = await fetch(
   `https://huggingface.co/api/models/ggerganov/whisper.cpp/tree/${revision}?recursive=false`,
@@ -26,7 +34,7 @@ const dir = resolve(".local/models");
 await mkdir(dir, { recursive: true });
 const model = join(dir, name),
   temp = model + ".part";
-const limit = 200 * 1024 * 1024;
+const limit = sizeLimits[modelSize] * 1024 * 1024;
 async function cachedModelValid() {
   try {
     if ((await stat(model)).size > limit) return false;
@@ -71,7 +79,24 @@ if (await cachedModelValid()) {
     throw e;
   }
 }
-const config = { binary: resolve(binary), model };
+const config = { binary: resolve(binary), model, language: "en" };
+// Optional extras written when present: the resident server and the Silero VAD model.
+const server = join(resolve(binary, ".."), "whisper-server");
+if (
+  await stat(server).then(
+    () => true,
+    () => false,
+  )
+)
+  config.server = server;
+const vad = resolve(".local/models/ggml-silero-v5.1.2.bin");
+if (
+  await stat(vad).then(
+    () => true,
+    () => false,
+  )
+)
+  config.vadModel = vad;
 await writeFile(".local/voice.json", JSON.stringify(config, null, 2), {
   mode: 0o600,
 });

@@ -52,3 +52,39 @@ export function rms(samples: Float32Array) {
   for (const sample of samples) sum += sample * sample;
   return Math.max(0, Math.min(1, Math.sqrt(sum / samples.length) * 4));
 }
+// Mono resample to 16 kHz for whisper. Down-sampling averages a centred window
+// of about one output step first (cheap low-pass), then interpolates linearly.
+export function resampleTo16k(
+  input: Float32Array,
+  fromRate: number,
+): Float32Array {
+  if (!Number.isFinite(fromRate) || fromRate < 8000 || fromRate > 192000)
+    throw Error("Unsupported sample rate");
+  if (fromRate === 16000) return input.slice();
+  const ratio = fromRate / 16000,
+    count = Math.floor(input.length / ratio),
+    out = new Float32Array(count);
+  let source = input;
+  const width = Math.round(ratio);
+  if (width > 1) {
+    const prefix = new Float64Array(input.length + 1);
+    for (let i = 0; i < input.length; i++)
+      prefix[i + 1] = prefix[i] + (Number.isFinite(input[i]) ? input[i] : 0);
+    source = new Float32Array(input.length);
+    const half = Math.floor(width / 2);
+    for (let i = 0; i < input.length; i++) {
+      const a = Math.max(0, i - half),
+        b = Math.min(input.length, a + width);
+      source[i] = (prefix[b] - prefix[a]) / Math.max(1, b - a);
+    }
+  }
+  for (let i = 0; i < count; i++) {
+    const t = i * ratio,
+      j = Math.floor(t),
+      frac = t - j,
+      a = source[j],
+      b = source[Math.min(source.length - 1, j + 1)];
+    out[i] = Number.isFinite(a + b) ? a + (b - a) * frac : 0;
+  }
+  return out;
+}

@@ -20,7 +20,8 @@
     "doctor": "node scripts/doctor.mjs",
     "mac": "./script/build_and_run.sh",
     "setup:voice": "./script/setup_voice.sh",
-    "install:voice": "./script/setup_voice.sh"
+    "install:voice": "./script/setup_voice.sh",
+    "setup:sherpa": "./scripts/setup-sherpa.sh"
   },
   "engines": {
     "node": ">=22.18"

@@ -14,6 +14,10 @@ import { InstalledApps } from "./InstalledApps";
 import { BackendSettings } from "./BackendSettings";
 import { useVoice } from "./useVoice";
 import { useOpenMic } from "./useOpenMic";
+import { MicButton } from "./MicButton";
+import { Markdown } from "./Markdown";
+import { speakable } from "../../../packages/shared-schemas/speech.ts";
+import { setSpeechContext } from "./speechContext";
 import { loadHistory, saveHistory, clearHistory } from "./history";
 import {
   parseHistory,
@@ -102,7 +106,8 @@ export function App() {
       isNative &&
       tab === "Conversations" &&
       !onboard,
-    busy || !!pending || voice.speaking || !historyReady,
+    busy || !!pending || !historyReady,
+    voice.speaking,
     setLiveTranscript,
     (text) => {
       void send(text);
@@ -111,6 +116,7 @@ export function App() {
       setError(message);
       if (message.startsWith("Microphone unavailable")) setOpenMicActive(false);
     },
+    () => void voice.stop(),
   );
   useEffect(() => {
     if (preferences.voice !== "open-mic") setOpenMicActive(false);
@@ -177,7 +183,12 @@ export function App() {
   }, [preferences.voice]);
   useEffect(() => {
     const latest = messages.at(-1);
-    publishPet(mood, latest?.role === "assistant" ? latest.text : "Thinking…");
+    const lastReply = messages.filter((m) => m.role === "assistant").at(-1);
+    setSpeechContext(lastReply?.text ?? "");
+    publishPet(
+      mood,
+      latest?.role === "assistant" ? speakable(latest) : "Thinking…",
+    );
   }, [mood, messages]);
   useEffect(() => {
     if (!onboard && !pending && !showApps) return;
@@ -286,7 +297,7 @@ export function App() {
       } else {
         setMood(reply.mood ?? "happy");
         if (preferences.voice !== "off" && isNative)
-          void voice.speak(reply.text, preferences.volume, reply.mood);
+          void voice.speak(speakable(reply), preferences.volume, reply.mood);
       }
     } catch (e) {
       if (!c.signal.aborted) {
@@ -471,7 +482,11 @@ export function App() {
                 {messages.map((m, i) => (
                   <div key={i} className={`message ${m.role}`}>
                     <small>{m.role === "user" ? "YOU" : "Mivuneko"}</small>
-                    <p>{m.text}</p>
+                    {m.role === "assistant" ? (
+                      <Markdown text={m.text} />
+                    ) : (
+                      <p>{m.text}</p>
+                    )}
                   </div>
                 ))}
                 {liveTranscript && !busy ? (
@@ -528,7 +543,7 @@ export function App() {
                     {openMicActive && openMic.working
                       ? "transcribing locally"
                       : openMicActive && !busy && !voice.speaking
-                        ? "open mic listening"
+                        ? "open mic on"
                         : voice.recording
                           ? "microphone recording"
                           : voice.speaking
@@ -540,19 +555,17 @@ export function App() {
                                 : "local voice"}
                   </small>
                   {preferences.voice === "open-mic" && (
-                    <button
-                      type="button"
+                    <MicButton
+                      active={openMicActive}
+                      phase={openMic.phase}
+                      waiting={busy || !!pending}
+                      speaking={voice.speaking}
                       disabled={!isNative}
                       onClick={() => {
                         setError("");
                         setOpenMicActive((active) => !active);
                       }}
-                    >
-                      <Icon name="mic" />
-                      <span>
-                        {openMicActive ? "Stop open mic" : "Start open mic"}
-                      </span>
-                    </button>
+                    />
                   )}
                   {preferences.voice !== "open-mic" && (
                     <button

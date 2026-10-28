@@ -1,4 +1,6 @@
 import { Icon } from "./Icon";
+import { Markdown } from "./Markdown";
+import { speakable } from "../../../packages/shared-schemas/speech.ts";
 import { useEffect, useRef, useState } from "react";
 import type { LaunchRequest } from "../../../packages/shared-schemas/index.ts";
 import { logActivity } from "./activity";
@@ -91,7 +93,7 @@ export function InlineChat({ onClose }: { onClose: () => void }) {
         setPending(request);
         publishPet("concerned", `Open ${request.app.name}?`);
       } else if (prefs.voice !== "off")
-        void voice.speak(reply.text, prefs.volume, reply.mood);
+        void voice.speak(speakable(reply), prefs.volume, reply.mood);
     } catch (e) {
       if (!c.signal.aborted) {
         setError(String(e));
@@ -158,12 +160,19 @@ export function InlineChat({ onClose }: { onClose: () => void }) {
         role="log"
         aria-live="polite"
       >
-        {messages.slice(-4).map((m, i) => (
-          <p key={i} className={m.role}>
-            <small>{m.role === "user" ? "You" : "Mivuneko"}</small>
-            {m.text}
-          </p>
-        ))}
+        {messages.slice(-4).map((m, i) =>
+          m.role === "assistant" ? (
+            <div key={i} className={m.role}>
+              <small>Mivuneko</small>
+              <Markdown text={m.text} />
+            </div>
+          ) : (
+            <p key={i} className={m.role}>
+              <small>You</small>
+              {m.text}
+            </p>
+          ),
+        )}
         {busy && (
           <p role="status" className="thinking-indicator">
             <i />

@@ -9,13 +9,14 @@ fn main() {
     );
     let worker = desktop_core::VoiceWorker::default();
     let wav = std::fs::read(&args[3]).expect("read public sample");
+    let config = desktop_core::WhisperConfig {
+        binary: Path::new(&args[1]).into(),
+        model: Path::new(&args[2]).into(),
+        language: "en".into(),
+        ..Default::default()
+    };
     let text = worker
-        .transcribe(
-            &wav,
-            Path::new(&args[1]),
-            Path::new(&args[2]),
-            worker.ticket(),
-        )
+        .transcribe(&wav, &config, "", worker.ticket())
         .expect("local transcription");
     assert!(
         text.to_lowercase().contains("country"),

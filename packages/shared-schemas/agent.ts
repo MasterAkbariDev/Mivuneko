@@ -27,6 +27,11 @@ export function parseAgentReply(raw: string): AgentReply {
         json.appQuery.length <= 200
           ? { appQuery: json.appQuery }
           : {}),
+        ...(typeof json.speech === "string" &&
+        json.speech.trim() &&
+        json.speech.length <= 300
+          ? { speech: json.speech.trim() }
+          : {}),
         mood: moods.includes(json.emotion) ? json.emotion : "idle",
       };
   } catch {}

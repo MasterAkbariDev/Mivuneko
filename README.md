@@ -27,7 +27,7 @@ npm run doctor
 ./script/build_and_run.sh
 ```
 
-The script builds/opens `Mivuneko.app`. `--verify`, `--logs`, `--telemetry`, `--debug` are supported. For development use `npm run desktop` or `npm start`; these launch the native app. `npm run dev` only serves the browser preview. Both macOS launch commands also use a project-local Rust toolchain in `.local` when present. Local voice setup is optional: `npm run setup:voice` installs/configures whisper.cpp and the multilingual base model; `npm run setup:voice -- tiny` selects the faster, less accurate tiny model. Gemini voice does not need whisper.cpp. The menu-bar menu provides Show pet, Conversations, Hide pet and Quit. Native signing/notarization is not supplied.
+The script builds/opens `Mivuneko.app`. `--verify`, `--logs`, `--telemetry`, `--debug` are supported. For development use `npm run desktop` or `npm start`; these launch the native app. `npm run dev` only serves the browser preview. Both macOS launch commands also use a project-local Rust toolchain in `.local` when present. Local voice setup is optional: `npm run setup:voice` installs/configures whisper.cpp and the multilingual base model; `npm run setup:voice -- tiny` selects the faster, less accurate tiny model. Gemini voice does not need whisper.cpp. For faster, more accurate recognition and Luna's own voice run `npm run setup:sherpa` (Parakeet + Kokoro); see [docs/VOICE.md](docs/VOICE.md) for engines, mic options and how to change a character's voice. The menu-bar menu provides Show pet, Conversations, Hide pet and Quit. Native signing/notarization is not supplied.
 
 ## Pet controls
 

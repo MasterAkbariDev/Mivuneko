@@ -9,6 +9,7 @@ import {
   isQuietHour,
   type BodyAction,
 } from "../../../packages/character/controller.ts";
+import { createWheelScaler } from "../../../packages/shared-schemas/wheel.ts";
 import { useVoice } from "./useVoice";
 import { publishPet } from "./session";
 import { isNative } from "./broker";
@@ -383,6 +384,38 @@ export function Pet() {
       }
     })().catch((e) => setError(String(e)));
   }, [prefs.petScale, prefs.petCaptions]);
+  // Scroll over the pet to resize: instant local scale, preference (and window) debounced.
+  const [scale, setScale] = useState(prefs.petScale),
+    [pill, setPill] = useState(false);
+  const wheel = useRef(createWheelScaler()),
+    wheelAt = useRef(0),
+    commit = useRef<ReturnType<typeof setTimeout> | undefined>(undefined),
+    pillTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    if (performance.now() - wheelAt.current > 400) setScale(prefs.petScale);
+  }, [prefs.petScale]);
+  useEffect(
+    () => () => {
+      clearTimeout(commit.current);
+      clearTimeout(pillTimer.current);
+    },
+    [],
+  );
+  function onWheel(e: import("react").WheelEvent) {
+    if ((e.target as Element).closest(".pet-bubble")) return;
+    const next = wheel.current.push(e.deltaY, e.deltaMode, scale);
+    if (next === null || next === scale) return;
+    wheelAt.current = performance.now();
+    setScale(next);
+    setPill(true);
+    clearTimeout(pillTimer.current);
+    pillTimer.current = setTimeout(() => setPill(false), 800);
+    clearTimeout(commit.current);
+    commit.current = setTimeout(
+      () => updatePreferences({ petScale: next }),
+      150,
+    );
+  }
   async function openApp(
     tab: "Conversations" | "Characters" = "Conversations",
   ) {
@@ -413,8 +446,14 @@ export function Pet() {
       className={
         reduced ? "pet-root pet-minimal reduced" : "pet-root pet-minimal"
       }
-      style={{ "--pet-scale": prefs.petScale } as import("react").CSSProperties}
+      style={{ "--pet-scale": scale } as import("react").CSSProperties}
+      onWheel={onWheel}
     >
+      {pill && (
+        <div className="pet-scale-pill" role="status">
+          {Math.round(scale * 100)}%
+        </div>
+      )}
       {prefs.petCaptions &&
         (bubble ||
           captionVisible ||

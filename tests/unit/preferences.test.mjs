@@ -77,3 +77,39 @@ test("VRM container validation rejects remote resources", () => {
     ),
   );
 });
+test("speech recognition options are validated and bounded", () => {
+  const defaults = parsePreferences({});
+  assert.equal(defaults.sttEngine, "auto");
+  assert.equal(defaults.micSensitivity, "normal");
+  assert.equal(defaults.endPauseMs, 600);
+  assert.equal(defaults.bargeIn, true);
+  assert.equal(defaults.sttContext, true);
+  assert.equal(
+    parsePreferences({ sttEngine: "parakeet:tdt-0.6b-v2" }).sttEngine,
+    "parakeet:tdt-0.6b-v2",
+  );
+  assert.equal(
+    parsePreferences({ sttEngine: "whisper:large-v3-turbo-q5_0" }).sttEngine,
+    "whisper:large-v3-turbo-q5_0",
+  );
+  for (const bad of [
+    "../../etc/passwd",
+    "whisper:",
+    "other:model",
+    "whisper:a b",
+    5,
+  ])
+    assert.equal(parsePreferences({ sttEngine: bad }).sttEngine, "auto");
+  assert.equal(
+    parsePreferences({ micSensitivity: "high" }).micSensitivity,
+    "high",
+  );
+  assert.equal(
+    parsePreferences({ micSensitivity: "max" }).micSensitivity,
+    "normal",
+  );
+  assert.equal(parsePreferences({ endPauseMs: 10 }).endPauseMs, 400);
+  assert.equal(parsePreferences({ endPauseMs: 99999 }).endPauseMs, 1500);
+  assert.equal(parsePreferences({ endPauseMs: 777 }).endPauseMs, 800);
+  assert.equal(parsePreferences({ bargeIn: false }).bargeIn, false);
+});

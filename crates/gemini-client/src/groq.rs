@@ -54,7 +54,7 @@ impl GroqService {
             builder = builder.proxy(reqwest::Proxy::all(&self.proxy).map_err(|_| "Invalid proxy")?);
         }
         let client = builder.build().map_err(|_| "Unable to configure Groq transport")?;
-        let mut input = vec![json!({"role":"system","content":format!("You are Mivuneko, a friendly desktop companion in {mode} mode. Be concise. Do not claim to execute tools or access the desktop. App launches are handled separately by the application.")})];
+        let mut input = vec![json!({"role":"system","content":format!("You are Mivuneko, a friendly desktop companion in {mode} mode. Be concise. Do not claim to execute tools or access the desktop. App launches are handled separately by the application. Format replies as Markdown: put code in fenced blocks with a language tag, and use short lists or bold sparingly.")})];
         input.extend(messages.iter().map(|m| json!({"role":m.role,"content":m.content})));
         let mut response = client.post("https://api.groq.com/openai/v1/chat/completions").bearer_auth(key)
             .json(&json!({"model":self.model,"messages":input,"stream":true,"max_completion_tokens":1024}))

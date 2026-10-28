@@ -70,6 +70,12 @@ export interface Preferences {
   focus: boolean;
   clickThrough: boolean;
   voice: "off" | "push-to-talk" | "spoken" | "open-mic";
+  // Speech recognition: engine id from the native registry ("auto" = configured model).
+  sttEngine: string;
+  micSensitivity: "low" | "normal" | "high";
+  endPauseMs: number;
+  bargeIn: boolean;
+  sttContext: boolean;
   reduced: boolean;
   monitor: string;
   volume: number;
@@ -100,6 +106,11 @@ export const defaults: Preferences = {
   focus: false,
   clickThrough: false,
   voice: "off",
+  sttEngine: "auto",
+  micSensitivity: "normal",
+  endPauseMs: 600,
+  bargeIn: true,
+  sttContext: true,
   reduced: false,
   monitor: "current",
   volume: 0.7,
@@ -211,6 +222,21 @@ export function parsePreferences(raw: unknown): Preferences {
       p.voice === "open-mic"
         ? p.voice
         : "off",
+    sttEngine:
+      typeof p.sttEngine === "string" &&
+      /^(auto|(whisper|parakeet):[A-Za-z0-9._-]{1,40})$/.test(p.sttEngine)
+        ? p.sttEngine
+        : "auto",
+    micSensitivity:
+      p.micSensitivity === "low" || p.micSensitivity === "high"
+        ? p.micSensitivity
+        : "normal",
+    endPauseMs:
+      typeof p.endPauseMs === "number" && Number.isFinite(p.endPauseMs)
+        ? Math.max(400, Math.min(1500, Math.round(p.endPauseMs / 50) * 50))
+        : 600,
+    bargeIn: p.bargeIn !== false,
+    sttContext: p.sttContext !== false,
     reduced: p.reduced === true,
     monitor:
       typeof p.monitor === "string" && p.monitor.length < 200

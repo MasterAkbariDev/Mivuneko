@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 if [[ "$(uname -s)" != "Darwin" ]]; then echo "This helper installs the macOS voice runtime." >&2; exit 1; fi
-if [[ "${1:-base}" != "base" && "${1:-base}" != "tiny" ]]; then echo "Usage: npm run setup:voice -- [base|tiny]" >&2; exit 2; fi
+case "${1:-base}" in base|tiny|base.en|small.en-q5_1|large-v3-turbo-q5_0) ;; *) echo "Usage: npm run setup:voice -- [base|tiny|base.en|small.en-q5_1|large-v3-turbo-q5_0]" >&2; exit 2;; esac
 if command -v whisper-cli >/dev/null; then
  WHISPER_CLI="$(command -v whisper-cli)"
 else
