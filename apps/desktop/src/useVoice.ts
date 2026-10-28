@@ -76,6 +76,7 @@ export function useVoice(
     setRecording(false);
     setSpeaking(false);
     onMood("idle");
+    publishPet("idle", "", 0);
     if (isNative) {
       const { invoke } = await import("@tauri-apps/api/core");
       await Promise.all([
@@ -135,7 +136,10 @@ export function useVoice(
             for (let i = 0; i < mono.length; i++)
               mono[i] += channel[i] / buffer.numberOfChannels;
           }
-          const wav = pcm16Wav(resampleTo16k(mono, buffer.sampleRate), 16000);
+          const wav = pcm16Wav(
+            resampleTo16k(mono, buffer.sampleRate).subarray(0, 16000 * 120),
+            16000,
+          );
           const { invoke } = await import("@tauri-apps/api/core");
           if (ticket !== generation.current) return;
           const localTranscribe = () =>
@@ -144,20 +148,7 @@ export function useVoice(
               context: preferences.sttContext ? getSpeechContext() : "",
               engine: preferences.sttEngine,
             });
-          let text: string;
-          if (cloud) {
-            try {
-              text = await cloudInvoke<string>("gemini_transcribe", {
-                wav: Array.from(wav),
-              });
-            } catch (e) {
-              if (ticket !== generation.current) return;
-              onError(
-                `Gemini transcription unavailable (${String(e)}). Using local transcription.`,
-              );
-              text = await localTranscribe();
-            }
-          } else text = await localTranscribe();
+          let text = await localTranscribe();
           if (ticket === generation.current) {
             onMood("idle");
             text = cleanTranscript(text);
@@ -176,7 +167,7 @@ export function useVoice(
       onMood("listening");
       timer.current = setTimeout(() => {
         if (rec.state === "recording") rec.stop();
-      }, 29000);
+      }, 120000);
     } catch (e) {
       releaseMic();
       setRecording(false);
@@ -191,7 +182,7 @@ export function useVoice(
   }
   // Luna's own voice: speech is split into phrases; the first plays as soon as it is
   // ready while the rest are made, with a natural pause after each. Returns false when
-  // the character has no voice pack or the engine is unavailable (system voice instead).
+  // the character has no voice pack or the engine is unavailable.
   async function speakCharacter(
     text: string,
     volume: number,
@@ -231,53 +222,59 @@ export function useVoice(
     let pending = make(parts[0].text),
       nextAt = 0,
       started = false,
-      last: AudioBufferSourceNode | undefined;
-    for (let i = 0; i < parts.length; i++) {
-      let buffer: AudioBuffer;
-      try {
-        buffer = await pending;
-      } catch (e) {
+      lastEnded: Promise<void> | undefined;
+    try {
+      for (let i = 0; i < parts.length; i++) {
+        let buffer: AudioBuffer;
+        try {
+          buffer = await pending;
+        } catch (e) {
+          if (ticket !== generation.current) return true;
+          throw e;
+        }
         if (ticket !== generation.current) return true;
-        if (!started) return false;
-        break;
-      }
-      if (ticket !== generation.current) return true;
-      if (i + 1 < parts.length) pending = make(parts[i + 1].text);
-      const node = audio.createBufferSource();
-      node.buffer = buffer;
-      node.connect(analyser);
-      const at = Math.max(audio.currentTime + 0.03, nextAt);
-      node.start(at);
-      phrases.current.push(node);
-      last = node;
-      nextAt =
-        at + buffer.duration + (parts[i].pauseMs * delivery.pauseScale) / 1000;
-      if (!started) {
-        started = true;
-        setSpeaking(true);
-        onMood("speaking");
-        const samples = new Float32Array(analyser.fftSize);
-        let shown = 0;
-        const animate = (now: number) => {
-          if (ticket !== generation.current) return;
-          if (now - shown > 80) {
-            analyser.getFloatTimeDomainData(samples);
-            publishPet("speaking", text, rms(samples), emotion);
-            shown = now;
-          }
+        if (i + 1 < parts.length) pending = make(parts[i + 1].text);
+        const node = audio.createBufferSource();
+        node.buffer = buffer;
+        node.connect(analyser);
+        const at = Math.max(audio.currentTime + 0.03, nextAt);
+        // Track completion as soon as a phrase is scheduled, including phrases
+        // that finish while another synthesis request is pending.
+        lastEnded = new Promise<void>((done) => {
+          node.onended = () => done();
+        });
+        node.start(at);
+        phrases.current.push(node);
+        nextAt =
+          at +
+          buffer.duration +
+          (parts[i].pauseMs * delivery.pauseScale) / 1000;
+        if (!started) {
+          started = true;
+          setSpeaking(true);
+          onMood("speaking");
+          const samples = new Float32Array(analyser.fftSize);
+          let shown = 0;
+          const animate = (now: number) => {
+            if (ticket !== generation.current) return;
+            if (now - shown > 80) {
+              analyser.getFloatTimeDomainData(samples);
+              publishPet("speaking", text, rms(samples), emotion);
+              shown = now;
+            }
+            frame.current = requestAnimationFrame(animate);
+          };
           frame.current = requestAnimationFrame(animate);
-        };
-        frame.current = requestAnimationFrame(animate);
+        }
       }
+      await lastEnded;
+    } finally {
+      analyser.disconnect();
+      out.disconnect();
     }
-    if (last)
-      await new Promise<void>((done) => {
-        last!.onended = () => done();
-      });
+    if (ticket !== generation.current) return true;
     cancelAnimationFrame(frame.current);
     phrases.current = [];
-    analyser.disconnect();
-    out.disconnect();
     if (ticket === generation.current) {
       setSpeaking(false);
       onMood(emotion);
@@ -287,21 +284,26 @@ export function useVoice(
   }
   async function speak(text: string, volume: number, emotion: Mood = "happy") {
     if (!isNative) return;
+    await stop();
     const ticket = generation.current;
     setSpeaking(true);
     try {
       prepare();
       const { invoke } = await import("@tauri-apps/api/core");
       if (ticket !== generation.current) return;
-      if (!cloud && (await speakCharacter(text, volume, emotion, ticket)))
-        return;
+      if (preferences.voiceProvider === "local") {
+        if (await speakCharacter(text, volume, emotion, ticket)) return;
+        throw new Error(
+          "Local character voice is not installed. Install Kokoro or choose Gemini in Character voice settings.",
+        );
+      }
       if (ticket !== generation.current) return;
-      // Characters without their own voice pack use the system voice.
+      // Basic system speech is an explicit selection, never a silent fallback.
       const localSpeech = () =>
         invoke<number[]>("synthesize_speech", {
           text: text.slice(0, 2000),
-          style: "natural",
-          language: "en",
+          style: preferences.localVoiceStyle,
+          language: preferences.localVoiceLanguage,
           character: preferences.character,
         });
       let bytes: number[];
@@ -317,7 +319,10 @@ export function useVoice(
           onError(
             `Gemini speech unavailable (${String(e)}). Using the local character voice.`,
           );
-          bytes = await localSpeech();
+          if (await speakCharacter(text, volume, emotion, ticket)) return;
+          throw new Error(
+            "Gemini speech is unavailable and the local character voice is not installed. Your reply is still available as text.",
+          );
         }
       } else bytes = await localSpeech();
       if (ticket !== generation.current) return;
@@ -363,8 +368,16 @@ export function useVoice(
       node.start();
     } catch (e) {
       if (ticket === generation.current) {
+        for (const node of phrases.current) {
+          try {
+            node.stop();
+          } catch {}
+        }
+        phrases.current = [];
+        cancelAnimationFrame(frame.current);
         setSpeaking(false);
         onMood("idle");
+        publishPet("idle", "", 0);
         onError(String(e));
       }
     }
@@ -384,6 +397,12 @@ export function useVoice(
       releaseMic();
       if (recorder.current?.state === "recording") recorder.current.stop();
       source.current?.stop();
+      for (const node of phrases.current) {
+        try {
+          node.stop();
+        } catch {}
+      }
+      phrases.current = [];
       cancelAnimationFrame(frame.current);
       if (isNative)
         void import("@tauri-apps/api/core").then(({ invoke }) => {

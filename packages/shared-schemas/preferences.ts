@@ -53,7 +53,7 @@ export interface Preferences {
   petScale: number;
   petAlwaysOnTop: boolean;
   backend: "offline" | "hermes" | "auto" | "gemini" | "groq";
-  voiceProvider: "local" | "gemini";
+  voiceProvider: "local" | "gemini" | "system";
   localVoiceStyle: LocalVoiceStyle;
   localVoiceLanguage: LocalVoiceLanguage;
   appLaunching: boolean;
@@ -74,6 +74,8 @@ export interface Preferences {
   sttEngine: string;
   micSensitivity: "low" | "normal" | "high";
   endPauseMs: number;
+  turnTaking: "automatic" | "manual";
+  turnTakingVersion: 2;
   bargeIn: boolean;
   sttContext: boolean;
   reduced: boolean;
@@ -108,7 +110,9 @@ export const defaults: Preferences = {
   voice: "off",
   sttEngine: "auto",
   micSensitivity: "normal",
-  endPauseMs: 600,
+  endPauseMs: 3500,
+  turnTaking: "automatic",
+  turnTakingVersion: 2,
   bargeIn: true,
   sttContext: true,
   reduced: false,
@@ -171,7 +175,10 @@ export function parsePreferences(raw: unknown): Preferences {
         : p.backend === "hermes"
           ? "hermes"
           : "offline",
-    voiceProvider: p.voiceProvider === "gemini" ? "gemini" : "local",
+    voiceProvider:
+      p.voiceProvider === "gemini" || p.voiceProvider === "system"
+        ? p.voiceProvider
+        : "local",
     localVoiceStyle:
       p.localVoiceStyle === "bright" || p.localVoiceStyle === "multilingual"
         ? p.localVoiceStyle
@@ -232,9 +239,13 @@ export function parsePreferences(raw: unknown): Preferences {
         ? p.micSensitivity
         : "normal",
     endPauseMs:
-      typeof p.endPauseMs === "number" && Number.isFinite(p.endPauseMs)
-        ? Math.max(400, Math.min(1500, Math.round(p.endPauseMs / 50) * 50))
-        : 600,
+      p.turnTakingVersion === 2 &&
+      typeof p.endPauseMs === "number" &&
+      Number.isFinite(p.endPauseMs)
+        ? Math.max(1500, Math.min(10000, Math.round(p.endPauseMs / 250) * 250))
+        : 3500,
+    turnTaking: p.turnTaking === "manual" ? "manual" : "automatic",
+    turnTakingVersion: 2,
     bargeIn: p.bargeIn !== false,
     sttContext: p.sttContext !== false,
     reduced: p.reduced === true,

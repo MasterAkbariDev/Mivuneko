@@ -71,7 +71,7 @@ export function PetSettings() {
       </label>
       <p className="hint">
         {isNative
-          ? "Open mic starts only when you press Start open mic in Conversations. Audio is processed locally; it pauses during replies. Local speech uses macOS voices."
+          ? "Open mic starts only when you press Start open mic in Conversations. Recognition runs locally. Choose a speech engine below for spoken replies."
           : "Voice is a preview in the browser; no microphone is opened or audio generated."}{" "}
       </p>
       <SpeechSettings />

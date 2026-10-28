@@ -3,10 +3,10 @@ export function pcm16Wav(input: Float32Array, sourceRate: number): Uint8Array {
     !Number.isFinite(sourceRate) ||
     sourceRate < 8000 ||
     sourceRate > 192000 ||
-    input.length > sourceRate * 30
+    input.length > sourceRate * 120
   )
     throw Error(
-      "Recording must be at most 30 seconds at a supported sample rate",
+      "Recording must be at most 120 seconds at a supported sample rate",
     );
   const size = Math.floor((input.length * 16000) / sourceRate);
   const bytes = new Uint8Array(44 + size * 2),

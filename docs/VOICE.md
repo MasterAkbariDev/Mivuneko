@@ -47,7 +47,8 @@ seconds; later ones do not. Only one engine stays in memory.
 
 Microphone options (same panel):
 - **Microphone sensitivity**: Low / Normal / High. How loud you must be relative to the room.
-- **End-of-speech pause**: 400–1500 ms of quiet before a phrase is sent.
+- **End-of-speech pause**: 1.5–10 seconds of quiet before a phrase is sent, default 3.5 seconds. Older short-pause preferences migrate once to the new default.
+- **Send my voice message**: choose automatic pause detection or **Only when I press Done speaking** for unlimited thinking pauses within a two-minute recording. **Done speaking** also works in automatic mode. The old 20-second automatic submission is removed. At two minutes, open mic stops and places the transcript in the composer as a draft instead of sending it mid-sentence.
 - **Interrupt Luna by speaking**: keep listening while she talks; stricter threshold so her own voice is not mistaken for you.
 - **Use conversation context**: gives Whisper her last reply and the names Mivuneko and Luna (Parakeet ignores it).
 
@@ -70,13 +71,28 @@ Environment overrides: `MIVUNEKO_WHISPER_BIN`, `MIVUNEKO_WHISPER_MODEL`, `MIVUNE
 
 ## 3. Luna's voice (text → speech)
 
-Each character can have a **voice pack**. Luna's is `assets/characters/luna/voice/voice.json`. Characters
-without a pack use the macOS system voice. The voice is not a user setting: it is part of the character.
-Settings → Voice output has one button per mood so you can audition them.
+Characters → **Voice output → Speech engine** offers local Kokoro character speech,
+expressive Gemini speech, or basic macOS system speech. The choice persists across restarts.
+Luna's local pack is `assets/characters/luna/voice/voice.json`: one warm, light identity
+(65% af_heart, 35% af_sky) at a natural pace, retained across emotions. Each mood preview
+changes delivery rather than turning her into a different speaker.
+
+Gemini Luna uses **Leda**, with a consistent adult anime companion direction and natural
+intonation. Only reply text is sent for synthesis; microphone transcription stays local
+regardless of the output engine. Gemini failure falls back to Kokoro when installed.
+Basic system speech is an explicit choice, never a silent replacement for a missing character voice.
+Missing local voices produce an actionable installation message.
+
+Use the mood buttons to audition the selected engine. Stop cancels playback, queued phrases
+and cloud requests. A synthesis error also releases playback and mouth-animation state.
+
+The private project `.env` accepts quoted multiline `GEMINI_API_KEYS`, `GROQ_API_KEY`, and
+`MIVUNEKO_PROXY`. Set `MIVUNEKO_PROXY=http://127.0.0.1:10808` if your provider needs that route,
+then restart the app. `.env` remains git-ignored; never commit real credentials.
 
 ### What makes it sound alive
 
-- **Mood voices**: every mood is its own *blend of Kokoro voices*, so sad sounds softer and happier sounds brighter, not just slower.
+- **Stable identity**: Luna uses the same speaker blend for every mood. Other packs may supply their own blends.
 - **Delivery**: each mood also sets speed, loudness and pause length.
 - **Phrases and pauses**: speech is cut into phrases; the first starts playing while the rest are still being made. Pauses follow punctuation (`.` 480 ms, `?` 520, `…` 700, `,` 200), scaled by mood.
 - **No pitch shifting**: an earlier version raised pitch by playing audio faster. It sounded robotic and rushed, so it was removed.
@@ -139,7 +155,7 @@ Tips: if it is too fast, lower `speed` (0.80–0.88 is a good range). If a mood 
 
 1. Create `assets/characters/<id>/voice/voice.json`.
 2. Add a line for it in `embedded_pack()` in `apps/desktop/src-tauri/src/main.rs`.
-3. Rebuild the app. (Characters without a pack keep the system voice.)
+3. Rebuild the app. Characters without a local pack can use Gemini, or the explicitly selected macOS system voice.
 
 ### How the blends work (for developers)
 

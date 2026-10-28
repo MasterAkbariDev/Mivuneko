@@ -599,7 +599,7 @@ fn read_bounded(path: &Path, max: u64) -> Result<Vec<u8>, String> {
 }
 pub fn validate_wav(wav: &[u8]) -> Result<(), String> {
     if wav.len() < 44
-        || wav.len() > 1_000_000
+        || wav.len() > 3_840_044
         || &wav[0..4] != b"RIFF"
         || &wav[8..12] != b"WAVE"
         || &wav[12..16] != b"fmt "

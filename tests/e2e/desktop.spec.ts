@@ -222,6 +222,7 @@ async function fakeNative(page: any, voice = false) {
         if (command === "resolve_launch")
           return { ok: true, message: "Launch requested for Calculator." };
         if (command === "transcribe_audio") return "Open Calculator";
+        if (command === "voice_engines") return [];
         return null;
       },
       transformCallback: () => 1,
@@ -741,80 +742,234 @@ test("automatic provider routing alternates and falls back after a failure", asy
   ]);
 });
 
-test("open mic previews local transcription and submits once after silence", async ({
+for (const turnTaking of ["automatic", "manual"] as const) {
+  test(`open mic keeps thinking pauses and submits once (${turnTaking})`, async ({
+    page,
+  }) => {
+    await fakeNative(page, true);
+    await page.addInitScript(() => {
+      const w = window as any;
+      let now = 0;
+      Object.defineProperty(performance, "now", { value: () => now });
+      w.__advanceAudio = (value: number, elapsed: number) => {
+        now += elapsed;
+        w.__processor?.onaudioprocess?.({
+          inputBuffer: {
+            getChannelData: () => new Float32Array(4096).fill(value),
+          },
+        });
+      };
+      const track = { stop: () => {} };
+      Object.defineProperty(navigator, "mediaDevices", {
+        value: { getUserMedia: async () => ({ getTracks: () => [track] }) },
+      });
+      w.AudioContext = class {
+        sampleRate = 16000;
+        destination = {};
+        resume() {
+          return Promise.resolve();
+        }
+        close() {
+          return Promise.resolve();
+        }
+        createMediaStreamSource() {
+          return { connect() {} };
+        }
+        createScriptProcessor() {
+          return (w.__processor = {
+            connect() {},
+            disconnect() {},
+            onaudioprocess: null,
+          });
+        }
+        createGain() {
+          return { gain: { value: 0 }, connect() {} };
+        }
+        decodeAudioData() {
+          return Promise.reject(Error("test has no playback"));
+        }
+      };
+      const previous = w.__TAURI_INTERNALS__.invoke;
+      let count = 0;
+      w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+        if (command === "transcribe_audio") {
+          count++;
+          return count === 1 ? "draft words" : "finished words";
+        }
+        return previous(command, args);
+      };
+    });
+    await chat(page);
+    await page.getByRole("button", { name: "Characters", exact: true }).click();
+    await page.getByLabel("Voice mode").selectOption("open-mic");
+    await page.getByLabel("Voice message submission").selectOption(turnTaking);
+    await page
+      .getByRole("button", { name: "Conversations", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Start open mic" }).click();
+    await expect
+      .poll(() => page.evaluate(() => !!(window as any).__processor))
+      .toBe(true);
+    await page.evaluate(() => {
+      for (let i = 0; i < 4; i++) (window as any).__advanceAudio(0, 256);
+      for (let i = 0; i < 28; i++) (window as any).__advanceAudio(0.1, 256);
+    });
+    await expect(page.getByRole("log")).toContainText("draft words");
+    await page.evaluate(() => {
+      for (let i = 0; i < 9; i++) (window as any).__advanceAudio(0, 256);
+    });
+    await expect(
+      page.getByRole("log").getByText("YOU", { exact: true }),
+    ).toHaveCount(0);
+    await page.evaluate(() => {
+      // More than the former 20-second cap, still the same utterance.
+      for (let i = 0; i < 80; i++) (window as any).__advanceAudio(0.1, 256);
+    });
+    await expect(
+      page.getByRole("button", { name: "Done speaking" }),
+    ).toBeEnabled();
+    await page.evaluate(() => {
+      for (let i = 0; i < 16; i++) (window as any).__advanceAudio(0, 256);
+    });
+    if (turnTaking === "manual") {
+      await expect(
+        page.getByRole("log").getByText("YOU", { exact: true }),
+      ).toHaveCount(0);
+      await page.getByRole("button", { name: "Done speaking" }).click();
+    }
+    await expect(page.getByRole("log")).toContainText("finished words");
+    await expect(
+      page.getByRole("log").getByText("YOU", { exact: true }),
+    ).toHaveCount(1);
+    await expect(page.getByRole("log").getByText("finished words")).toHaveCount(
+      1,
+    );
+    await page.getByRole("button", { name: "Stop open mic" }).click();
+    if (turnTaking === "manual") {
+      await page.getByRole("button", { name: "Start open mic" }).click();
+      await expect(
+        page.getByRole("button", { name: "Done speaking" }),
+      ).toBeDisabled();
+      await page.evaluate(() => {
+        for (let i = 0; i < 4; i++) (window as any).__advanceAudio(0, 256);
+        for (let i = 0; i < 480; i++) (window as any).__advanceAudio(0.1, 256);
+      });
+      await expect(page.getByRole("alert")).toContainText(
+        "Recording limit reached",
+      );
+      await expect(
+        page.getByLabel("Message Mivuneko", { exact: true }),
+      ).toHaveValue("finished words");
+      await expect(
+        page.getByRole("log").getByText("YOU", { exact: true }),
+      ).toHaveCount(1);
+    }
+  });
+}
+
+test("character playback completes and recovers from a failed later phrase", async ({
   page,
 }) => {
-  await fakeNative(page, true);
+  await fakeNative(page);
   await page.addInitScript(() => {
     const w = window as any;
-    let now = 0;
-    Object.defineProperty(performance, "now", { value: () => now });
-    w.__advanceAudio = (value: number, elapsed: number) => {
-      now += elapsed;
-      w.__processor?.onaudioprocess?.({
-        inputBuffer: {
-          getChannelData: () => new Float32Array(4096).fill(value),
-        },
-      });
+    w.__failPhrase = false;
+    let count = 0;
+    const previous = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: unknown) => {
+      if (command === "cancel_voice") {
+        count = 0;
+        return null;
+      }
+      if (command === "character_voice")
+        return { engine: "kokoro", speed: 0.98, gain: 1 };
+      if (command === "synthesize_phrase") {
+        count++;
+        if (count > 1) await new Promise((resolve) => setTimeout(resolve, 80));
+        if (w.__failPhrase && count > 1)
+          throw new Error("Character synthesis failed");
+        return [0];
+      }
+      return previous(command, args);
     };
-    const track = { stop: () => {} };
-    Object.defineProperty(navigator, "mediaDevices", {
-      value: { getUserMedia: async () => ({ getTracks: () => [track] }) },
-    });
     w.AudioContext = class {
-      sampleRate = 16000;
       destination = {};
+      get currentTime() {
+        return performance.now() / 1000;
+      }
       resume() {
         return Promise.resolve();
       }
       close() {
         return Promise.resolve();
       }
-      createMediaStreamSource() {
-        return { connect() {} };
-      }
-      createScriptProcessor() {
-        return (w.__processor = {
-          connect() {},
-          disconnect() {},
-          onaudioprocess: null,
-        });
+      decodeAudioData() {
+        return Promise.resolve({ duration: 0.01 });
       }
       createGain() {
-        return { gain: { value: 0 }, connect() {} };
+        return { gain: { value: 1 }, connect() {}, disconnect() {} };
       }
-      decodeAudioData() {
-        return Promise.reject(Error("test has no playback"));
+      createAnalyser() {
+        return {
+          fftSize: 32,
+          connect() {},
+          disconnect() {},
+          getFloatTimeDomainData(a: Float32Array) {
+            a.fill(0);
+          },
+        };
       }
-    };
-    const previous = w.__TAURI_INTERNALS__.invoke;
-    let count = 0;
-    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
-      if (command === "transcribe_audio") {
-        count++;
-        return count === 1 ? "draft words" : "finished words";
+      createBufferSource() {
+        return {
+          buffer: null,
+          onended: null as (() => void) | null,
+          connect() {},
+          disconnect() {},
+          start() {
+            setTimeout(() => this.onended?.(), 10);
+          },
+          stop() {
+            this.onended?.();
+          },
+        };
       }
-      return previous(command, args);
     };
   });
   await chat(page);
   await page.getByRole("button", { name: "Characters", exact: true }).click();
-  await page.getByLabel("Voice mode").selectOption("open-mic");
-  await page
-    .getByRole("button", { name: "Conversations", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Start open mic" }).click();
-  await expect
-    .poll(() => page.evaluate(() => !!(window as any).__processor))
-    .toBe(true);
+  const happy = page
+    .locator(".mood-previews")
+    .getByRole("button", { name: "Happy", exact: true });
+  await happy.click();
+  await expect(happy).toBeDisabled();
+  await expect(happy).toBeEnabled();
   await page.evaluate(() => {
-    for (let i = 0; i < 4; i++) (window as any).__advanceAudio(0.1, 1000);
+    (window as any).__failPhrase = true;
   });
-  await expect(page.getByRole("log")).toContainText("draft words");
-  await page.evaluate(() => (window as any).__advanceAudio(0, 1200));
-  await expect(page.getByRole("log")).toContainText("finished words");
-  await expect(page.getByRole("log").getByText("finished words")).toHaveCount(
-    1,
+  await happy.click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Character synthesis failed",
   );
-  await page.getByRole("button", { name: "Stop open mic" }).click();
+  await expect(happy).toBeEnabled();
+});
+
+test("saved Gemini speech selection survives startup and reload", async ({
+  page,
+}) => {
+  await fakeNative(page);
+  await page.addInitScript(() => {
+    const preferences = JSON.parse(
+      localStorage.getItem("mivuneko.preferences.v1") || "{}",
+    );
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ ...preferences, voiceProvider: "gemini" }),
+    );
+  });
+  await chat(page);
+  await page.getByRole("button", { name: "Characters", exact: true }).click();
+  await expect(page.getByLabel("Speech engine")).toHaveValue("gemini");
+  await page.reload();
+  await page.getByRole("button", { name: "Characters", exact: true }).click();
+  await expect(page.getByLabel("Speech engine")).toHaveValue("gemini");
 });

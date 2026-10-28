@@ -553,7 +553,7 @@ impl Service {
         Ok(json!({"text":text,"emotion":reply["emotion"],"appQuery":query,"speech":speech}).to_string())
     }
     pub async fn transcribe(&self, id: String, wav: Vec<u8>) -> Result<String, String> {
-        if wav.len() < 44 || wav.len() > 1_000_000 || &wav[..4] != b"RIFF" || &wav[8..12] != b"WAVE"
+        if wav.len() < 44 || wav.len() > 3_840_044 || &wav[..4] != b"RIFF" || &wav[8..12] != b"WAVE"
         {
             return Err("Invalid or oversized microphone WAV".into());
         }
@@ -586,12 +586,15 @@ impl Service {
         let transport = self.transport()?;
         let mut config = transport.config.clone();
         config.voice = match character.as_str() {
-            "luna" => "Kore", "miku" => "Aoede", "kitsune" => "Leda", "stella" => "Puck",
+            "luna" => "Leda", "miku" => "Aoede", "kitsune" => "Leda", "stella" => "Puck",
             "teto" => "Zephyr", "neru" => "Autonoe", "snow" => "Callirrhoe",
             "silver" => "Despina", "azure" => "Laomedeia", "goth" => "Vindemiatrix",
             _ => "Kore",
         }.into();
-        let body = speech_body(&config, &text, style);
+        let style = if character == "luna" {
+            format!("Luna is a warm, playful adult anime companion. Use a light, clear feminine voice, a gentle smile and natural conversational phrasing. Keep the same vocal identity across emotions. Speak at a comfortable pace with expressive intonation; no baby talk, exaggerated squeaking, robotic narration or whispered delivery. Current emotion: {style}. Speak only the supplied words.")
+        } else { style.to_string() };
+        let body = speech_body(&config, &text, &style);
         let result = self
             .generate(id, &transport.config.speech_model.clone(), body, transport)
             .await?;
@@ -988,7 +991,7 @@ mod tests {
         assert!(wires[0].contains("Calculator"));
         assert!(wires[1].contains("audio/wav"));
         assert!(wires[2].contains("playfully indignant"));
-        assert!(wires[2].contains("\"voice\":\"Kore\""));
+        assert!(wires[2].contains("\"voice\":\"Leda\""));
     }
     #[tokio::test]
     async fn chat_schema_allows_no_action_and_still_rejects_unavailable_apps() {

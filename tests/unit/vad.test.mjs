@@ -111,3 +111,20 @@ test("a longer end pause keeps the utterance open through short gaps", () => {
   assert.equal(run(500), true);
   assert.equal(run(1200), false);
 });
+
+test("thinking pauses and resumed speech stay in a single turn", () => {
+  const vad = createVad({ sampleRate: rate, endSilenceMs: 3500 });
+  for (const f of frames(900, 0.002)) vad.push(f);
+  for (const f of frames(900, 0.002, 0.2)) vad.push(f);
+  for (const f of frames(2500, 0.002)) assert.notEqual(vad.push(f), "end");
+  for (const f of frames(900, 0.002, 0.2)) assert.notEqual(vad.push(f), "end");
+  for (const f of frames(3000, 0.002)) assert.notEqual(vad.push(f), "end");
+  assert.ok(frames(600, 0.002).some((f) => vad.push(f) === "end"));
+});
+
+test("manual endpointing never sends on silence", () => {
+  const vad = createVad({ sampleRate: rate, endSilenceMs: Infinity });
+  for (const f of frames(900, 0.002)) vad.push(f);
+  for (const f of frames(900, 0.002, 0.2)) vad.push(f);
+  for (const f of frames(15000, 0.002)) assert.notEqual(vad.push(f), "end");
+});

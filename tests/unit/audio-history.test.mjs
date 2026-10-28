@@ -13,7 +13,8 @@ test("recordings resample into bounded mono 16 kHz PCM WAV", () => {
 });
 test("audio rejects unsupported sample rates and long recordings", () => {
   assert.throws(() => pcm16Wav(new Float32Array(1), 0));
-  assert.throws(() => pcm16Wav(new Float32Array(16000 * 31), 16000));
+  assert.throws(() => pcm16Wav(new Float32Array(16000 * 121), 16000));
+  assert.equal(pcm16Wav(new Float32Array(16000 * 120), 16000).length, 3840044);
 });
 test("mouth amplitude is bounded and silent audio closes the mouth", () => {
   assert.equal(rms(new Float32Array(10)), 0);

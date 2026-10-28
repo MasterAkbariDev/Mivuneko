@@ -114,9 +114,14 @@ export function App() {
     },
     (message) => {
       setError(message);
-      if (message.startsWith("Microphone unavailable")) setOpenMicActive(false);
+      if (
+        message.startsWith("Microphone unavailable") ||
+        message.startsWith("Recording limit reached")
+      )
+        setOpenMicActive(false);
     },
     () => void voice.stop(),
+    setInput,
   );
   useEffect(() => {
     if (preferences.voice !== "open-mic") setOpenMicActive(false);
@@ -566,6 +571,17 @@ export function App() {
                         setOpenMicActive((active) => !active);
                       }}
                     />
+                  )}
+                  {preferences.voice === "open-mic" && openMicActive && (
+                    <button
+                      type="button"
+                      disabled={
+                        openMic.phase !== "hearing" || busy || !!pending
+                      }
+                      onClick={() => openMic.finish()}
+                    >
+                      Done speaking
+                    </button>
                   )}
                   {preferences.voice !== "open-mic" && (
                     <button

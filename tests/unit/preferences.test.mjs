@@ -81,7 +81,7 @@ test("speech recognition options are validated and bounded", () => {
   const defaults = parsePreferences({});
   assert.equal(defaults.sttEngine, "auto");
   assert.equal(defaults.micSensitivity, "normal");
-  assert.equal(defaults.endPauseMs, 600);
+  assert.equal(defaults.endPauseMs, 3500);
   assert.equal(defaults.bargeIn, true);
   assert.equal(defaults.sttContext, true);
   assert.equal(
@@ -108,8 +108,27 @@ test("speech recognition options are validated and bounded", () => {
     parsePreferences({ micSensitivity: "max" }).micSensitivity,
     "normal",
   );
-  assert.equal(parsePreferences({ endPauseMs: 10 }).endPauseMs, 400);
-  assert.equal(parsePreferences({ endPauseMs: 99999 }).endPauseMs, 1500);
-  assert.equal(parsePreferences({ endPauseMs: 777 }).endPauseMs, 800);
+  assert.equal(parsePreferences({ endPauseMs: 600 }).endPauseMs, 3500);
+  assert.equal(
+    parsePreferences({ turnTakingVersion: 2, endPauseMs: 10 }).endPauseMs,
+    1500,
+  );
+  assert.equal(
+    parsePreferences({ turnTakingVersion: 2, endPauseMs: 99999 }).endPauseMs,
+    10000,
+  );
+  assert.equal(
+    parsePreferences({ turnTakingVersion: 2, endPauseMs: 3777 }).endPauseMs,
+    3750,
+  );
+  assert.equal(parsePreferences({ turnTaking: "manual" }).turnTaking, "manual");
+  assert.equal(
+    parsePreferences({ voiceProvider: "gemini" }).voiceProvider,
+    "gemini",
+  );
+  assert.equal(
+    parsePreferences({ voiceProvider: "system" }).voiceProvider,
+    "system",
+  );
   assert.equal(parsePreferences({ bargeIn: false }).bargeIn, false);
 });

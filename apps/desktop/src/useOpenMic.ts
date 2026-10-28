@@ -22,9 +22,17 @@ export function useOpenMic(
   onFinal: (text: string) => void,
   onError: (text: string) => void,
   onInterrupt: () => void,
+  onDraft: (text: string) => void,
 ) {
-  const callbacks = useRef({ onPartial, onFinal, onError, onInterrupt });
-  callbacks.current = { onPartial, onFinal, onError, onInterrupt };
+  const callbacks = useRef({
+    onPartial,
+    onFinal,
+    onError,
+    onInterrupt,
+    onDraft,
+  });
+  callbacks.current = { onPartial, onFinal, onError, onInterrupt, onDraft };
+  const finishCurrent = useRef<(() => void) | null>(null);
   const preferences = usePreferences();
   const prefs = useRef(preferences);
   prefs.current = preferences;
@@ -69,7 +77,10 @@ export function useOpenMic(
         samples.set(frame, offset);
         offset += frame.length;
       }
-      const wav = pcm16Wav(resampleTo16k(samples, sampleRate), 16000);
+      const wav = pcm16Wav(
+        resampleTo16k(samples, sampleRate).subarray(0, 16000 * 120),
+        16000,
+      );
       const { invoke } = await import("@tauri-apps/api/core");
       return cleanTranscript(
         await invoke<string>("transcribe_audio", {
@@ -79,7 +90,7 @@ export function useOpenMic(
         }),
       );
     };
-    const finish = () => {
+    const finish = (submit = true) => {
       if (finishing || !context) return;
       finishing = true;
       const rate = context.sampleRate,
@@ -95,12 +106,17 @@ export function useOpenMic(
           const final = (await snapshot(frames, size, rate)).trim();
           if (stopped) return;
           callbacks.current.onPartial("");
-          if (final) callbacks.current.onFinal(final);
+          if (!submit) {
+            callbacks.current.onDraft(final);
+            callbacks.current.onError(
+              "Recording limit reached. Your words are saved in the draft; review and send when ready.",
+            );
+          } else if (final) callbacks.current.onFinal(final);
           else setRestart((n) => n + 1);
         } catch (e) {
           if (!stopped) callbacks.current.onError(String(e));
         } finally {
-          setWorking(false);
+          if (!stopped) setWorking(false);
         }
       })();
     };
@@ -129,8 +145,14 @@ export function useOpenMic(
         vad = createVad({
           sampleRate: context.sampleRate,
           sensitivity: prefs.current.micSensitivity,
-          endSilenceMs: prefs.current.endPauseMs,
+          endSilenceMs:
+            prefs.current.turnTaking === "manual"
+              ? Infinity
+              : prefs.current.endPauseMs,
         });
+        finishCurrent.current = () => {
+          if (started) finish();
+        };
         const muted = context.createGain();
         muted.gain.value = 0;
         const onFrame = (frame: Float32Array) => {
@@ -178,7 +200,8 @@ export function useOpenMic(
                 transcribing = false;
               });
           }
-          if (state === "end" || total >= context.sampleRate * 20) finish();
+          if (total >= context.sampleRate * 120) finish(false);
+          else if (state === "end") finish();
         };
         try {
           // Audio-thread capture; falls back to the main thread if unavailable.
@@ -207,9 +230,11 @@ export function useOpenMic(
     })();
     return () => {
       stopped = true;
+      finishCurrent.current = null;
       cleanup();
       callbacks.current.onPartial("");
       setHearing(false);
+      setWorking(false);
     };
   }, [
     enabled,
@@ -217,6 +242,7 @@ export function useOpenMic(
     restart,
     preferences.micSensitivity,
     preferences.endPauseMs,
+    preferences.turnTaking,
   ]);
   const phase: MicPhase = !enabled
     ? "off"
@@ -225,5 +251,5 @@ export function useOpenMic(
       : hearing && !paused
         ? "hearing"
         : "listening";
-  return { working, phase };
+  return { working, phase, finish: () => finishCurrent.current?.() };
 }

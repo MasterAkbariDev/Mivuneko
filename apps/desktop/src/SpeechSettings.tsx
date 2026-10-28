@@ -195,9 +195,10 @@ export function SpeechSettings() {
         End-of-speech pause: {p.endPauseMs} ms
         <input
           type="range"
-          min={400}
-          max={1500}
-          step={50}
+          min={1500}
+          max={10000}
+          step={250}
+          disabled={p.turnTaking === "manual"}
           value={p.endPauseMs}
           aria-label="End-of-speech pause"
           onChange={(e) =>
@@ -206,8 +207,27 @@ export function SpeechSettings() {
         />
       </label>
       <p className="hint">
-        How long you must be quiet before your phrase is sent. Shorter feels
-        faster but can cut you off mid-thought.
+        Waits {(p.endPauseMs / 1000).toFixed(2)} seconds after your last words.
+        Keep talking after a thinking pause to continue the same message.
+      </p>
+      <label className="setting">
+        Send my voice message
+        <select
+          aria-label="Voice message submission"
+          value={p.turnTaking}
+          onChange={(e) =>
+            updatePreferences({
+              turnTaking: e.target.value as typeof p.turnTaking,
+            })
+          }
+        >
+          <option value="automatic">After a quiet pause</option>
+          <option value="manual">Only when I press Done speaking</option>
+        </select>
+      </label>
+      <p className="hint">
+        Manual mode lets you think for as long as you need. Recordings are
+        limited to two minutes; at that limit, text is kept as a draft.
       </p>
       <label className="setting">
         Interrupt Luna by speaking

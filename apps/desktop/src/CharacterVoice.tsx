@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { isNative } from "./broker";
 import { characters } from "./lunaModel";
 import type { Mood } from "../../../packages/shared-schemas/index.ts";
+import { updatePreferences, usePreferences } from "./preferences";
 
 const SAMPLES: [Mood, string, string][] = [
   [
@@ -51,6 +52,7 @@ export function CharacterVoice({
   preview: Preview;
   volume: number;
 }) {
+  const preferences = usePreferences();
   const [own, setOwn] = useState<boolean | null>(null);
   useEffect(() => {
     if (!isNative) return;
@@ -64,17 +66,41 @@ export function CharacterVoice({
     characters[character as keyof typeof characters]?.name ?? character;
   return (
     <section className="settings-group" aria-label="Character voice">
+      <label className="setting">
+        Speech engine
+        <select
+          aria-label="Speech engine"
+          value={preferences.voiceProvider}
+          onChange={(e) =>
+            updatePreferences({
+              voiceProvider: e.target.value as typeof preferences.voiceProvider,
+            })
+          }
+        >
+          <option value="local">Local character voice · Kokoro</option>
+          <option value="gemini">Expressive character voice · Gemini</option>
+          <option value="system">macOS system voice · basic</option>
+        </select>
+      </label>
       <p className="hint">
         Voice:{" "}
         <b>
-          {own === null
-            ? "checking…"
-            : own
-              ? `${name}'s own voice`
-              : `system voice (${name} has no voice pack yet)`}
+          {preferences.voiceProvider === "gemini"
+            ? `${name} · expressive cloud voice`
+            : preferences.voiceProvider === "system"
+              ? "macOS system voice"
+              : own === null
+                ? "checking…"
+                : own
+                  ? `${name}'s own voice`
+                  : `character voice not installed`}
         </b>
-        . Each character's voice is fixed by its voice pack, so it stays the
-        same character every time. To change it, see docs/VOICE.md.
+        .{" "}
+        {preferences.voiceProvider === "gemini"
+          ? "Reply text is sent to Gemini for speech. Luna uses a light, warm voice with expressive delivery. Configure Gemini keys or add them to .env and restart."
+          : preferences.voiceProvider === "system"
+            ? "Basic system speech is available on macOS. Choose a character engine for a more expressive voice."
+            : "Runs on your device. Install Kokoro with npm run setup:sherpa -- kokoro. Luna keeps the same voice across emotions."}
       </p>
       <div className="mood-previews">
         {SAMPLES.map(([mood, label, line]) => (
