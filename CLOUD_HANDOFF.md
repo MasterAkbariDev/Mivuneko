@@ -1,5 +1,10 @@
 # Mivuneko local-to-ChatGPT Work handoff — 2026-10-28
 
+**Latest branch update:** `codex/macos-pet-voice` now includes in-app Whisper setup, microphone
+selection, editable app shortcuts, redesigned settings and restored VRM import/sample rendering.
+See [Settings and 3D companions](docs/SETTINGS_AND_3D.md) and [Voice](docs/VOICE.md).
+The older snapshot notes below describe the earlier 2D handoff.
+
 This source snapshot supersedes the earlier v0.3.2 archive in the conversation
 "Mivuneko MVP Setup Verification". Continue from the attached snapshot rather
 than regenerating the older code.

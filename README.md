@@ -1,5 +1,10 @@
 # Mivuneko · v0.3.2 developer build
 
+Latest on `codex/macos-pet-voice`: in-app speech-recognition downloads, microphone selection
+and level checks, patient turn-taking, configurable app shortcuts, refreshed settings, and
+restored bundled/imported 3D VRM companions alongside 2D artwork.
+See [Settings and 3D](docs/SETTINGS_AND_3D.md) and [Voice setup](docs/VOICE.md).
+
 A pet-first desktop companion built with Tauri 2, React and Rust. The character lives on your screen; a discreet menu opens chat **beneath the model**. The utility app contains conversations, activity, permissions and settings. Windows and macOS are native targets; the cloud browser preview is offline.
 
 This revision includes Gemini text chat, microphone transcription and generated speech, concurrent multi-key rotation, HTTP/SOCKS proxy support, and four expressive 2D companions. Hermes remains available as a local backend. Native hardware and real provider calls still require your local test pass.

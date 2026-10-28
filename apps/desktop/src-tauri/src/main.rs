@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 mod project_env;
+mod voice_install;
 type State<'a> = tauri::State<'a, Arc<Mutex<Broker>>>;
 #[derive(Clone, Serialize, Deserialize)]
 struct PetEvent {
@@ -362,7 +363,7 @@ const ENGINES: &[EngineSpec] = &[
         size_mb: 503,
         speed: "Fastest",
         accuracy: "Best",
-        detail: "NVIDIA English model, kept loaded in a local server. About 0.2–0.4 s per short phrase here; it heard \"open a Spotify\" correctly where small.en did not. English only; ignores the conversation-context hint.",
+        detail: "English recognition with a resident local server. Requires the separate sherpa-onnx runtime. Download a Whisper model below for the simplest setup.",
         install: "Needs .local/sherpa (runtime + model, ~503 MB).",
     },
     EngineSpec {
@@ -371,9 +372,9 @@ const ENGINES: &[EngineSpec] = &[
         family: "Whisper · whisper.cpp",
         file: "ggml-large-v3-turbo-q5_0.bin",
         size_mb: 574,
-        speed: "Slow on this CPU",
+        speed: "Higher CPU use",
         accuracy: "High, multilingual",
-        detail: "Largest Whisper option. Handles accents, noise and other languages; the most RAM and CPU of the Whisper models. Not benchmarked yet.",
+        detail: "Multilingual recognition with stronger accuracy for accents and longer conversations. Uses more memory than Base.",
         install: "npm run setup:voice -- large-v3-turbo-q5_0",
     },
     EngineSpec {
@@ -384,7 +385,7 @@ const ENGINES: &[EngineSpec] = &[
         size_mb: 190,
         speed: "Medium",
         accuracy: "Good, English",
-        detail: "English-tuned Whisper, the earlier default. About 2.7 s per phrase as a one-shot run on this Mac; uses the conversation-context hint.",
+        detail: "A balance of English recognition quality and model size. Suitable for regular conversations on desktop CPUs.",
         install: "npm run setup:voice -- small.en-q5_1",
     },
     EngineSpec {
@@ -406,7 +407,7 @@ const ENGINES: &[EngineSpec] = &[
         size_mb: 148,
         speed: "Fast",
         accuracy: "Fair, multilingual",
-        detail: "The original model. Mis-heard your test phrases (\"What can you do?\" became \"What's in it?\"). Kept for comparison.",
+        detail: "Compact multilingual recognition. A practical starting point when you speak more than one language.",
         install: "npm run setup:voice -- base",
     },
     EngineSpec {
@@ -469,9 +470,9 @@ fn whisper_config(
             .or_else(|| voice_config[key].as_str().map(std::path::PathBuf::from))
     };
     let binary = path("MIVUNEKO_WHISPER_BIN", "binary")
-        .ok_or("Set MIVUNEKO_WHISPER_BIN to your whisper-cli executable")?;
+        .ok_or("Speech recognition is not installed. Open Settings → Voice & input and download a speech model; the engine is installed with it.")?;
     let mut model = path("MIVUNEKO_WHISPER_MODEL", "model")
-        .ok_or("Set MIVUNEKO_WHISPER_MODEL to your local whisper model")?;
+        .ok_or("No speech model is installed. Open Settings → Voice & input to download one.")?;
     let models_dir = model.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
     let mut sherpa = None;
     // "auto" (or nothing chosen) prefers Parakeet when it is installed.
@@ -487,7 +488,7 @@ fn whisper_config(
     }
     // Without an explicit server, use a whisper-server built next to whisper-cli.
     let server = path("MIVUNEKO_WHISPER_SERVER", "server")
-        .or_else(|| binary.parent().map(|d| d.join("whisper-server")));
+        .or_else(|| binary.parent().map(|d| d.join(if cfg!(windows) {"whisper-server.exe"} else {"whisper-server"})));
     let language = voice_config["language"]
         .as_str()
         .filter(|l| l.len() <= 8 && l.chars().all(|c| c.is_ascii_alphabetic() || c == '-'))
@@ -554,7 +555,7 @@ fn voice_engines(app: tauri::AppHandle) -> Vec<EngineInfo> {
             installed: if e.family.starts_with("Parakeet") {
                 sherpa_install(&voice, &models_dir).is_some()
             } else {
-                models_dir.join(e.file).is_file()
+                models_dir.join(e.file).is_file() && voice["binary"].as_str().is_some_and(|b|std::path::Path::new(b).is_file())
             },
         })
         .collect()
@@ -687,6 +688,8 @@ fn main() {
             synthesize_phrase,
             transcribe_audio,
             voice_engines,
+            voice_install::install_voice_engine,
+            voice_install::cancel_voice_install,
             cancel_voice,
             save_history,
             load_history,

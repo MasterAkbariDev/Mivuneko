@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { Pet } from "./Pet";
 import "./style.css";
+import "./redesign.css";
 const pet = new URLSearchParams(location.search).get("view") !== "chat";
 if (pet) {
   document.body.classList.add("pet-body");

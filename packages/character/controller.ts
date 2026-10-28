@@ -7,7 +7,7 @@ export type Activity =
   | "working"
   | "approval"
   | "sleeping";
-export type BodyAction = "idle" | "walk" | "sit" | "sleep";
+export type BodyAction = "idle" | "walk" | "sit" | "sleep" | "dance";
 export interface CharacterState {
   activity: Activity;
   expression: Mood;

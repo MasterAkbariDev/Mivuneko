@@ -7,6 +7,7 @@ import { createVad, type Vad } from "../../../packages/shared-schemas/vad.ts";
 import { getSpeechContext } from "./speechContext";
 import { usePreferences } from "./preferences";
 import { cleanTranscript } from "../../../packages/shared-schemas/transcript.ts";
+import { microphoneConstraints } from "./microphone";
 
 // Capture stays on-device; successive snapshots update the draft. The completed
 // utterance is submitted once after a quiet gap, not sent to a model mid-sentence.
@@ -123,12 +124,7 @@ export function useOpenMic(
     void (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
+          audio: microphoneConstraints(prefs.current),
           video: false,
         });
         if (stopped) {
@@ -243,6 +239,10 @@ export function useOpenMic(
     preferences.micSensitivity,
     preferences.endPauseMs,
     preferences.turnTaking,
+    preferences.microphoneId,
+    preferences.echoCancellation,
+    preferences.noiseSuppression,
+    preferences.autoGainControl,
   ]);
   const phase: MicPhase = !enabled
     ? "off"

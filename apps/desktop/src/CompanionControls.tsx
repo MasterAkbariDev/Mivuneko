@@ -19,8 +19,12 @@ export function CompanionControls() {
         .catch(() => {});
   }, []);
   return (
-    <section className="companion-controls" aria-label="2D companion controls">
-      <h3>Your 2D companion</h3>
+    <section
+      className="companion-controls settings-group"
+      aria-label="Companion controls"
+    >
+      <span className="eyebrow">DESKTOP PRESENCE</span>
+      <h3>Your companion, your way</h3>
       <p className="hint">
         The desktop shows only your companion and optional captions.
         Double-click the character for Conversations, or right-click for

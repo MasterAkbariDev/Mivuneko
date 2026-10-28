@@ -133,7 +133,9 @@ export function CharacterScene({ state, model, reduced }: Props) {
     try {
       renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     } catch {
-      setError("3D rendering unavailable. Select Mooncat in Pet settings.");
+      setError(
+        "3D rendering is unavailable on this device. Choose 2D illustration in Characters.",
+      );
       return;
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -171,7 +173,25 @@ export function CharacterScene({ state, model, reduced }: Props) {
     effect.visible = false;
     scene.add(effect);
     const headPosition = new THREE.Vector3();
-    let modelHeight = 1.5;
+    let modelHeight = 1.5,
+      baseRotation = 0;
+    const gaze = new THREE.Object3D();
+    gaze.position.set(0, 1.4, 3);
+    const pointer = { x: 0, y: 0 };
+    const track = (event: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = THREE.MathUtils.clamp(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -1,
+        1,
+      );
+      pointer.y = THREE.MathUtils.clamp(
+        1 - ((event.clientY - rect.top) / rect.height) * 2,
+        -1,
+        1,
+      );
+    };
+    window.addEventListener("pointermove", track);
     let vrm: VRM | undefined,
       disposed = false,
       frame = 0,
@@ -193,8 +213,10 @@ export function CharacterScene({ state, model, reduced }: Props) {
             throw Error("This file has no supported VRM extension");
           }
           vrm = loaded;
+          if (vrm.lookAt) vrm.lookAt.target = gaze;
           setModelReady(true);
           VRMUtils.rotateVRM0(vrm);
+          baseRotation = vrm.scene.rotation.y;
           scene.remove(fallback.root);
           scene.add(vrm.scene);
           const box = new THREE.Box3().setFromObject(vrm.scene);
@@ -226,7 +248,11 @@ export function CharacterScene({ state, model, reduced }: Props) {
           ex?.setValue(name, 0);
         ex?.setValue(
           "happy",
-          s.expression === "happy" || s.expression === "celebrating" ? 0.55 : 0,
+          s.expression === "happy" || s.expression === "celebrating"
+            ? 0.55
+            : (s.expression as string) === "shy"
+              ? 0.2
+              : 0,
         );
         ex?.setValue(
           "sad",
@@ -239,11 +265,26 @@ export function CharacterScene({ state, model, reduced }: Props) {
         ex?.setValue("angry", s.expression === "angry" ? 0.65 : 0);
         ex?.setValue(
           "relaxed",
-          s.body === "sleep" ? 0.6 : s.expression === "idle" ? 0.12 : 0,
+          s.body === "sleep"
+            ? 0.6
+            : (s.expression as string) === "shy"
+              ? 0.5
+              : s.expression === "idle"
+                ? 0.12
+                : 0,
         );
         ex?.setValue("surprised", s.expression === "surprised" ? 0.7 : 0);
         const head = vrm.humanoid.getNormalizedBoneNode("head");
         if (head) {
+          head.getWorldPosition(headPosition);
+          gaze.position.lerp(
+            new THREE.Vector3(
+              headPosition.x + (quiet ? 0 : pointer.x * 0.65),
+              headPosition.y + (quiet ? 0 : pointer.y * 0.4),
+              headPosition.z + 2,
+            ),
+            0.08,
+          );
           head.rotation.z =
             s.body === "sleep"
               ? 0.15
@@ -273,8 +314,31 @@ export function CharacterScene({ state, model, reduced }: Props) {
             (!quiet && s.expression === "happy"
               ? Math.sin(phase * 2) * 0.035
               : 0);
+        if (s.body === "dance" && !quiet) {
+          if (left) left.rotation.z = -1.6 + Math.sin(phase * 4) * 0.35;
+          if (right)
+            right.rotation.z = 1.6 + Math.sin(phase * 4 + Math.PI) * 0.35;
+          vrm.scene.rotation.y = baseRotation + Math.sin(phase * 2) * 0.14;
+        } else vrm.scene.rotation.y = baseRotation;
         const chest = vrm.humanoid.getNormalizedBoneNode("chest");
-        if (chest) chest.rotation.z = quiet ? 0 : Math.sin(phase * 1.1) * 0.008;
+        if (chest)
+          chest.rotation.z = quiet
+            ? 0
+            : s.body === "dance"
+              ? Math.sin(phase * 4) * 0.07
+              : Math.sin(phase * 1.1) * 0.008;
+        for (const [i, bone] of ["leftUpperLeg", "rightUpperLeg"].entries()) {
+          const leg = vrm.humanoid.getNormalizedBoneNode(
+            bone as "leftUpperLeg" | "rightUpperLeg",
+          );
+          if (leg)
+            leg.rotation.x =
+              s.body === "sit"
+                ? -1.1
+                : !quiet && s.body === "walk"
+                  ? Math.sin(phase * 6 + i * Math.PI) * 0.25
+                  : 0;
+        }
         vrm.update(delta);
       } else {
         fallback.root.position.y = quiet ? 0 : Math.sin(phase * 2) * 0.012;
@@ -324,6 +388,7 @@ export function CharacterScene({ state, model, reduced }: Props) {
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
+      window.removeEventListener("pointermove", track);
       VRMUtils.deepDispose(fallback.root);
       if (vrm) VRMUtils.deepDispose(vrm.scene);
       Object.values(textures).forEach((texture) => texture.dispose());

@@ -16,6 +16,7 @@ import { pronounce } from "../../../packages/shared-schemas/pronounce.ts";
 import { getSpeechContext } from "./speechContext";
 import { cleanTranscript } from "../../../packages/shared-schemas/transcript.ts";
 import { publishPet } from "./session";
+import { microphoneConstraints } from "./microphone";
 export function useVoice(
   onTranscript: (text: string) => void,
   onMood: (mood: Mood) => void,
@@ -102,7 +103,7 @@ export function useVoice(
       discard.current = false;
       prepare();
       const mic = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1 },
+        audio: microphoneConstraints(preferences),
         video: false,
       });
       if (ticket !== generation.current) {

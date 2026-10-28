@@ -12,6 +12,8 @@ import type {
 import { agentFor } from "./agent";
 import { InstalledApps } from "./InstalledApps";
 import { BackendSettings } from "./BackendSettings";
+import { SettingsHome } from "./SettingsHome";
+import { matchesShortcut } from "../../../packages/shared-schemas/shortcuts.ts";
 import { useVoice } from "./useVoice";
 import { useOpenMic } from "./useOpenMic";
 import { MicButton } from "./MicButton";
@@ -378,6 +380,49 @@ export function App() {
       "Stopped; pending approvals revoked. Already launched apps remain open.",
     );
   }
+  const shortcutActions = useRef<Record<string, () => void>>({});
+  shortcutActions.current = {
+    stop: () => void stop(),
+    chat: () => setTab("Conversations"),
+    characters: () => setTab("Characters"),
+    settings: () => setTab("Settings"),
+    record: () => {
+      if (busy || pending || onboard) return;
+      if (preferences.voice === "open-mic") {
+        if (openMic.phase === "hearing") openMic.finish();
+        else setOpenMicActive((active) => !active);
+      } else if (preferences.voice === "push-to-talk")
+        voice.recording ? voice.finishRecording() : void voice.record();
+      else
+        setError(
+          "Choose Push to talk or Open mic in Settings → Voice & input first.",
+        );
+    },
+  };
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (
+        event.repeat ||
+        event.isComposing ||
+        (event.target as HTMLElement)?.closest("[data-shortcut-capture]")
+      )
+        return;
+      for (const [action, chord] of Object.entries(preferences.shortcuts))
+        if (matchesShortcut(event, chord)) {
+          event.preventDefault();
+          shortcutActions.current[action]?.();
+          break;
+        }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [preferences.shortcuts]);
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--text-scale",
+      String(preferences.textScale),
+    );
+  }, [preferences.textScale]);
   return (
     <div className={preferences.reduced ? "shell reduced" : "shell"}>
       <aside inert={onboard || !!pending || showApps}>
@@ -661,10 +706,10 @@ export function App() {
           <section className="page">
             <h2>
               {tab === "Activity"
-                ? "A transparent trail."
+                ? "Activity log"
                 : tab === "Permissions"
-                  ? "You hold the keys."
-                  : "Make yourself at home."}
+                  ? "Access and approvals"
+                  : "Your preferences"}
             </h2>
             {tab === "Activity" ? (
               <>
@@ -753,22 +798,10 @@ export function App() {
               </>
             ) : (
               <>
-                <BackendSettings />
+                <SettingsHome />
                 <button type="button" onClick={() => setTab("Characters")}>
                   Companion and voice settings
                 </button>
-                <label className="setting">
-                  Language{" "}
-                  <select aria-label="Language">
-                    <option>English · en-US</option>
-                  </select>
-                </label>
-                <p>Choose your 2D companion and voice style above.</p>
-                <p>
-                  Hermes credentials stay in your environment or macOS Keychain.
-                  The optional voice helper configures a local whisper.cpp
-                  model.
-                </p>
                 <button
                   onClick={() => {
                     setMessages([]);

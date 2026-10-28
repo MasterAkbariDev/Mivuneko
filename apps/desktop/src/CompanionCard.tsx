@@ -1,7 +1,7 @@
 import { usePreferences } from "./preferences";
 import { usePetSession } from "./session";
-import { Luna } from "./Luna";
 import { Icon } from "./Icon";
+import { CompanionVisual } from "./CompanionVisual";
 export function CompanionCard({ onSettings }: { onSettings: () => void }) {
   const prefs = usePreferences();
   const session = usePetSession();
@@ -21,14 +21,7 @@ export function CompanionCard({ onSettings }: { onSettings: () => void }) {
     <section className="companion-card" aria-label="Your companion">
       <div className="companion-art">
         <div className="companion-orbit" aria-hidden="true" />
-        <Luna
-          character={prefs.character}
-          mood={session.mood}
-          mouth={session.mouth}
-          mode={prefs.petMode}
-          expression={prefs.petExpression}
-          effects={prefs.petEffects}
-        />
+        <CompanionVisual mood={session.mood} mouth={session.mouth} />
       </div>
       <div className="companion-card-copy">
         <h2>

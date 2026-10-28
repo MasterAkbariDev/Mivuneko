@@ -45,6 +45,16 @@ export type CharacterId =
 export type LocalVoiceStyle = "natural" | "bright" | "multilingual";
 export type LocalVoiceLanguage = "en" | "ja" | "fr" | "es" | "de";
 export interface Preferences {
+  renderer: "2d" | "sample-vrm" | "custom-vrm";
+  microphoneId: string;
+  echoCancellation: boolean;
+  noiseSuppression: boolean;
+  autoGainControl: boolean;
+  textScale: number;
+  shortcuts: Record<
+    "record" | "stop" | "chat" | "characters" | "settings",
+    string
+  >;
   version: 1;
   petMode: PetMode;
   petExpression: PetExpression;
@@ -83,6 +93,19 @@ export interface Preferences {
   volume: number;
 }
 export const defaults: Preferences = {
+  renderer: "2d",
+  microphoneId: "default",
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  textScale: 1,
+  shortcuts: {
+    record: "Alt+M",
+    stop: "Escape",
+    chat: "Alt+1",
+    characters: "Alt+2",
+    settings: "Alt+,",
+  },
   version: 1,
   petMode: "auto",
   petExpression: "auto",
@@ -123,6 +146,35 @@ export function parsePreferences(raw: unknown): Preferences {
   const p = (raw && typeof raw === "object" ? raw : {}) as Partial<Preferences>;
   return {
     ...defaults,
+    renderer:
+      p.renderer === "sample-vrm" || p.renderer === "custom-vrm"
+        ? p.renderer
+        : "2d",
+    microphoneId:
+      typeof p.microphoneId === "string" && p.microphoneId.length < 300
+        ? p.microphoneId
+        : "default",
+    echoCancellation: p.echoCancellation !== false,
+    noiseSuppression: p.noiseSuppression !== false,
+    autoGainControl: p.autoGainControl !== false,
+    textScale:
+      typeof p.textScale === "number" && Number.isFinite(p.textScale)
+        ? Math.max(0.9, Math.min(1.25, p.textScale))
+        : 1,
+    shortcuts: Object.fromEntries(
+      Object.entries(defaults.shortcuts).map(([action, fallback]) => {
+        const value = p.shortcuts?.[action as keyof Preferences["shortcuts"]];
+        return [
+          action,
+          typeof value === "string" &&
+          /^(?:(?:Ctrl|Alt|Shift|Meta)\+){0,4}(?:[A-Za-z0-9,./;]|Escape|F\d{1,2})$/.test(
+            value,
+          )
+            ? value
+            : fallback,
+        ];
+      }),
+    ) as Preferences["shortcuts"],
     petMode: [
       "auto",
       "cozy",

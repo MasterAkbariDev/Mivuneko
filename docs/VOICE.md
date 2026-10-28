@@ -13,6 +13,23 @@ reply ─► speech line / speakable text ─► pronunciation fixes ─► phra
 
 ## 1. Install
 
+The desktop app now has an installer at **Settings → Voice & input → Speech recognition**.
+Press **Set up speech recognition** for Base English, or Download on a different Whisper model.
+The app installs the runtime as well as the model, verifies the published model SHA-256,
+shows progress, and writes `voice.json` automatically. No `MIVUNEKO_WHISPER_BIN` is needed.
+Downloads can be cancelled and retried. Partial or failed downloads never activate a new configuration.
+Models and the runtime live in the app data directory under `speech/` and are never committed.
+
+Windows x64 uses the official pinned whisper.cpp runtime (b5454), verified against its published
+SHA-256. macOS builds the official v1.9.5 source and needs CMake plus Xcode Command Line Tools.
+Parakeet remains an optional advanced installation through the setup script below.
+
+Choose an **Input device** and use **Check microphone** to see a local level meter. This check
+does not save audio. Echo cancellation, noise suppression and automatic level control apply
+to both open mic and push-to-talk. Changing the device or leaving the panel closes the test microphone.
+
+The commands below remain available for advanced setup:
+
 | Command | Installs | Download |
 | --- | --- | --- |
 | `npm run setup:voice` | whisper.cpp (`whisper-cli`, `whisper-server`) and a Whisper model | 78–574 MB, your pick |

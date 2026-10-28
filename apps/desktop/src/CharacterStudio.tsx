@@ -1,8 +1,9 @@
-import { Luna } from "./Luna";
 import { characters } from "./lunaModel";
 import { PetSettings } from "./PetSettings";
 import { updatePreferences, usePreferences } from "./preferences";
 import type { CharacterId } from "../../../packages/shared-schemas/preferences.ts";
+import { ModelSettings } from "./ModelSettings";
+import { CompanionVisual } from "./CompanionVisual";
 
 export function CharacterStudio() {
   const p = usePreferences();
@@ -20,15 +21,10 @@ export function CharacterStudio() {
           className="character-live-preview"
           aria-label="Live character preview"
         >
-          <Luna
-            character={p.character}
-            mood="idle"
-            mode={p.petMode}
-            expression={p.petExpression}
-            effects={p.petEffects}
-          />
+          <CompanionVisual />
         </div>
       </div>
+      <ModelSettings />
       <div
         className="character-gallery"
         role="group"
@@ -40,7 +36,7 @@ export function CharacterStudio() {
             type="button"
             className="character-choice"
             aria-pressed={p.character === id}
-            onClick={() => updatePreferences({ character: id })}
+            onClick={() => updatePreferences({ character: id, renderer: "2d" })}
           >
             <span
               className="character-choice-art"
@@ -52,8 +48,9 @@ export function CharacterStudio() {
       </div>
       <p className="hint">
         Luna has individual expression artwork and smooth transitions. The other
-        characters use six drawn poses. Walking and running move the desktop
-        window; preview your local voice below.
+        characters use six drawn poses. The 3D sample and imported VRM models
+        use live expressions, lip sync and gaze. Walking and running move the
+        desktop window.
       </p>
       <PetSettings />
     </section>

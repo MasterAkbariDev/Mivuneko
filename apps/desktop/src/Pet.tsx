@@ -1,4 +1,4 @@
-import { Luna } from "./Luna";
+import { CompanionVisual } from "./CompanionVisual";
 import { useEffect, useRef, useState } from "react";
 import type { Mood } from "../../../packages/shared-schemas/index.ts";
 import {
@@ -508,14 +508,7 @@ export function Pet() {
             .catch((e) => setError(String(e)));
         }}
       >
-        <Luna
-          character={prefs.character}
-          mood={mood}
-          mouth={session.mouth}
-          mode={prefs.petMode}
-          expression={prefs.petExpression}
-          effects={prefs.petEffects}
-        />
+        <CompanionVisual mood={mood} mouth={session.mouth} />
       </div>
       {error && (
         <p className="error" role="alert">
