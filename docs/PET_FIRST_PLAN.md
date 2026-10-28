@@ -1,4 +1,5 @@
 # Mivuneko product plan · v0.3
+This is a historical plan. The current character lineup and desktop interaction are documented in CHARACTERS.md.
 Mivuneko lives primarily as a desktop pet. Menu → Chat opens an input beneath the character. Conversations, activity, permissions and settings remain an on-demand utility window. Windows/macOS are native targets; the original AURA blueprint is preserved for provenance.
 
 Implemented: Gemini chat/two-way turn-based voice, concurrent multi-key rotation, project cooldowns, explicit HTTP/SOCKS proxy, session-only credentials, existing Hermes/local voice adapters, shared conversations/activity, constrained approval-only app launching, an expressive bundled VRM with head effects, local VRM import, compact menu, transparent frameless pet, monitor-bounded placement and opt-in text/spoken check-ins.

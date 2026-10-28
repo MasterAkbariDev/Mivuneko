@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
+mod project_env;
 type State<'a> = tauri::State<'a, Arc<Mutex<Broker>>>;
 #[derive(Clone, Serialize, Deserialize)]
 struct PetEvent {
@@ -180,12 +181,23 @@ async fn hermes_chat(
 #[tauri::command]
 async fn synthesize_speech(
     text: String,
+    style: Option<String>,
+    language: Option<String>,
+    character: Option<String>,
     state: tauri::State<'_, Arc<desktop_core::VoiceWorker>>,
 ) -> Result<Vec<u8>, String> {
     let worker = state.inner().clone();
     worker.cancel();
     let ticket = worker.ticket();
-    tauri::async_runtime::spawn_blocking(move || worker.synthesize(&text, ticket))
+    tauri::async_runtime::spawn_blocking(move || {
+        worker.synthesize_for_character(
+            &text,
+            style.as_deref().unwrap_or("natural"),
+            language.as_deref().unwrap_or("en"),
+            character.as_deref().unwrap_or("luna"),
+            ticket,
+        )
+    })
         .await
         .map_err(|_| "Speech worker failed")?
 }
@@ -301,12 +313,14 @@ fn install_tray(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 fn main() {
+    project_env::load();
     let gemini = gemini_client::Service::default();
     if let Some(config) = gemini_client::Config::from_env() {
         let _ = gemini.configure(config);
     }
     tauri::Builder::default()
         .manage(gemini)
+        .manage(gemini_client::groq::GroqService::default())
         .setup(|_app| {
             #[cfg(any(target_os = "windows", target_os = "macos"))]
             install_tray(_app)?;
@@ -332,6 +346,10 @@ fn main() {
             gemini::test_gemini_connection,
             gemini::cancel_gemini,
             gemini::gemini_chat,
+            gemini::gemini_chat_stream,
+            gemini::groq_chat,
+            gemini::groq_status,
+            gemini::cancel_groq,
             gemini::gemini_transcribe,
             gemini::gemini_speak,
             list_apps,

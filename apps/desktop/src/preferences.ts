@@ -14,6 +14,13 @@ try {
 } catch {
   /* blocked or malformed storage: safe defaults */
 }
+// Local synthesis is the selected default; do not retain the old cloud voice choice.
+if (state.voiceProvider !== "local") {
+  state = { ...state, voiceProvider: "local" };
+  try {
+    localStorage.setItem("mivuneko.preferences.v1", JSON.stringify(state));
+  } catch {}
+}
 const listeners = new Set<() => void>();
 function notify() {
   listeners.forEach((fn) => fn());

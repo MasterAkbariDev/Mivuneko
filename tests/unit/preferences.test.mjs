@@ -25,6 +25,28 @@ test("malformed persisted preferences fail safely", () => {
   assert.equal(p.volume, 0.7);
   assert.equal(p.monitor, "current");
 });
+test("legacy models migrate to Luna while new characters and voice styles persist", () => {
+  for (const character of ["sample-vrm", "local-vrm", "chibi", "mock-cat"])
+    assert.equal(parsePreferences({ character }).character, "luna");
+  for (const character of ["miku", "kitsune", "stella"])
+    assert.equal(parsePreferences({ character }).character, character);
+  assert.equal(
+    parsePreferences({ localVoiceStyle: "bright" }).localVoiceStyle,
+    "bright",
+  );
+  assert.equal(
+    parsePreferences({
+      localVoiceStyle: "multilingual",
+      localVoiceLanguage: "ja",
+    }).localVoiceLanguage,
+    "ja",
+  );
+  assert.equal(
+    parsePreferences({ localVoiceStyle: "bad", localVoiceLanguage: "bad" })
+      .localVoiceStyle,
+    "natural",
+  );
+});
 function glb(data) {
   const raw = new TextEncoder().encode(JSON.stringify(data));
   const n = Math.ceil(raw.length / 4) * 4;

@@ -2,7 +2,7 @@
 
 A pet-first desktop companion built with Tauri 2, React and Rust. The character lives on your screen; a discreet menu opens chat **beneath the model**. The utility app contains conversations, activity, permissions and settings. Windows and macOS are native targets; the cloud browser preview is offline.
 
-This revision includes Gemini text chat, microphone transcription and generated speech, concurrent multi-key rotation, HTTP/SOCKS proxy support, an expressive licensed VRM sample, and head-anchored emotion effects. Hermes remains available as a local backend. Native hardware and real provider calls still require your local test pass.
+This revision includes Gemini text chat, microphone transcription and generated speech, concurrent multi-key rotation, HTTP/SOCKS proxy support, and four expressive 2D companions. Hermes remains available as a local backend. Native hardware and real provider calls still require your local test pass.
 
 ## Windows quick start
 
@@ -27,7 +27,7 @@ npm run doctor
 ./script/build_and_run.sh
 ```
 
-The script builds/opens `Mivuneko.app`. `--verify`, `--logs`, `--telemetry`, `--debug` are supported. For development use `npm run desktop`. Local voice setup is optional: `npm run setup:voice` installs/configures whisper.cpp on a Mac; Gemini voice does not need whisper.cpp. The menu-bar menu provides Show pet, Conversations, Hide pet and Quit. Native signing/notarization is not supplied.
+The script builds/opens `Mivuneko.app`. `--verify`, `--logs`, `--telemetry`, `--debug` are supported. For development use `npm run desktop` or `npm start`; these launch the native app. `npm run dev` only serves the browser preview. Both macOS launch commands also use a project-local Rust toolchain in `.local` when present. Local voice setup is optional: `npm run setup:voice` installs/configures whisper.cpp and the multilingual base model; `npm run setup:voice -- tiny` selects the faster, less accurate tiny model. Gemini voice does not need whisper.cpp. The menu-bar menu provides Show pet, Conversations, Hide pet and Quit. Native signing/notarization is not supplied.
 
 ## Pet controls
 
@@ -73,6 +73,23 @@ cargo clippy -p os-broker -p agent-client -p desktop-core -p gemini-client --all
 - `packages`: schemas, character controller, embedded VRM validation and design tokens.
 - `blueprint`: original AURA source documents preserved unchanged; current Mivuneko docs record authorized revisions.
 
-Read [architecture](docs/ARCHITECTURE.md), [character sources](docs/CHARACTER_SOURCES.md), [validation](docs/VALIDATION.md), [remaining work](docs/GAPS.md), [Windows checklist](docs/WINDOWS_TEST_CHECKLIST.md), and [Mac checklist](docs/MACOS_TEST_CHECKLIST.md). The bundled VRM's license is separate from software licensing; see [licenses](licenses/README.md). Project-wide distribution license remains an owner decision.
+Read [architecture](docs/ARCHITECTURE.md), [character sources](docs/CHARACTER_SOURCES.md), [validation](docs/VALIDATION.md), [remaining work](docs/GAPS.md), [Windows checklist](docs/WINDOWS_TEST_CHECKLIST.md), and [Mac checklist](docs/MACOS_TEST_CHECKLIST.md). See [licenses](licenses/README.md) for character provenance and distribution considerations. Project-wide distribution license remains an owner decision.
 
-Two-way voice is turn-based, not a continuous Live call. Lip motion uses playback amplitude, not phonemes. Live2D import, authored VRM walk/sit clips, automatic icon/window perching, signed releases and device QA remain release work. This is a developer MVP, not a production-release claim.
+Two-way voice is turn-based, not a continuous Live call. Mouth motion uses playback amplitude, not phonemes. Automatic icon/window perching, signed releases and broader device QA remain release work. This is a developer MVP, not a production-release claim.
+
+
+### Characters, approvals and streaming
+
+Open **Characters** to select a 2D companion, preview expressions and movement, adjust its size, and test a voice style. Miku, Teto and Neru are unofficial fan art. The other designs include the original Luna, Kiko, Stella, Yuki, Sora, Aoi and Raven. Extra emotions and movement use the six drawn poses with animated effects.
+
+In **Permissions**, choose whether recognized installed-app launch requests require approval, are automatically approved, or are denied. Spoken approval accepts an explicit “approve” or “deny” after you press Decide by voice. These settings do not grant shell access. Pet captions clear after eight seconds once the companion is no longer busy.
+
+For Gemini or Groq conversation, copy `.env.example` to `.env` in this project folder, add the desired API key, and restart the native app. Select Automatic in Settings. The app alternates configured Gemini and Groq providers per turn and falls back if one fails. Gemini and Groq responses stream into the conversation; the message request itself is sent normally. The app reads only documented environment keys from the project-local file, or from its inherited environment. A moved app bundle outside the project requires the inherited environment or Gemini's in-app setup. Do not commit `.env`. Groq handles explicit `Open <app>` requests locally; it does not operate desktop tools.
+
+The project `.env` accepts `GEMINI_API_KEY` or a quoted multiline `GEMINI_API_KEYS` (also `GEMINI_KEYS`) with one key per line, and `GROQ_API_KEY`. Gemini keys rotate within the credential pool; keys listed without project identifiers are conservatively treated as sharing a quota. A cloud failure falls back to the other configured provider; speech and transcription can fall back to local macOS speech and Whisper. Character voice previews work for either speech provider. Some macOS voices require installation in System Settings and macOS may substitute an unavailable voice.
+
+### Open mic and Luna prototype
+
+Select **Open mic + replies** in Characters, then press **Start open mic** in Conversations. Microphone audio is transcribed on this device with Whisper; a draft is refreshed as speech is recognized and the final phrase is sent after a quiet gap. The microphone pauses while the assistant responds, stops when the window is hidden, and can be stopped explicitly. The model receives the completed phrase rather than a word-by-word audio stream; supported provider responses appear incrementally. Recognition quality and delay depend on the local Whisper model and machine.
+
+Luna's first prototype has individual expression frames and separate walking, running and sitting artwork, with timed cross-fades and motion. It is animated 2D artwork, not a generated video. Local macOS voices are selected per character; macOS may substitute a default voice if a requested voice is not installed.

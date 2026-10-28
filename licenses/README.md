@@ -1,12 +1,9 @@
 # Asset and dependency provenance
-Original procedural chibi geometry, SVG Mooncat and star application icon were authored for this project. Project-wide redistribution license is not selected; owner must choose it before public distribution.
 
-The generated design-concept image is a historical AI-generated UI direction reference, not a working screenshot or production character asset. Actual browser screenshots are in docs/screenshots.
+Luna's existing 2D sprite sheets remain in the project. The Miku, Kiko, Stella, Teto, Neru, Yuki, Sora, Aoi and Raven sprite sheets were generated for this project with the built-in image generation tool in October 2026. Miku, Teto and Neru are unofficial fan art depicting third-party characters; this project does not claim ownership or an endorsement. The project owner must assess the relevant character rights before distribution. Kiko, Stella, Yuki, Sora, Aoi and Raven are original generated designs.
 
-One third-party VRM sample is bundled under the terms below. No voice weights, font binaries or recorded audio are bundled. User-imported VRM packs require suitable rights. React, Three.js, Three-VRM, Tauri and all transitive dependencies retain their own licenses; perform a dependency/license review for the locked tree before distributing binaries. No completed legal clearance is claimed.
+The former Pixiv VRM sample is no longer bundled; its historical source and license metadata remain in `pixiv-expression-sample.json`. Previously imported user models are not deleted by the character migration.
 
-## Bundled expressive VRM sample (v0.3)
+The project's overall redistribution license has not been selected. Tauri, React and other dependencies retain their own licenses. No completed legal clearance is claimed.
 
-`apps/desktop/public/models/pixiv-expression-sample.vrm` is **VRM1_Constraint_Twist_Sample v1.0.1**, copyright (c) 2022 pixiv Inc., from https://github.com/vrm-c/vrm-specification/tree/master/samples/VRM1_Constraint_Twist_Sample . It is unmodified and governed by the **VRM Public License 1.0**, https://vrm.dev/licenses/1.0/ . Read that license together with the model's embedded license settings; it is not the project's software license. Author-supplied settings allow redistribution, everyone avatar permission, corporate commercial usage and modification/redistribution; antisocial/hate usage is disallowed. Attribution is supplied here even though creditNotation is unnecessary. No endorsement by pixiv is implied. It is provided without warranties under its license.
-
-Exact source, SHA-256 and embedded license metadata are preserved in `pixiv-expression-sample.json`. This model is a technical sample, not Mivuneko's original production character. No Kyndred or AIRI character assets are copied. Other user-imported models remain subject to their own terms.
+Luna's `luna-emotions-v2.png` and `luna-actions-v2.png` were generated from the existing Luna art using the built-in image generation tool in October 2026 for this project's animated 2D prototype.

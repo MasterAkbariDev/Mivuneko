@@ -135,8 +135,8 @@ export function InlineChat({ onClose }: { onClose: () => void }) {
         <span>
           <i className="dot" /> Mivuneko{" "}
           <small>
-            {prefs.backend === "gemini"
-              ? "Gemini"
+            {prefs.backend === "auto"
+              ? "Gemini + Groq"
               : prefs.backend === "hermes"
                 ? "Hermes"
                 : "offline"}

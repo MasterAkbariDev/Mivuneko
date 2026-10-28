@@ -1,5 +1,5 @@
 import { Luna } from "./Luna";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Mood } from "../../../packages/shared-schemas/index.ts";
 import {
   characterFor,
@@ -9,75 +9,26 @@ import {
   isQuietHour,
   type BodyAction,
 } from "../../../packages/character/controller.ts";
-import { validateVrmBytes } from "../../../packages/character/packs.ts";
 import { useVoice } from "./useVoice";
 import { publishPet } from "./session";
-import { Avatar } from "./Avatar";
-import { storedModel } from "./modelStore";
 import { isNative } from "./broker";
 import { usePreferences, updatePreferences } from "./preferences";
 import { usePetSession } from "./session";
-const CharacterScene = lazy(() =>
-  import("./CharacterScene").then((m) => ({ default: m.CharacterScene })),
-);
 export function Pet() {
   const prefs = usePreferences(),
     session = usePetSession();
   const [override, setOverride] = useState<Mood | null>(null),
     [error, setError] = useState(""),
-    [model, setModel] = useState<ArrayBuffer | null>(null),
-    [sampleModel, setSampleModel] = useState<ArrayBuffer | null>(null),
     [bubble, setBubble] = useState(""),
+    [captionVisible, setCaptionVisible] = useState(true),
     [offset, setOffset] = useState(0);
-  useEffect(() => {
-    let active = true;
-    void storedModel()
-      .then((bytes) => {
-        if (bytes && active) {
-          validateVrmBytes(bytes);
-          setModel(bytes);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
-  useEffect(() => {
-    if (prefs.character !== "sample-vrm" || sampleModel) return;
-    const controller = new AbortController();
-    void fetch("/models/pixiv-expression-sample.vrm", {
-      signal: controller.signal,
-    })
-      .then((response) => {
-        if (!response.ok) throw Error("Bundled model unavailable");
-        return response.arrayBuffer();
-      })
-      .then((bytes) => {
-        validateVrmBytes(bytes);
-        setSampleModel(bytes);
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(String(e));
-      });
-    return () => controller.abort();
-  }, [prefs.character, sampleModel]);
-  const selectedModel =
-    prefs.character === "sample-vrm"
-      ? sampleModel
-      : prefs.character === "local-vrm"
-        ? model
-        : null;
-  useEffect(() => {
-    const channel = new BroadcastChannel("mivuneko.assets");
-    channel.onmessage = () => {
-      void storedModel()
-        .then(setModel)
-        .catch(() => {});
-    };
-    return () => channel.close();
-  }, []);
   const checkinActive = useRef(false);
+  useEffect(() => {
+    setCaptionVisible(true);
+    if (["thinking", "listening", "speaking"].includes(session.mood)) return;
+    const timer = setTimeout(() => setCaptionVisible(false), 8000);
+    return () => clearTimeout(timer);
+  }, [session.at, session.mood]);
   const checkinVoice = useVoice(
     () => {},
     (mood) => {
@@ -157,7 +108,12 @@ export function Pet() {
     unanswered = useRef(budget.current.unanswered),
     promptCount = useRef(budget.current.count),
     day = useRef(new Date().toDateString());
-  const body: BodyAction = prefs.petMode === "sleep" ? "sleep" : "idle";
+  const body: BodyAction =
+    prefs.petMode === "sleep"
+      ? "sleep"
+      : prefs.petMode === "sit"
+        ? "sit"
+        : "idle";
   const mood =
     prefs.petMode === "sleep"
       ? "sleeping"
@@ -168,11 +124,13 @@ export function Pet() {
     prefs.reduced || matchMedia("(prefers-reduced-motion: reduce)").matches;
   const drag = useRef<{ x: number; y: number } | null>(null);
   const moving =
-    !["local-vrm", "sample-vrm"].includes(prefs.character) &&
-    prefs.movement === "roaming" &&
+    (prefs.movement === "roaming" ||
+      prefs.petMode === "walk" ||
+      prefs.petMode === "run") &&
     !prefs.focus &&
     prefs.petMode !== "focus" &&
     prefs.petMode !== "sleep" &&
+    prefs.petMode !== "sit" &&
     !reduced &&
     ["idle", "happy", "curious"].includes(mood) &&
     body !== "sleep";
@@ -363,7 +321,7 @@ export function Pet() {
             point.x,
             direction,
             0.1,
-            36 * selected.scaleFactor,
+            (prefs.petMode === "run" ? 85 : 36) * selected.scaleFactor,
             area.x,
             area.x + Math.max(0, area.width - size.width),
           );
@@ -391,7 +349,7 @@ export function Pet() {
       disposed = true;
       clearInterval(timer);
     };
-  }, [moving, prefs.monitor]);
+  }, [moving, prefs.monitor, prefs.petMode]);
   useEffect(() => {
     if (!isNative) return;
     void (async () => {
@@ -425,7 +383,9 @@ export function Pet() {
       }
     })().catch((e) => setError(String(e)));
   }, [prefs.petScale, prefs.petCaptions]);
-  async function openApp(tab: "Conversations" | "Settings" = "Conversations") {
+  async function openApp(
+    tab: "Conversations" | "Characters" = "Conversations",
+  ) {
     try {
       if (isNative) {
         const { Window } = await import("@tauri-apps/api/window");
@@ -455,32 +415,35 @@ export function Pet() {
       }
       style={{ "--pet-scale": prefs.petScale } as import("react").CSSProperties}
     >
-      {prefs.petCaptions && (
-        <div
-          className={`pet-bubble ${session.at || bubble ? "has-message" : ""}`}
-          aria-live="polite"
-        >
-          <p>
-            {bubble || (mood === "listening" ? "Listening…" : session.text)}
-          </p>
-        </div>
-      )}
+      {prefs.petCaptions &&
+        (bubble ||
+          captionVisible ||
+          ["thinking", "listening", "speaking"].includes(mood)) && (
+          <div
+            className={`pet-bubble ${session.at || bubble ? "has-message" : ""}`}
+            aria-live="polite"
+          >
+            <p>
+              {bubble || (mood === "listening" ? "Listening…" : session.text)}
+            </p>
+          </div>
+        )}
       <div
         className={`pet-character body-${character.body}`}
         style={{ transform: `translateX(${offset}px)` }}
         tabIndex={0}
         role="group"
-        aria-label="Mivuneko character. Double-click to open the app. Right-click for settings."
+        aria-label="Mivuneko character. Double-click to open the app. Right-click for characters."
         onDoubleClick={() => void openApp()}
         onContextMenu={(e) => {
           e.preventDefault();
-          void openApp("Settings");
+          void openApp("Characters");
         }}
         onKeyDown={(e) => {
           if (e.key === "Enter") void openApp();
           if (e.key === " ") {
             e.preventDefault();
-            void openApp("Settings");
+            void openApp("Characters");
           }
         }}
         onPointerDown={(e) => {
@@ -506,25 +469,14 @@ export function Pet() {
             .catch((e) => setError(String(e)));
         }}
       >
-        {prefs.character === "luna" ? (
-          <Luna
-            mood={mood}
-            mouth={session.mouth}
-            mode={prefs.petMode}
-            expression={prefs.petExpression}
-            effects={prefs.petEffects}
-          />
-        ) : prefs.character === "mock-cat" ? (
-          <Avatar mood={character.expression} />
-        ) : (
-          <Suspense fallback={<p>Loading companion…</p>}>
-            <CharacterScene
-              state={character}
-              model={selectedModel}
-              reduced={reduced}
-            />
-          </Suspense>
-        )}
+        <Luna
+          character={prefs.character}
+          mood={mood}
+          mouth={session.mouth}
+          mode={prefs.petMode}
+          expression={prefs.petExpression}
+          effects={prefs.petEffects}
+        />
       </div>
       {error && (
         <p className="error" role="alert">

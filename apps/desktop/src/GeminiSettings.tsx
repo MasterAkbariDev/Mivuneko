@@ -1,7 +1,7 @@
 import { Icon } from "./Icon";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { isNative } from "./broker";
-import { updatePreferences, usePreferences } from "./preferences";
+import { updatePreferences } from "./preferences";
 interface Status {
   configured: boolean;
   keyCount: number;
@@ -18,8 +18,8 @@ const session = {
   busy: "",
   keys: "",
   proxy: "",
-  chatModel: "gemini-3.8-flash",
-  speechModel: "gemini-3.8-flash-tts",
+  chatModel: "gemini-3.1-flash-lite",
+  speechModel: "gemini-2.5-flash-preview-tts",
   voice: "Kore",
   results: [] as TestResult[],
   proxyResult: "",
@@ -28,7 +28,6 @@ const session = {
 let snapshot = { ...session };
 const listeners = new Set<() => void>();
 export function GeminiSettings() {
-  const prefs = usePreferences();
   const draft = useSyncExternalStore(
     (listener) => {
       listeners.add(listener);
@@ -144,7 +143,7 @@ export function GeminiSettings() {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       setStatus(await invoke<Status>("configure_gemini", { config: config() }));
-      updatePreferences({ backend: "gemini", voiceProvider: "gemini" });
+      updatePreferences({ backend: "auto" });
       patch({
         message:
           "Configuration applied. Keys and proxy stay available throughout this app session.",
@@ -338,21 +337,10 @@ export function GeminiSettings() {
           drafts but cannot send provider requests.
         </p>
       )}
-      <label className="setting">
-        Voice provider
-        <select
-          aria-label="Voice provider"
-          value={prefs.voiceProvider}
-          onChange={(e) =>
-            updatePreferences({
-              voiceProvider: e.target.value as typeof prefs.voiceProvider,
-            })
-          }
-        >
-          <option value="local">Local whisper.cpp + macOS voice</option>
-          <option value="gemini">Gemini speech + transcription</option>
-        </select>
-      </label>
+      <p className="hint">
+        Voice output and transcription use the local macOS voice and Whisper
+        model.
+      </p>
       <p className="hint">
         Session only. Keys and drafts remain when switching tabs and are cleared
         when the app closes. Recording begins when you press the microphone.

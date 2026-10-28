@@ -144,6 +144,10 @@ fn launch(entry: &Entry) -> Result<LaunchResult, String> {
     if cfg!(target_os = "macos") {
         let status = std::process::Command::new("/usr/bin/open")
             .env_remove("MIVUNEKO_GEMINI_KEYS")
+            .env_remove("GEMINI_API_KEY")
+            .env_remove("GEMINI_API_KEYS")
+            .env_remove("GEMINI_KEYS")
+            .env_remove("GROQ_API_KEY")
             .env_remove("MIVUNEKO_PROXY")
             .env_remove("MIVUNEKO_HERMES_KEY")
             .env_remove("API_SERVER_KEY")
@@ -161,6 +165,10 @@ fn launch(entry: &Entry) -> Result<LaunchResult, String> {
     }
     let child = std::process::Command::new(&entry.path)
         .env_remove("MIVUNEKO_GEMINI_KEYS")
+        .env_remove("GEMINI_API_KEY")
+            .env_remove("GEMINI_API_KEYS")
+            .env_remove("GEMINI_KEYS")
+        .env_remove("GROQ_API_KEY")
         .env_remove("MIVUNEKO_PROXY")
         .env_remove("MIVUNEKO_HERMES_KEY")
         .env_remove("API_SERVER_KEY")

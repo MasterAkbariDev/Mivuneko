@@ -21,6 +21,10 @@ impl VoiceWorker {
         }
         let mut child = command
             .env_remove("MIVUNEKO_GEMINI_KEYS")
+            .env_remove("GEMINI_API_KEY")
+            .env_remove("GEMINI_API_KEYS")
+            .env_remove("GEMINI_KEYS")
+            .env_remove("GROQ_API_KEY")
             .env_remove("MIVUNEKO_PROXY")
             .env_remove("MIVUNEKO_HERMES_KEY")
             .env_remove("API_SERVER_KEY")
@@ -47,18 +51,60 @@ impl VoiceWorker {
         }
     }
     pub fn synthesize(&self, text: &str, ticket: u64) -> Result<Vec<u8>, String> {
+        self.synthesize_with_voice(text, "natural", "en", ticket)
+    }
+    pub fn synthesize_with_voice(
+        &self,
+        text: &str,
+        style: &str,
+        language: &str,
+        ticket: u64,
+    ) -> Result<Vec<u8>, String> {
+        self.synthesize_for_character(text, style, language, "luna", ticket)
+    }
+    pub fn synthesize_for_character(
+        &self, text: &str, style: &str, language: &str, character: &str, ticket: u64,
+    ) -> Result<Vec<u8>, String> {
         if !cfg!(target_os = "macos") {
             return Err("System speech output is currently supported on macOS only".into());
         }
         if text.trim().is_empty() || text.chars().count() > 2000 {
             return Err("Speech text must contain 1–2000 characters".into());
         }
+        let character_voice = match character {
+            "luna" => "Samantha", "miku" => "Sandy (English (US))",
+            "kitsune" => "Flo (English (US))", "stella" => "Shelley (English (US))",
+            "teto" => "Karen", "neru" => "Moira", "snow" => "Tessa",
+            "silver" => "Flo (English (UK))", "azure" => "Sandy (English (UK))", "goth" => "Shelley (English (UK))",
+            _ => "Samantha",
+        };
+        let (natural_rate, bright_rate) = match character {
+            "miku" => ("178", "203"), "kitsune" => ("184", "209"),
+            "stella" => ("190", "215"), "teto" => ("196", "221"),
+            "neru" => ("172", "197"), "snow" => ("158", "183"),
+            "silver" => ("162", "187"), "azure" => ("180", "205"),
+            "goth" => ("154", "179"), _ => ("170", "195"),
+        };
+        let (voice, rate) = match (style, language) {
+            ("natural", _) => (character_voice, natural_rate),
+            ("bright", _) => (character_voice, bright_rate),
+            ("multilingual", "en") => ("Samantha", "170"),
+            ("multilingual", "ja") => ("Kyoko", "170"),
+            ("multilingual", "fr") => ("Amélie", "170"),
+            ("multilingual", "es") => ("Mónica", "170"),
+            ("multilingual", "de") => ("Anna", "170"),
+            _ => return Err("Invalid local voice style or language".into()),
+        };
         let temp = tempfile::tempdir().map_err(|_| "Cannot create private audio workspace")?;
         let input = temp.path().join("text.txt");
         let output = temp.path().join("speech.wav");
         std::fs::write(&input, text).map_err(|_| "Cannot prepare speech")?;
         let mut command = Command::new("/usr/bin/say");
         command
+            .arg("-v")
+            .arg(voice)
+            .arg("-r")
+            .arg(rate)
             .arg("-f")
             .arg(&input)
             .arg("-o")
@@ -86,6 +132,10 @@ impl VoiceWorker {
         let output = temp.path().join("transcript");
         std::fs::write(&input, wav).map_err(|_| "Cannot prepare recording")?;
         let mut command = Command::new(binary);
+        // Intel macOS Metal can return corrupted transcripts or fail to initialize.
+        // The CPU backend is reliable and avoids a long GPU startup on these Macs.
+        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+        command.arg("-ng");
         command
             .arg("-m")
             .arg(model)

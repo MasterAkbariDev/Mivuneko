@@ -17,8 +17,8 @@ export function BackendSettings() {
             updatePreferences({ backend: e.target.value as typeof p.backend })
           }
         >
-          <option value="gemini" disabled={!isNative}>
-            Google Gemini
+          <option value="auto" disabled={!isNative}>
+            Automatic · Gemini + Groq
           </option>
           <option value="offline">Offline demo</option>
           <option value="hermes" disabled={!isNative}>
@@ -26,6 +26,13 @@ export function BackendSettings() {
           </option>
         </select>
       </label>
+      {p.backend === "auto" && (
+        <p className="hint">
+          Configured Gemini and Groq providers alternate between turns. If one
+          fails, the other is tried; no duplicate simultaneous requests.
+          Conversation text is sent to the selected provider.
+        </p>
+      )}
       {p.backend === "hermes" && (
         <>
           <p className="hint">

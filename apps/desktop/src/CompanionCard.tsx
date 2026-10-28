@@ -1,50 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from "react";
 import { usePreferences } from "./preferences";
 import { usePetSession } from "./session";
-import { characterFor } from "../../../packages/character/controller.ts";
-import { storedModel } from "./modelStore";
-import { Avatar } from "./Avatar";
 import { Luna } from "./Luna";
 import { Icon } from "./Icon";
-const Scene = lazy(() =>
-  import("./CharacterScene").then((m) => ({ default: m.CharacterScene })),
-);
 export function CompanionCard({ onSettings }: { onSettings: () => void }) {
   const prefs = usePreferences();
   const session = usePetSession();
-  const [model, setModel] = useState<ArrayBuffer | null>(null);
-  useEffect(() => {
-    let alive = true;
-    setModel(null);
-    const request =
-      prefs.character === "sample-vrm"
-        ? fetch("/models/pixiv-expression-sample.vrm").then((r) => {
-            if (!r.ok) throw Error();
-            return r.arrayBuffer();
-          })
-        : prefs.character === "local-vrm"
-          ? storedModel()
-          : Promise.resolve(null);
-    void request
-      .then((bytes) => {
-        if (alive) setModel(bytes);
-      })
-      .catch(() => {});
-    const channel = new BroadcastChannel("mivuneko.assets");
-    channel.onmessage = () => {
-      if (prefs.character === "local-vrm")
-        void storedModel()
-          .then((bytes) => {
-            if (alive) setModel(bytes);
-          })
-          .catch(() => {});
-    };
-    return () => {
-      alive = false;
-      channel.close();
-    };
-  }, [prefs.character]);
-  const state = { ...characterFor(session.mood), mouth: session.mouth ?? 0 };
   const status =
     prefs.petMode === "sleep"
       ? "Dreaming…"
@@ -61,21 +21,14 @@ export function CompanionCard({ onSettings }: { onSettings: () => void }) {
     <section className="companion-card" aria-label="Your companion">
       <div className="companion-art">
         <div className="companion-orbit" aria-hidden="true" />
-        {prefs.character === "luna" ? (
-          <Luna
-            mood={session.mood}
-            mouth={session.mouth}
-            mode={prefs.petMode}
-            expression={prefs.petExpression}
-            effects={prefs.petEffects}
-          />
-        ) : prefs.character === "mock-cat" ? (
-          <Avatar mood={session.mood} />
-        ) : (
-          <Suspense fallback={<Icon name="cat" />}>
-            <Scene state={state} model={model} reduced={prefs.reduced} />
-          </Suspense>
-        )}
+        <Luna
+          character={prefs.character}
+          mood={session.mood}
+          mouth={session.mouth}
+          mode={prefs.petMode}
+          expression={prefs.petExpression}
+          effects={prefs.petEffects}
+        />
       </div>
       <div className="companion-card-copy">
         <h2>

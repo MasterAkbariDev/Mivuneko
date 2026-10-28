@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "npm run dev -w @mivuneko/desktop",
     "build": "npm run build -w @mivuneko/desktop",
-    "desktop": "npm run tauri -w @mivuneko/desktop -- dev",
+    "desktop": "node scripts/run-desktop.mjs",
+    "start": "npm run desktop",
     "test": "node --test tests/unit/*.test.mjs",
     "check": "npm run check -w @mivuneko/desktop",
     "test:e2e": "playwright test",
@@ -18,7 +19,8 @@
     "format:check": "prettier --check apps packages services tests scripts .github package.json playwright.config.ts",
     "doctor": "node scripts/doctor.mjs",
     "mac": "./script/build_and_run.sh",
-    "setup:voice": "./script/setup_voice.sh"
+    "setup:voice": "./script/setup_voice.sh",
+    "install:voice": "./script/setup_voice.sh"
   },
   "engines": {
     "node": ">=22.18"

@@ -1,4 +1,13 @@
-export type PetMode = "auto" | "cozy" | "playful" | "focus" | "sleep" | "dance";
+export type PetMode =
+  | "auto"
+  | "cozy"
+  | "playful"
+  | "focus"
+  | "sleep"
+  | "dance"
+  | "walk"
+  | "run"
+  | "sit";
 export type PetExpression =
   | "auto"
   | "idle"
@@ -12,7 +21,29 @@ export type PetExpression =
   | "shy"
   | "sad"
   | "celebrating"
-  | "dancing";
+  | "dancing"
+  | "excited"
+  | "confused"
+  | "love"
+  | "joking"
+  | "teasing"
+  | "wink"
+  | "proud"
+  | "crying"
+  | "determined";
+export type CharacterId =
+  | "luna"
+  | "miku"
+  | "kitsune"
+  | "stella"
+  | "teto"
+  | "neru"
+  | "snow"
+  | "silver"
+  | "azure"
+  | "goth";
+export type LocalVoiceStyle = "natural" | "bright" | "multilingual";
+export type LocalVoiceLanguage = "en" | "ja" | "fr" | "es" | "de";
 export interface Preferences {
   version: 1;
   petMode: PetMode;
@@ -21,11 +52,14 @@ export interface Preferences {
   petCaptions: boolean;
   petScale: number;
   petAlwaysOnTop: boolean;
-  backend: "offline" | "hermes" | "gemini";
+  backend: "offline" | "hermes" | "auto" | "gemini" | "groq";
   voiceProvider: "local" | "gemini";
+  localVoiceStyle: LocalVoiceStyle;
+  localVoiceLanguage: LocalVoiceLanguage;
   appLaunching: boolean;
+  approvalMode: "ask" | "auto" | "deny";
   rememberHistory: boolean;
-  character: "luna" | "chibi" | "mock-cat" | "local-vrm" | "sample-vrm";
+  character: CharacterId;
   movement: "stationary" | "roaming";
   proactive: boolean;
   spokenCheckins: boolean;
@@ -35,7 +69,7 @@ export interface Preferences {
   quietEnd: number;
   focus: boolean;
   clickThrough: boolean;
-  voice: "off" | "push-to-talk" | "spoken";
+  voice: "off" | "push-to-talk" | "spoken" | "open-mic";
   reduced: boolean;
   monitor: string;
   volume: number;
@@ -50,7 +84,10 @@ export const defaults: Preferences = {
   petAlwaysOnTop: true,
   backend: "offline",
   voiceProvider: "local",
+  localVoiceStyle: "natural",
+  localVoiceLanguage: "en",
   appLaunching: true,
+  approvalMode: "ask",
   rememberHistory: false,
   character: "luna",
   movement: "stationary",
@@ -71,9 +108,17 @@ export function parsePreferences(raw: unknown): Preferences {
   const p = (raw && typeof raw === "object" ? raw : {}) as Partial<Preferences>;
   return {
     ...defaults,
-    petMode: ["auto", "cozy", "playful", "focus", "sleep", "dance"].includes(
-      p.petMode ?? "",
-    )
+    petMode: [
+      "auto",
+      "cozy",
+      "playful",
+      "focus",
+      "sleep",
+      "dance",
+      "walk",
+      "run",
+      "sit",
+    ].includes(p.petMode ?? "")
       ? p.petMode!
       : "auto",
     petExpression: [
@@ -90,6 +135,15 @@ export function parsePreferences(raw: unknown): Preferences {
       "sad",
       "celebrating",
       "dancing",
+      "excited",
+      "confused",
+      "love",
+      "joking",
+      "teasing",
+      "wink",
+      "proud",
+      "crying",
+      "determined",
     ].includes(p.petExpression ?? "")
       ? p.petExpression!
       : "auto",
@@ -97,30 +151,43 @@ export function parsePreferences(raw: unknown): Preferences {
     petCaptions: p.petCaptions !== false,
     petScale:
       typeof p.petScale === "number" && Number.isFinite(p.petScale)
-        ? Math.max(0.75, Math.min(1.3, p.petScale))
+        ? Math.max(0.5, Math.min(1.8, p.petScale))
         : 1,
     petAlwaysOnTop: p.petAlwaysOnTop !== false,
     backend:
-      p.backend === "gemini"
-        ? "gemini"
+      p.backend === "gemini" || p.backend === "groq" || p.backend === "auto"
+        ? "auto"
         : p.backend === "hermes"
           ? "hermes"
           : "offline",
     voiceProvider: p.voiceProvider === "gemini" ? "gemini" : "local",
+    localVoiceStyle:
+      p.localVoiceStyle === "bright" || p.localVoiceStyle === "multilingual"
+        ? p.localVoiceStyle
+        : "natural",
+    localVoiceLanguage: ["en", "ja", "fr", "es", "de"].includes(
+      p.localVoiceLanguage ?? "",
+    )
+      ? p.localVoiceLanguage!
+      : "en",
     appLaunching: p.appLaunching !== false,
+    approvalMode:
+      p.approvalMode === "auto" || p.approvalMode === "deny"
+        ? p.approvalMode
+        : "ask",
     rememberHistory: p.rememberHistory === true,
     character:
-      p.character === "luna"
-        ? "luna"
-        : p.character === "sample-vrm"
-          ? "sample-vrm"
-          : p.character === "local-vrm"
-            ? "local-vrm"
-            : p.character === "mock-cat"
-              ? "mock-cat"
-              : p.character === "chibi"
-                ? "chibi"
-                : "luna",
+      p.character === "miku" ||
+      p.character === "kitsune" ||
+      p.character === "stella" ||
+      p.character === "teto" ||
+      p.character === "neru" ||
+      p.character === "snow" ||
+      p.character === "silver" ||
+      p.character === "azure" ||
+      p.character === "goth"
+        ? p.character
+        : "luna",
     movement: p.movement === "roaming" ? "roaming" : "stationary",
     proactive: p.proactive === true,
     spokenCheckins: p.spokenCheckins === true,
@@ -138,7 +205,12 @@ export function parsePreferences(raw: unknown): Preferences {
       : 8,
     focus: p.focus === true,
     clickThrough: p.clickThrough === true,
-    voice: p.voice === "push-to-talk" || p.voice === "spoken" ? p.voice : "off",
+    voice:
+      p.voice === "push-to-talk" ||
+      p.voice === "spoken" ||
+      p.voice === "open-mic"
+        ? p.voice
+        : "off",
     reduced: p.reduced === true,
     monitor:
       typeof p.monitor === "string" && p.monitor.length < 200

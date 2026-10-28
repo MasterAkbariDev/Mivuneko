@@ -2,15 +2,8 @@ import { useEffect, useState } from "react";
 import { isNative } from "./broker";
 import { updatePreferences, usePreferences } from "./preferences";
 import { lunaModel } from "./lunaModel";
-import {
-  inspectVrm,
-  validateVrmFile,
-  validateVrmBytes,
-} from "../../../packages/character/packs.ts";
-import { saveModel } from "./modelStore";
 export function CompanionControls() {
   const p = usePreferences();
-  const [message, setMessage] = useState("");
   const [monitors, setMonitors] = useState<string[]>([]);
   useEffect(() => {
     if (isNative)
@@ -31,7 +24,7 @@ export function CompanionControls() {
       <p className="hint">
         The desktop shows only your companion and optional captions.
         Double-click the character for Conversations, or right-click for
-        Settings.
+        Characters.
       </p>
       <label className="setting">
         Companion mode
@@ -51,6 +44,9 @@ export function CompanionControls() {
           <option value="focus">Focus · quiet company</option>
           <option value="sleep">Sleep · curled up</option>
           <option value="dance">Dance · little celebration</option>
+          <option value="walk">Walk · roam slowly</option>
+          <option value="run">Run · roam faster</option>
+          <option value="sit">Sit · settle in place</option>
         </select>
       </label>
       <label className="setting">
@@ -93,8 +89,8 @@ export function CompanionControls() {
         <input
           aria-label="Companion size"
           type="range"
-          min="0.75"
-          max="1.3"
+          min="0.5"
+          max="1.8"
           step="0.05"
           value={p.petScale}
           onChange={(e) =>
@@ -129,46 +125,6 @@ export function CompanionControls() {
             ))}
           </select>
         </label>
-      )}
-      {p.character === "local-vrm" && (
-        <>
-          <label className="setting">
-            Import a licensed .vrm
-            <input
-              aria-label="Import VRM"
-              type="file"
-              accept=".vrm"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                try {
-                  validateVrmFile(file.name, file.size);
-                  const bytes = await file.arrayBuffer();
-                  validateVrmBytes(bytes);
-                  const info = inspectVrm(bytes);
-                  await saveModel(bytes);
-                  setMessage(`${info.name} · ${info.authors}`);
-                } catch (error) {
-                  setMessage(String(error));
-                }
-              }}
-            />
-          </label>
-          <button
-            onClick={async () => {
-              await saveModel(null);
-              updatePreferences({ character: "luna" });
-              setMessage("Imported model removed.");
-            }}
-          >
-            Remove imported model
-          </button>
-        </>
-      )}
-      {message && (
-        <p role="status" className="hint">
-          {message}
-        </p>
       )}
     </section>
   );

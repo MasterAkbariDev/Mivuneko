@@ -5,6 +5,7 @@ import {
 import type { Agent } from "../../../packages/shared-schemas/index.ts";
 import { mockHermes } from "../../../services/agent-adapter/mock.ts";
 import { isNative } from "./broker";
+import { partialText } from "./partialText";
 export function abortable<T>(
   promise: Promise<T>,
   signal: AbortSignal,
@@ -26,9 +27,12 @@ export function abortable<T>(
     );
   });
 }
-export function agentFor(backend: "offline" | "hermes" | "gemini"): Agent {
+let nextCloud = 0;
+export function agentFor(
+  backend: "offline" | "hermes" | "auto" | "gemini" | "groq",
+): Agent {
   return {
-    async reply(text, mode, signal, history = []) {
+    async reply(text, mode, signal, history = [], onProgress) {
       // Explicit user launch requests use the same constrained local intent path in every backend.
       if (backend === "offline" || /^open\s+/i.test(text.trim()))
         return mockHermes.reply(text, mode, signal);
@@ -37,28 +41,89 @@ export function agentFor(backend: "offline" | "hermes" | "gemini"): Agent {
           "Live providers require the native desktop app. Browser preview remains offline.",
         );
       const { invoke } = await import("@tauri-apps/api/core");
+      if (backend === "auto") {
+        const [gemini, groq] = await Promise.all([
+          invoke<{ configured: boolean }>("gemini_status").catch(() => ({
+            configured: false,
+          })),
+          invoke<boolean>("groq_status").catch(() => false),
+        ]);
+        const choices: ("gemini" | "groq")[] = [];
+        if (gemini?.configured) choices.push("gemini");
+        if (groq) choices.push("groq");
+        if (!choices.length)
+          throw Error(
+            "No cloud providers configured. Add keys to the project .env and restart, or choose Offline demo.",
+          );
+        const start = nextCloud++ % choices.length;
+        const errors: string[] = [];
+        for (let i = 0; i < choices.length; i++) {
+          signal.throwIfAborted();
+          const provider = choices[(start + i) % choices.length];
+          try {
+            return await agentFor(provider).reply(
+              text,
+              mode,
+              signal,
+              history,
+              onProgress,
+            );
+          } catch (error) {
+            signal.throwIfAborted();
+            errors.push(`${provider}: ${String(error)}`);
+            onProgress?.("");
+          }
+        }
+        throw Error(`All configured providers failed. ${errors.join("; ")}`);
+      }
       const messages = boundedMessages(history, text);
       signal.throwIfAborted();
       const requestId = crypto.randomUUID();
       const cancel = () => {
-        if (backend === "gemini") void invoke("cancel_gemini", { requestId });
+        if (backend === "gemini" || backend === "groq")
+          void invoke(backend === "gemini" ? "cancel_gemini" : "cancel_groq", {
+            requestId,
+          });
       };
       signal.addEventListener("abort", cancel, { once: true });
       let answer: string;
+      let raw = "";
+      const { listen } = await import("@tauri-apps/api/event");
+      const unlisten =
+        backend === "gemini" || backend === "groq"
+          ? await listen<{ requestId: string; delta: string }>(
+              "provider-stream",
+              (event) => {
+                if (event.payload.requestId !== requestId || signal.aborted)
+                  return;
+                raw += event.payload.delta;
+                onProgress?.(backend === "gemini" ? partialText(raw) : raw);
+              },
+            )
+          : () => {};
       try {
         answer = await abortable(
-          invoke<string>(backend === "gemini" ? "gemini_chat" : "hermes_chat", {
-            messages,
-            mode,
-            requestId,
-          }),
+          invoke<string>(
+            backend === "gemini"
+              ? "gemini_chat_stream"
+              : backend === "groq"
+                ? "groq_chat"
+                : "hermes_chat",
+            {
+              messages,
+              mode,
+              requestId,
+            },
+          ),
           signal,
         );
       } finally {
         signal.removeEventListener("abort", cancel);
+        unlisten();
       }
       signal.throwIfAborted();
-      const reply = parseAgentReply(answer);
+      const reply =
+        backend === "groq" ? { text: answer } : parseAgentReply(answer);
       if (mode === "Chat" || mode === "Creative") delete reply.appQuery;
       return reply;
     },

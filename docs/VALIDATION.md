@@ -1,5 +1,7 @@
 # v0.3 cloud validation · 2026-10-28
 
+This is a historical cloud validation record. Its VRM and inline-chat UI references describe a previous revision; see CHARACTER_SOURCES.md and the current tests for the 2D companion lineup.
+
 Linux cloud container; Node 24.22.1, Rust 1.99.1, Playwright 1.62.1 with Chromium Headless Shell 134, software WebGL and synthetic audio. The connected Browser tool could not run because it requires the originating browser context. Cloud Playwright was used under the user's cloud-development/test instruction. The current Chromium archive endpoint returned invalid empty content, so the compatible pinned Chromium 134 headless shell was used instead.
 
 | Check | Result |

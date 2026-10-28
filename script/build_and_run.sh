@@ -5,6 +5,11 @@ cd "$ROOT_DIR"
 if [[ "$(uname -s)" != "Darwin" ]]; then echo "This entrypoint builds the macOS app. Use npm run dev for the browser preview." >&2; exit 1; fi
 MODE="${1:-run}"
 case "$MODE" in run|--debug|--logs|--telemetry|--verify) ;; *) echo "Usage: $0 [--debug|--logs|--telemetry|--verify]" >&2; exit 2;; esac
+if [[ -x "$ROOT_DIR/.local/cargo/bin/cargo" && -z "${RUSTUP_HOME:-}" && -z "${CARGO_HOME:-}" ]]; then
+ export RUSTUP_HOME="$ROOT_DIR/.local/rustup"
+ export CARGO_HOME="$ROOT_DIR/.local/cargo"
+ export PATH="$CARGO_HOME/bin:$PATH"
+fi
 command -v node >/dev/null || { echo "Install Node 22.18+ first." >&2; exit 1; }
 command -v cargo >/dev/null || { echo "Install Rust stable first." >&2; exit 1; }
 xcode-select -p >/dev/null || { echo "Install Xcode Command Line Tools with xcode-select --install." >&2; exit 1; }
@@ -13,7 +18,7 @@ if [[ -f .local/voice.json ]]; then
  export MIVUNEKO_WHISPER_MODEL="$(node scripts/voice-config.mjs model)"
 fi
 pkill -x mivuneko-desktop >/dev/null 2>&1 || true
-if [[ ! -d node_modules ]]; then npm ci; fi
+if [[ ! -x node_modules/.bin/tauri ]]; then npm ci; fi
 npm run tauri -w @mivuneko/desktop -- build --bundles app
 APP_BUNDLE="$ROOT_DIR/target/release/bundle/macos/Mivuneko.app"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/mivuneko-desktop"

@@ -21,8 +21,7 @@ Drag it to move it, double-click to open Conversations, and right-click to open
 Settings. Keyboard Enter opens Conversations; Space opens Settings.
 
 All controls live in app Settings: mode, expression preview, effects, captions,
-size, always-on-top, display, character, voice, movement and VRM import/removal.
-VRM asset changes are broadcast between the app and companion windows.
+size, always-on-top, display, character, voice and movement.
 
-Original 3D/VRM and Mooncat choices remain available. Imported characters do not
-gain Luna's sprite-specific poses; the Luna modes and visual effects target Luna.
+The character picker also offers Miku fan art, Kiko and Stella. Their six drawn
+poses are combined with motion and effects for the additional expression choices.

@@ -21,39 +21,6 @@ async function ask(page: any, text: string) {
   await page.getByLabel("Message Mivuneko", { exact: true }).fill(text);
   await page.getByRole("button", { name: "Send" }).click();
 }
-test("pet renders 3D, changes pose, and exposes honest voice preview", async ({
-  page,
-}) => {
-  const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  await page.addInitScript(() =>
-    localStorage.setItem(
-      "mivuneko.preferences.v1",
-      JSON.stringify({ character: "chibi" }),
-    ),
-  );
-  await page.goto("/");
-  await expect(
-    page.getByRole("button", { name: "Companion menu" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("img", { name: "Original chibi prototype character" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Companion menu" }).click();
-  await page.getByRole("button", { name: "Pet options" }).click();
-  await page.getByRole("button", { name: "Sit", exact: true }).click();
-  await expect(page.locator(".pet-character")).toHaveClass(/body-sit/);
-  await page.getByLabel("Pet voice mode").selectOption("push-to-talk");
-  await expect(page.locator(".pet-voice")).toContainText(
-    "No microphone recording",
-  );
-  await page.getByLabel("Pet character").selectOption("mock-cat");
-  await expect(
-    page.getByRole("img", { name: /Original mock cat avatar/ }),
-  ).toBeVisible();
-  await expect(page.locator(".vite-error-overlay")).toHaveCount(0);
-  expect(errors).toEqual([]);
-});
 test("launch approval, deny, allow, activity and unknown app", async ({
   page,
 }) => {
@@ -124,40 +91,34 @@ test("settings and chat activity synchronize to an already open pet", async ({
   await page.goto("/");
   const main = await context.newPage();
   await chat(main);
-  await main.getByRole("button", { name: "Settings", exact: true }).click();
-  await main.getByLabel("Character", { exact: true }).selectOption("mock-cat");
+  await main.getByRole("button", { name: "Characters", exact: true }).click();
+  await main.getByLabel("Character", { exact: true }).selectOption("miku");
   await expect(
-    page.getByRole("img", { name: /Original mock cat avatar/ }),
+    page.getByRole("img", { name: /Miku · unofficial fan art 2D companion/ }),
   ).toBeVisible();
   await main.getByLabel("Do not disturb", { exact: true }).check();
-  await expect(page.locator(".pet-bubble")).toContainText("do not disturb");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("mivuneko.preferences.v1") || "{}")
+            .focus,
+      ),
+    )
+    .toBe(true);
   await main.getByLabel("Do not disturb", { exact: true }).uncheck();
   await main
     .getByRole("button", { name: "Conversations", exact: true })
     .click();
   await ask(main, "Open Telegram");
-  await expect(page.locator(".pet-bubble small")).toContainText("approval");
+  await expect(page.locator(".luna-model")).toHaveAttribute(
+    "data-emotion",
+    "concerned",
+  );
   await main.getByRole("button", { name: "Allow once" }).click();
   await expect(page.locator(".pet-bubble p")).toContainText(
     "Mock launch: Telegram",
   );
-});
-test("VRM import rejects invalid containers without crashing", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Companion menu" }).click();
-  await page.getByRole("button", { name: "Pet options" }).click();
-  await page.getByLabel("Pet character").selectOption("local-vrm");
-  await page.getByLabel("Import VRM").setInputFiles({
-    name: "bad.vrm",
-    mimeType: "application/octet-stream",
-    buffer: Buffer.from("bad"),
-  });
-  await expect(page.getByRole("alert")).toContainText("Invalid VRM/GLB");
-  await expect(
-    page.getByRole("button", { name: "Companion menu" }),
-  ).toBeVisible();
 });
 test("narrow chat remains usable without horizontal page overflow", async ({
   page,
@@ -188,7 +149,7 @@ test("proactive check-in happens once while unanswered and respects quiet defaul
   await page.addInitScript(() =>
     localStorage.setItem(
       "mivuneko.preferences.v1",
-      JSON.stringify({ proactive: true, character: "mock-cat" }),
+      JSON.stringify({ proactive: true, character: "luna" }),
     ),
   );
   await page.goto("/");
@@ -240,6 +201,7 @@ async function fakeNative(page: any, voice = false) {
   await page.addInitScript((withVoice: boolean) => {
     const w = window as any;
     w.__calls = [];
+    w.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} };
     w.__TAURI_INTERNALS__ = {
       invoke: async (command: string, args: any) => {
         w.__calls.push({ command, args });
@@ -294,12 +256,7 @@ test("synthetic microphone recording converts to WAV and routes transcript into 
   await context.grantPermissions(["microphone"]);
   await fakeNative(page, true);
   await chat(page);
-  await page
-    .getByRole("button", { name: "Record", exact: true })
-    .evaluate((button) => {
-      (button as HTMLButtonElement).click();
-      (button as HTMLButtonElement).click();
-    });
+  await page.getByRole("button", { name: "Record", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Finish recording", exact: true }),
   ).toBeVisible();
@@ -350,85 +307,67 @@ test("native turn guard prevents duplicate asynchronous submissions", async ({
   expect(count).toBe(1);
 });
 
-test("inline chat stays beneath the pet, shares messages, and approves apps", async ({
+test("double-clicking the pet opens conversations and shares activity", async ({
   page,
   context,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Companion menu" }).click();
-  await page.getByRole("button", { name: "Chat", exact: true }).click();
-  await expect(page.getByLabel("Message beneath pet")).toBeFocused();
-  expect(context.pages()).toHaveLength(1);
-  await page.getByLabel("Message beneath pet").fill("Open Telegram");
-  await page.getByRole("button", { name: "Send", exact: false }).click();
-  await expect(
-    page.getByRole("group", { name: "App launch approval" }),
-  ).toContainText("Open Telegram?");
-  await page.getByRole("button", { name: "Deny", exact: true }).click();
-  await expect(page.getByRole("log")).toContainText("Launch denied");
-  const main = await context.newPage();
-  await chat(main);
+  const [main] = await Promise.all([
+    context.waitForEvent("page"),
+    page.getByRole("group", { name: /Mivuneko character/ }).dblclick(),
+  ]);
+  await main.getByRole("button", { name: "Meet Mivuneko" }).click();
+  await ask(main, "Open Telegram");
+  await expect(main.getByRole("dialog")).toContainText("Open Telegram?");
+  await main.getByRole("button", { name: "Deny", exact: true }).click();
   await expect(main.getByRole("log")).toContainText("Launch denied");
+  await expect(page.locator(".pet-bubble p")).toContainText("Launch denied");
 });
 
-test("expressive bundled VRM exposes morphs and head anger effect", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Companion menu" }).click();
-  await page.getByRole("button", { name: "Pet options" }).click();
-  await page.getByLabel("Pet character").selectOption("sample-vrm");
-  await expect(page.locator(".model-info")).toContainText("pixiv Inc.");
-  await expect(page.locator(".model-info")).toContainText("angry");
-  await page.getByLabel("Emotion preview").selectOption("angry");
-  await expect(page.locator(".character-scene")).toHaveAttribute(
-    "data-emotion",
-    "angry",
-  );
-  await expect(page.locator(".character-scene")).toHaveAttribute(
-    "data-model-ready",
-    "true",
-    { timeout: 20000 },
-  );
-  await expect(page.getByRole("alert")).toHaveCount(0);
-});
-
-test("Gemini configuration stays out of storage and chat/voice use native commands", async ({
+test("Gemini configuration stays private while speech uses local commands", async ({
   page,
 }) => {
   await fakeNative(page);
   await page.addInitScript(() => {
     const w = window as any;
     const previous = w.__TAURI_INTERNALS__.invoke;
+    let configured = false;
     w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
       if (
         !command.startsWith("gemini_") &&
-        !["configure_gemini", "clear_gemini"].includes(command)
+        ![
+          "configure_gemini",
+          "clear_gemini",
+          "transcribe_audio",
+          "synthesize_speech",
+        ].includes(command)
       )
         return previous(command, args);
       w.__calls.push({ command, args });
       if (command === "gemini_status")
         return {
-          configured: false,
+          configured,
           keyCount: 0,
           proxyEnabled: false,
           chatModel: "",
         };
-      if (command === "configure_gemini")
+      if (command === "configure_gemini") {
+        configured = true;
         return {
           configured: true,
           keyCount: args.config.keys.length,
           proxyEnabled: true,
           chatModel: args.config.chatModel,
         };
-      if (command === "gemini_chat")
+      }
+      if (command === "gemini_chat_stream")
         return JSON.stringify({
           text: "A playful grumble!",
           emotion: "angry",
           appQuery: "",
         });
-      if (command === "gemini_transcribe") return "Hello Mivuneko";
-      if (command === "gemini_speak") {
+      if (command === "transcribe_audio") return "Hello Mivuneko";
+      if (command === "synthesize_speech") {
         const bytes = new Uint8Array(44 + 3200),
           view = new DataView(bytes.buffer);
         const str = (offset: number, value: string) =>
@@ -472,6 +411,7 @@ test("Gemini configuration stays out of storage and chat/voice use native comman
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(
     "test_key",
   );
+  await page.getByRole("button", { name: "Characters", exact: true }).click();
   await page
     .getByLabel("Voice mode", { exact: true })
     .selectOption("push-to-talk");
@@ -488,7 +428,9 @@ test("Gemini configuration stays out of storage and chat/voice use native comman
   await expect
     .poll(() =>
       page.evaluate(() =>
-        (window as any).__calls.some((x: any) => x.command === "gemini_speak"),
+        (window as any).__calls.some(
+          (x: any) => x.command === "synthesize_speech",
+        ),
       ),
     )
     .toBe(true);
@@ -501,12 +443,12 @@ test("Gemini configuration stays out of storage and chat/voice use native comman
   ]);
   expect(
     calls
-      .find((c: any) => c.command === "gemini_transcribe")
+      .find((c: any) => c.command === "transcribe_audio")
       .args.wav.slice(0, 4),
   ).toEqual([82, 73, 70, 70]);
   expect(
-    calls.find((c: any) => c.command === "gemini_speak").args.emotion,
-  ).toBe("angry");
+    calls.find((c: any) => c.command === "synthesize_speech").args.character,
+  ).toBe("luna");
 });
 
 test("connection drafts and masked previews survive tab changes", async ({
@@ -546,6 +488,9 @@ test("native diagnostics identify each key, retain results and preserve proxy on
 }) => {
   await page.addInitScript(() => {
     let configured = false;
+    (window as any).__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+      unregisterListener: () => {},
+    };
     (window as any).__TAURI_INTERNALS__ = {
       transformCallback: () => 1,
       unregisterCallback: () => {},
@@ -649,42 +594,6 @@ test("long conversations keep the composer visible and reveal the latest reply",
   expect(scroll.remaining).toBeLessThan(3);
 });
 
-test("illustrated companion supports sleep, expressions, and keyboard menu dismissal", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await expect(
-    page.getByRole("img", { name: "Luna illustrated companion, idle" }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Companion status and actions", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Sleep", exact: true }).click();
-  await expect(
-    page.getByRole("img", { name: "Luna illustrated companion, sleeping" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", {
-      name: "Companion status and actions",
-      exact: true,
-    }),
-  ).toContainText("Dreaming");
-  await page
-    .getByRole("button", { name: "Companion menu", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Pet options" }).click();
-  await page.getByLabel("Emotion preview").selectOption("surprised");
-  await expect(
-    page.getByRole("img", { name: "Luna illustrated companion, surprised" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Close pet options" }).focus();
-  await page.keyboard.press("Escape");
-  await expect(page.locator(".pet-voice")).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Companion menu", exact: true }),
-  ).toBeFocused();
-});
-
 test("redesigned settings remain usable on a narrow viewport", async ({
   page,
 }) => {
@@ -703,8 +612,209 @@ test("redesigned settings remain usable on a narrow viewport", async ({
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+  await page.getByRole("button", { name: "Characters", exact: true }).click();
   await page.getByLabel("Character", { exact: true }).selectOption("luna");
   await expect(page.getByLabel("Character", { exact: true })).toHaveValue(
     "luna",
   );
+});
+
+test("approval policy automatically denies or approves recognized app launches", async ({
+  page,
+}) => {
+  await chat(page);
+  await page.getByRole("button", { name: "Permissions", exact: true }).click();
+  await page.getByLabel("Approval mode").selectOption("deny");
+  await page
+    .getByRole("button", { name: "Conversations", exact: true })
+    .click();
+  await ask(page, "Open Telegram");
+  await expect(page.getByRole("log")).toContainText("Launch denied");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Permissions", exact: true }).click();
+  await page.getByLabel("Approval mode").selectOption("auto");
+  await page
+    .getByRole("button", { name: "Conversations", exact: true })
+    .click();
+  await ask(page, "Open Telegram");
+  await expect(page.getByRole("log")).toContainText("Mock launch: Telegram");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("completed pet captions clear while the conversation remains", async ({
+  page,
+  context,
+}) => {
+  await page.clock.install();
+  await page.goto("/");
+  const main = await context.newPage();
+  await chat(main);
+  await ask(main, "Open Telegram");
+  await main.getByRole("button", { name: "Allow once" }).click();
+  await expect(page.locator(".pet-bubble")).toContainText(
+    "Mock launch: Telegram",
+  );
+  await page.clock.fastForward(9000);
+  await expect(page.locator(".pet-bubble")).toHaveCount(0);
+  await expect(main.getByRole("log")).toContainText("Mock launch: Telegram");
+});
+
+test("spoken approval resolves the pending launch", async ({ page }) => {
+  await fakeNative(page, true);
+  await page.addInitScript(() => {
+    const w = window as any;
+    const original = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+      if (command === "transcribe_audio") return "approve";
+      return original(command, args);
+    };
+  });
+  await chat(page);
+  await ask(page, "Open Calculator");
+  await expect(page.getByRole("dialog")).toContainText("Open Calculator?");
+  await page.getByRole("button", { name: "Decide by voice" }).click();
+  await expect(
+    page.getByRole("button", { name: "Finish voice decision" }),
+  ).toBeVisible();
+  await page.waitForTimeout(400);
+  await page.getByRole("button", { name: "Finish voice decision" }).click();
+  await expect(page.getByRole("log")).toContainText(
+    "Launch requested for Calculator.",
+  );
+  const calls = await page.evaluate(() => (window as any).__calls);
+  expect(
+    calls.find((x: any) => x.command === "resolve_launch").args.allow,
+  ).toBe(true);
+});
+
+test("automatic provider routing alternates and falls back after a failure", async ({
+  page,
+}) => {
+  await fakeNative(page);
+  await page.addInitScript(() => {
+    const w = window as any;
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ backend: "auto", voice: "off" }),
+    );
+    const previous = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+      if (command === "gemini_status") return { configured: true };
+      if (command === "groq_status") return true;
+      if (command === "gemini_chat_stream") {
+        w.__calls.push({ command, args });
+        return JSON.stringify({ text: "Gemini answer", emotion: "happy" });
+      }
+      if (command === "groq_chat") {
+        w.__calls.push({ command, args });
+        if (w.__failGroq) throw Error("Groq unavailable");
+        return "Groq answer";
+      }
+      return previous(command, args);
+    };
+  });
+  await chat(page);
+  await ask(page, "First question");
+  await expect(page.getByRole("log")).toContainText("Gemini answer");
+  await ask(page, "Second question");
+  await expect(page.getByRole("log")).toContainText("Groq answer");
+  await ask(page, "Third question");
+  await expect(page.getByRole("log").getByText("Gemini answer")).toHaveCount(2);
+  await page.evaluate(() => {
+    (window as any).__failGroq = true;
+  });
+  await ask(page, "Fourth question");
+  await expect(page.getByRole("log").getByText("Gemini answer")).toHaveCount(3);
+  const calls = await page.evaluate(() =>
+    (window as any).__calls
+      .filter((c: any) =>
+        ["gemini_chat_stream", "groq_chat"].includes(c.command),
+      )
+      .map((c: any) => c.command),
+  );
+  expect(calls).toEqual([
+    "gemini_chat_stream",
+    "groq_chat",
+    "gemini_chat_stream",
+    "groq_chat",
+    "gemini_chat_stream",
+  ]);
+});
+
+test("open mic previews local transcription and submits once after silence", async ({
+  page,
+}) => {
+  await fakeNative(page, true);
+  await page.addInitScript(() => {
+    const w = window as any;
+    let now = 0;
+    Object.defineProperty(performance, "now", { value: () => now });
+    w.__advanceAudio = (value: number, elapsed: number) => {
+      now += elapsed;
+      w.__processor?.onaudioprocess?.({
+        inputBuffer: {
+          getChannelData: () => new Float32Array(4096).fill(value),
+        },
+      });
+    };
+    const track = { stop: () => {} };
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: async () => ({ getTracks: () => [track] }) },
+    });
+    w.AudioContext = class {
+      sampleRate = 16000;
+      destination = {};
+      resume() {
+        return Promise.resolve();
+      }
+      close() {
+        return Promise.resolve();
+      }
+      createMediaStreamSource() {
+        return { connect() {} };
+      }
+      createScriptProcessor() {
+        return (w.__processor = {
+          connect() {},
+          disconnect() {},
+          onaudioprocess: null,
+        });
+      }
+      createGain() {
+        return { gain: { value: 0 }, connect() {} };
+      }
+      decodeAudioData() {
+        return Promise.reject(Error("test has no playback"));
+      }
+    };
+    const previous = w.__TAURI_INTERNALS__.invoke;
+    let count = 0;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+      if (command === "transcribe_audio") {
+        count++;
+        return count === 1 ? "draft words" : "finished words";
+      }
+      return previous(command, args);
+    };
+  });
+  await chat(page);
+  await page.getByRole("button", { name: "Characters", exact: true }).click();
+  await page.getByLabel("Voice mode").selectOption("open-mic");
+  await page
+    .getByRole("button", { name: "Conversations", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Start open mic" }).click();
+  await expect
+    .poll(() => page.evaluate(() => !!(window as any).__processor))
+    .toBe(true);
+  await page.evaluate(() => {
+    for (let i = 0; i < 4; i++) (window as any).__advanceAudio(0.1, 1000);
+  });
+  await expect(page.getByRole("log")).toContainText("draft words");
+  await page.evaluate(() => (window as any).__advanceAudio(0, 1200));
+  await expect(page.getByRole("log")).toContainText("finished words");
+  await expect(page.getByRole("log").getByText("finished words")).toHaveCount(
+    1,
+  );
+  await page.getByRole("button", { name: "Stop open mic" }).click();
 });

@@ -13,23 +13,33 @@ import { agentFor } from "./agent";
 import { InstalledApps } from "./InstalledApps";
 import { BackendSettings } from "./BackendSettings";
 import { useVoice } from "./useVoice";
+import { useOpenMic } from "./useOpenMic";
 import { loadHistory, saveHistory, clearHistory } from "./history";
 import {
   parseHistory,
   type ChatMessage,
 } from "../../../packages/shared-schemas/history.ts";
 import { publishPet } from "./session";
-import { PetSettings } from "./PetSettings";
+import { CharacterStudio } from "./CharacterStudio";
 import { usePreferences, updatePreferences } from "./preferences";
 import { broker, isNative } from "./broker";
+import { voiceDecision } from "../../../packages/shared-schemas/voice-decision.ts";
 
-const tabs = ["Conversations", "Activity", "Permissions", "Settings"] as const;
+const tabs = [
+  "Conversations",
+  "Characters",
+  "Activity",
+  "Permissions",
+  "Settings",
+] as const;
 export function App() {
   const preferences = usePreferences();
   const [showApps, setShowApps] = useState(false);
   const [tab, setTab] = useState<string>(
-      new URLSearchParams(location.search).get("tab") === "Settings"
-        ? "Settings"
+      ["Settings", "Characters"].includes(
+        new URLSearchParams(location.search).get("tab") ?? "",
+      )
+        ? new URLSearchParams(location.search).get("tab")!
         : "Conversations",
     ),
     [mode, setMode] = useState<Mode>("Assist"),
@@ -60,7 +70,11 @@ export function App() {
   const [input, setInput] = useState(""),
     [pending, setPending] = useState<LaunchRequest | null>(null),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [approvalError, setApprovalError] = useState(""),
+    [streaming, setStreaming] = useState(""),
+    [openMicActive, setOpenMicActive] = useState(false),
+    [liveTranscript, setLiveTranscript] = useState("");
   const [onboard, setOnboard] = useState(
     !sessionStorage.getItem("mivuneko-welcome"),
   );
@@ -73,7 +87,7 @@ export function App() {
   useEffect(() => {
     const list = messageList.current;
     if (list) list.scrollTop = list.scrollHeight;
-  }, [messages, busy, tab]);
+  }, [messages, busy, tab, streaming, liveTranscript]);
   const [historyReady, setHistoryReady] = useState(false);
   const voice = useVoice(
     (text) => {
@@ -81,6 +95,42 @@ export function App() {
     },
     setMood,
     setError,
+  );
+  const openMic = useOpenMic(
+    openMicActive &&
+      preferences.voice === "open-mic" &&
+      isNative &&
+      tab === "Conversations" &&
+      !onboard,
+    busy || !!pending || voice.speaking || !historyReady,
+    setLiveTranscript,
+    (text) => {
+      void send(text);
+    },
+    (message) => {
+      setError(message);
+      if (message.startsWith("Microphone unavailable")) setOpenMicActive(false);
+    },
+  );
+  useEffect(() => {
+    if (preferences.voice !== "open-mic") setOpenMicActive(false);
+    const hidden = () => {
+      if (document.hidden) setOpenMicActive(false);
+    };
+    document.addEventListener("visibilitychange", hidden);
+    return () => document.removeEventListener("visibilitychange", hidden);
+  }, [preferences.voice]);
+  const approvalVoice = useVoice(
+    (text) => {
+      const decision = voiceDecision(text);
+      if (decision === null)
+        setApprovalError(
+          `I heard “${text}”. Say “approve” or “deny”, or use the buttons.`,
+        );
+      else void resolve(decision);
+    },
+    () => {},
+    setApprovalError,
   );
   useEffect(() => {
     let active = true;
@@ -168,6 +218,22 @@ export function App() {
   const add = (text: string) =>
     setMessages((m) => [...m, { role: "assistant", text }]);
   const log = logActivity;
+  async function applyApproval(request: LaunchRequest) {
+    if (preferences.approvalMode === "ask") {
+      setApprovalError("");
+      setPending(request);
+      setMood("concerned");
+      log(`Approval requested: ${request.app.name}`);
+      return;
+    }
+    const allow = preferences.approvalMode === "auto";
+    const result = await broker.resolveLaunch(request.id, allow);
+    add(result.message);
+    log(
+      `${allow ? "Automatically approved" : "Automatically denied"}: ${request.app.name}. ${result.message}`,
+    );
+    setMood(result.ok ? "celebrating" : "idle");
+  }
   async function send(text = input) {
     if (!text.trim() || busy || pending || !historyReady || turnActive.current)
       return;
@@ -176,6 +242,7 @@ export function App() {
       return;
     }
     setInput("");
+    setStreaming("");
     setError("");
     setMessages((m) => [...m, { role: "user", text }]);
     turnActive.current = true;
@@ -195,6 +262,9 @@ export function App() {
         mode,
         c.signal,
         messages,
+        (partial) => {
+          if (!c.signal.aborted) setStreaming(partial);
+        },
       );
       c.signal.throwIfAborted();
       add(reply.text);
@@ -212,9 +282,7 @@ export function App() {
           await broker.revoke();
           return;
         }
-        setPending(p);
-        log(`Approval requested: ${p.app.name}`);
-        setMood("concerned");
+        await applyApproval(p);
       } else {
         setMood(reply.mood ?? "happy");
         if (preferences.voice !== "off" && isNative)
@@ -229,6 +297,7 @@ export function App() {
     } finally {
       if (controller.current === c) {
         turnActive.current = false;
+        setStreaming("");
         setBusy(false);
       }
     }
@@ -249,9 +318,7 @@ export function App() {
         await broker.revoke();
         return;
       }
-      setPending(request);
-      setMood("concerned");
-      log(`Approval requested: ${app.name}`);
+      await applyApproval(request);
     } catch (e) {
       if (!c.signal.aborted) setError(String(e));
     } finally {
@@ -264,6 +331,7 @@ export function App() {
   async function resolve(allow: boolean) {
     if (!pending) return;
     const p = pending;
+    void approvalVoice.stop();
     setPending(null);
     setBusy(true);
     try {
@@ -281,8 +349,11 @@ export function App() {
   }
   async function stop() {
     controller.current?.abort();
+    setOpenMicActive(false);
+    setLiveTranscript("");
     turnActive.current = false;
     await voice.stop();
+    await approvalVoice.stop();
     setPending(null);
     await broker.revoke();
     setBusy(false);
@@ -308,7 +379,9 @@ export function App() {
               <span>
                 <Icon
                   name={
-                    (["chat", "activity", "shield", "settings"] as const)[i]
+                    (
+                      ["chat", "cat", "activity", "shield", "settings"] as const
+                    )[i]
                   }
                 />
               </span>
@@ -345,15 +418,15 @@ export function App() {
             <p>
               {tab === "Conversations"
                 ? "A little company, on your terms."
-                : tab === "Settings"
+                : tab === "Settings" || tab === "Characters"
                   ? "A space that feels like you."
                   : "Your companion, with you in control."}
             </p>
           </div>
           <span className="status">
             <span className="dot" />{" "}
-            {preferences.backend === "gemini"
-              ? "Gemini"
+            {preferences.backend === "auto"
+              ? "Gemini + Groq"
               : preferences.backend === "hermes"
                 ? "Hermes local"
                 : "Offline demo"}{" "}
@@ -362,7 +435,7 @@ export function App() {
         </header>
         {tab === "Conversations" ? (
           <div className="workspace">
-            <CompanionCard onSettings={() => setTab("Settings")} />
+            <CompanionCard onSettings={() => setTab("Characters")} />
             <section className="chat">
               <div className="chat-head">
                 <div>
@@ -401,7 +474,19 @@ export function App() {
                     <p>{m.text}</p>
                   </div>
                 ))}
-                {busy ? (
+                {liveTranscript && !busy ? (
+                  <div className="message user" aria-live="polite">
+                    <small>YOU · listening</small>
+                    <p>{liveTranscript}</p>
+                  </div>
+                ) : null}
+                {busy && streaming ? (
+                  <div className="message assistant">
+                    <small>Mivuneko</small>
+                    <p>{streaming}</p>
+                  </div>
+                ) : null}
+                {busy && !streaming ? (
                   <p role="status" className="thinking-indicator">
                     <i />
                     <i />
@@ -440,35 +525,65 @@ export function App() {
                 <div className="composer-actions">
                   <small>
                     {mode} mode ·{" "}
-                    {voice.recording
-                      ? "microphone recording"
-                      : voice.speaking
-                        ? "speaking"
-                        : preferences.voice === "off"
-                          ? "text only"
-                          : preferences.voiceProvider === "gemini"
-                            ? "Gemini voice"
-                            : "local voice"}
+                    {openMicActive && openMic.working
+                      ? "transcribing locally"
+                      : openMicActive && !busy && !voice.speaking
+                        ? "open mic listening"
+                        : voice.recording
+                          ? "microphone recording"
+                          : voice.speaking
+                            ? "speaking"
+                            : preferences.voice === "off"
+                              ? "text only"
+                              : preferences.voiceProvider === "gemini"
+                                ? "Gemini voice"
+                                : "local voice"}
                   </small>
-                  <button
-                    type="button"
-                    disabled={
-                      !isNative ||
-                      preferences.voice !== "push-to-talk" ||
-                      busy ||
-                      !!pending
-                    }
-                    onClick={() =>
-                      voice.recording
-                        ? voice.finishRecording()
-                        : void voice.record()
-                    }
-                  >
-                    <Icon name="mic" />
-                    <span>
-                      {voice.recording ? "Finish recording" : "Record"}
-                    </span>
-                  </button>
+                  {preferences.voice === "open-mic" && (
+                    <button
+                      type="button"
+                      disabled={!isNative}
+                      onClick={() => {
+                        setError("");
+                        setOpenMicActive((active) => !active);
+                      }}
+                    >
+                      <Icon name="mic" />
+                      <span>
+                        {openMicActive ? "Stop open mic" : "Start open mic"}
+                      </span>
+                    </button>
+                  )}
+                  {preferences.voice !== "open-mic" && (
+                    <button
+                      type="button"
+                      title={
+                        !isNative
+                          ? "Recording requires the native app"
+                          : preferences.voice !== "push-to-talk"
+                            ? "Enable push-to-talk in Characters"
+                            : busy || pending
+                              ? "Wait for the current request"
+                              : "Record your voice"
+                      }
+                      disabled={
+                        !isNative ||
+                        preferences.voice !== "push-to-talk" ||
+                        busy ||
+                        !!pending
+                      }
+                      onClick={() =>
+                        voice.recording
+                          ? voice.finishRecording()
+                          : void voice.record()
+                      }
+                    >
+                      <Icon name="mic" />
+                      <span>
+                        {voice.recording ? "Finish recording" : "Record"}
+                      </span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={busy || !!pending || voice.recording}
@@ -497,10 +612,22 @@ export function App() {
                 </div>
               </form>
               <p className="chat-note">
-                App access requires your approval. Every time.
+                {openMicActive && (
+                  <span>
+                    Open mic is on. Speech is transcribed locally; completed
+                    phrases are sent to the selected conversation provider.{" "}
+                  </span>
+                )}
+                {preferences.approvalMode === "auto"
+                  ? "Recognized app launches are automatically approved."
+                  : preferences.approvalMode === "deny"
+                    ? "App launches are denied."
+                    : "App launch approval follows your Permissions setting."}
               </p>
             </section>
           </div>
+        ) : tab === "Characters" ? (
+          <CharacterStudio />
         ) : (
           <section className="page">
             <h2>
@@ -542,8 +669,8 @@ export function App() {
             ) : tab === "Permissions" ? (
               <>
                 <p>
-                  Assist and Autonomous can request launches. Neither bypasses
-                  approval.
+                  Choose how recognized application launches are handled in
+                  Assist and Autonomous modes.
                 </p>
                 <label className="setting">
                   App launching{" "}
@@ -556,10 +683,35 @@ export function App() {
                     }}
                   />
                 </label>
+                <label className="setting">
+                  Approval mode
+                  <select
+                    aria-label="Approval mode"
+                    value={preferences.approvalMode}
+                    disabled={busy || !!pending}
+                    onChange={(e) =>
+                      updatePreferences({
+                        approvalMode: e.target
+                          .value as typeof preferences.approvalMode,
+                      })
+                    }
+                  >
+                    <option value="ask">Approve each request</option>
+                    <option value="auto">
+                      Automatically approve app launches
+                    </option>
+                    <option value="deny">Deny app launches</option>
+                  </select>
+                </label>
                 <p>
-                  Microphone is available only through Record in the native app
-                  with system permission. Screenshots, accessibility, shell and
-                  arbitrary file access are unavailable.
+                  Automatic approval opens recognized installed apps without
+                  asking. Shell commands and arbitrary paths remain unavailable.
+                </p>
+                <p>
+                  Microphone access starts when you use Record or Start open mic
+                  in the native app with system permission. Screenshots,
+                  accessibility, shell and arbitrary file access are
+                  unavailable.
                 </p>
                 <button
                   onClick={async () => {
@@ -573,17 +725,16 @@ export function App() {
             ) : (
               <>
                 <BackendSettings />
-                <PetSettings />
+                <button type="button" onClick={() => setTab("Characters")}>
+                  Companion and voice settings
+                </button>
                 <label className="setting">
                   Language{" "}
                   <select aria-label="Language">
                     <option>English · en-US</option>
                   </select>
                 </label>
-                <p>
-                  Characters: original prototypes / imported VRM. Voice and
-                  provider behavior follow your settings above.
-                </p>
+                <p>Choose your 2D companion and voice style above.</p>
                 <p>
                   Hermes credentials stay in your environment or macOS Keychain.
                   The optional voice helper configures a local whisper.cpp
@@ -645,6 +796,30 @@ export function App() {
                 Allow once
               </button>
             </div>
+            <button
+              type="button"
+              disabled={!isNative || preferences.voice === "off"}
+              onClick={() =>
+                approvalVoice.recording
+                  ? approvalVoice.finishRecording()
+                  : void approvalVoice.record()
+              }
+            >
+              {approvalVoice.recording
+                ? "Finish voice decision"
+                : "Decide by voice"}
+            </button>
+            <p>
+              Say “approve” or “deny”.{" "}
+              {preferences.voice === "off"
+                ? "Enable a voice mode in Characters first."
+                : ""}
+            </p>
+            {approvalError && (
+              <p className="error" role="alert">
+                {approvalError}
+              </p>
+            )}
             <button onClick={() => void stop()}>Cancel request</button>
           </section>
         </div>
@@ -667,9 +842,14 @@ export function App() {
             </h2>
             <p>Meet Mivuneko, your little desktop companion.</p>
             <ul>
-              <li>Original illustrated companion, with 3D and VRM options</li>
-              <li>One-time approval before each app launch</li>
-              <li>Microphone only when you press Record; history is opt-in</li>
+              <li>Illustrated 2D companions with expressions and effects</li>
+              <li>
+                App launches ask first by default; change this in Permissions
+              </li>
+              <li>
+                Microphone starts only when you choose Record or Start open mic;
+                history is opt-in
+              </li>
             </ul>
             <p>
               Use Assist mode and type “Open Telegram”. Browser previews

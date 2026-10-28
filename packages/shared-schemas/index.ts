@@ -44,6 +44,7 @@ export interface Agent {
     mode: Mode,
     signal: AbortSignal,
     history?: { role: string; text: string }[],
+    onProgress?: (text: string) => void,
   ): Promise<AgentReply>;
 }
 export interface Speech {

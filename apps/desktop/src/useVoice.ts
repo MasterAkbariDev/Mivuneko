@@ -118,13 +118,22 @@ export function useVoice(
           const wav = pcm16Wav(mono, buffer.sampleRate);
           const { invoke } = await import("@tauri-apps/api/core");
           if (ticket !== generation.current) return;
-          const text = cloud
-            ? await cloudInvoke<string>("gemini_transcribe", {
-                wav: Array.from(wav),
-              })
-            : await invoke<string>("transcribe_audio", {
+          const localTranscribe = () =>
+            invoke<string>("transcribe_audio", { wav: Array.from(wav) });
+          let text: string;
+          if (cloud) {
+            try {
+              text = await cloudInvoke<string>("gemini_transcribe", {
                 wav: Array.from(wav),
               });
+            } catch (e) {
+              if (ticket !== generation.current) return;
+              onError(
+                `Gemini transcription unavailable (${String(e)}). Using local transcription.`,
+              );
+              text = await localTranscribe();
+            }
+          } else text = await localTranscribe();
           if (ticket === generation.current) {
             onMood("idle");
             if (text) onTranscript(text);
@@ -158,20 +167,37 @@ export function useVoice(
   async function speak(text: string, volume: number, emotion: Mood = "happy") {
     if (!isNative) return;
     const ticket = generation.current;
+    setSpeaking(true);
     try {
       prepare();
       const { invoke } = await import("@tauri-apps/api/core");
       if (ticket !== generation.current) return;
-      const bytes = cloud
-        ? await cloudInvoke<number[]>("gemini_speak", {
+      const localSpeech = () =>
+        invoke<number[]>("synthesize_speech", {
+          text: text.slice(0, 2000),
+          style: preferences.localVoiceStyle,
+          language: preferences.localVoiceLanguage,
+          character: preferences.character,
+        });
+      let bytes: number[];
+      if (cloud) {
+        try {
+          bytes = await cloudInvoke<number[]>("gemini_speak", {
             text: text.slice(0, 2000),
             emotion,
-          })
-        : await invoke<number[]>("synthesize_speech", {
-            text: text.slice(0, 2000),
+            character: preferences.character,
           });
+        } catch (e) {
+          if (ticket !== generation.current) return;
+          onError(
+            `Gemini speech unavailable (${String(e)}). Using the local character voice.`,
+          );
+          bytes = await localSpeech();
+        }
+      } else bytes = await localSpeech();
       if (ticket !== generation.current) return;
       const audio = context.current!;
+      await audio.resume();
       const buffer = await audio.decodeAudioData(new Uint8Array(bytes).buffer);
       if (ticket !== generation.current) return;
       const node = audio.createBufferSource(),
@@ -199,6 +225,7 @@ export function useVoice(
       frame.current = requestAnimationFrame(animate);
       node.onended = () => {
         cancelAnimationFrame(frame.current);
+        if (source.current === node) source.current = null;
         node.disconnect();
         analyser.disconnect();
         gain.disconnect();
@@ -219,7 +246,11 @@ export function useVoice(
   }
   useEffect(() => {
     const hidden = () => {
-      if (document.hidden) void stop();
+      if (
+        document.hidden &&
+        (starting.current || recorder.current?.state === "recording")
+      )
+        void stop();
     };
     document.addEventListener("visibilitychange", hidden);
     return () => {
