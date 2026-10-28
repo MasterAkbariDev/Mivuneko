@@ -11,7 +11,7 @@ export const mockHermes: Agent = {
     return {
       text: match
         ? "Switch to Assist to request app launching. Chat and Creative have no desktop tools."
-        : "You’re using offline demo mode. Try “Open Telegram” in Assist mode, or choose Google Gemini or Local Hermes Agent in Settings for live chat.",
+        : "Connect a conversation provider in Settings to chat. Basic app commands remain available offline in Assist mode.",
     };
   },
 };

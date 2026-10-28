@@ -131,7 +131,8 @@ impl VoiceWorker {
                 .spawn()
                 .map_err(|_| "Could not start the character voice engine")?;
             let stdin = child.stdin.take().ok_or("Voice engine has no input")?;
-            let mut stdout = BufReader::new(child.stdout.take().ok_or("Voice engine has no output")?);
+            let mut stdout =
+                BufReader::new(child.stdout.take().ok_or("Voice engine has no output")?);
             let mut line = String::new();
             // The model takes several seconds to load; READY arrives when it is usable.
             if stdout.read_line(&mut line).is_err() || !line.starts_with("READY") {
@@ -150,11 +151,17 @@ impl VoiceWorker {
         let t = slot.as_mut().ok_or("Voice engine unavailable")?;
         let request = format!("GEN {speaker} {speed:.3} {}\n", text.len());
         let io = (|| -> Result<Vec<u8>, String> {
-            t.stdin.write_all(request.as_bytes()).map_err(|_| "Voice engine closed")?;
-            t.stdin.write_all(text.as_bytes()).map_err(|_| "Voice engine closed")?;
+            t.stdin
+                .write_all(request.as_bytes())
+                .map_err(|_| "Voice engine closed")?;
+            t.stdin
+                .write_all(text.as_bytes())
+                .map_err(|_| "Voice engine closed")?;
             t.stdin.flush().map_err(|_| "Voice engine closed")?;
             let mut line = String::new();
-            t.stdout.read_line(&mut line).map_err(|_| "Voice engine closed")?;
+            t.stdout
+                .read_line(&mut line)
+                .map_err(|_| "Voice engine closed")?;
             let size: usize = line
                 .strip_prefix("OK ")
                 .and_then(|n| n.trim().parse().ok())
@@ -163,7 +170,9 @@ impl VoiceWorker {
                 return Err("Voice engine returned an invalid size".into());
             }
             let mut wav = vec![0u8; size];
-            t.stdout.read_exact(&mut wav).map_err(|_| "Voice engine closed")?;
+            t.stdout
+                .read_exact(&mut wav)
+                .map_err(|_| "Voice engine closed")?;
             Ok(wav)
         })();
         if io.is_err() {
@@ -196,7 +205,10 @@ impl VoiceWorker {
             .as_ref()
             .filter(|s| s.is_absolute() && s.is_file())
             .ok_or("No whisper-server configured")?;
-        let mut slot = self.resident.lock().map_err(|_| "Speech server state poisoned")?;
+        let mut slot = self
+            .resident
+            .lock()
+            .map_err(|_| "Speech server state poisoned")?;
         if let Some(r) = slot.as_mut() {
             if r.model == config.model && matches!(r.child.try_wait(), Ok(None)) {
                 return Ok(r.port);
@@ -210,6 +222,11 @@ impl VoiceWorker {
             .map(|n| (n.get() / 2).clamp(2, 8))
             .unwrap_or(4);
         let mut command = Command::new(server);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000);
+        }
         #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
         command.arg("-ng");
         command
@@ -273,7 +290,10 @@ impl VoiceWorker {
         if !sherpa.server.is_file() || !sherpa.model_dir.is_dir() {
             return Err("Parakeet is not installed".into());
         }
-        let mut slot = self.resident.lock().map_err(|_| "Speech server state poisoned")?;
+        let mut slot = self
+            .resident
+            .lock()
+            .map_err(|_| "Speech server state poisoned")?;
         if let Some(r) = slot.as_mut() {
             if r.model == sherpa.model_dir && matches!(r.child.try_wait(), Ok(None)) {
                 return Ok(r.port);
@@ -284,7 +304,13 @@ impl VoiceWorker {
         }
         let port = Self::free_port()?;
         let m = &sherpa.model_dir;
-        let mut child = Command::new(&sherpa.server)
+        let mut command = Command::new(&sherpa.server);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000);
+        }
+        let mut child = command
             .env("DYLD_LIBRARY_PATH", &sherpa.lib_dir)
             .env_remove("MIVUNEKO_GEMINI_KEYS")
             .env_remove("GEMINI_API_KEY")
@@ -295,11 +321,21 @@ impl VoiceWorker {
             .arg("--num-work-threads=2")
             .arg("--max-batch-size=1")
             .arg(format!("--tokens={}", m.join("tokens.txt").display()))
-            .arg(format!("--encoder={}", m.join("encoder.int8.onnx").display()))
-            .arg(format!("--decoder={}", m.join("decoder.int8.onnx").display()))
+            .arg(format!(
+                "--encoder={}",
+                m.join("encoder.int8.onnx").display()
+            ))
+            .arg(format!(
+                "--decoder={}",
+                m.join("decoder.int8.onnx").display()
+            ))
             .arg(format!("--joiner={}", m.join("joiner.int8.onnx").display()))
             .arg("--model-type=nemo_transducer")
-            .arg("--log-file=/dev/null")
+            .arg(if cfg!(windows) {
+                "--log-file=NUL"
+            } else {
+                "--log-file=/dev/null"
+            })
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -347,7 +383,9 @@ impl VoiceWorker {
     ) -> Result<String, String> {
         let port = self.ensure_sherpa(sherpa, ticket)?;
         let samples: Vec<u8> = wav[44..]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .flat_map(|b| (i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0).to_le_bytes())
             .collect();
         let mut message = Vec::with_capacity(8 + samples.len());
@@ -366,7 +404,9 @@ impl VoiceWorker {
         let reply = loop {
             match socket.read().map_err(|_| "Parakeet did not answer")? {
                 tungstenite::Message::Text(t) => break t,
-                tungstenite::Message::Close(_) => return Err("Parakeet closed the connection".into()),
+                tungstenite::Message::Close(_) => {
+                    return Err("Parakeet closed the connection".into())
+                }
                 _ => {}
             }
         };
@@ -418,6 +458,11 @@ impl VoiceWorker {
         Ok(body["text"].as_str().unwrap_or("").trim().to_string())
     }
     fn run(&self, mut command: Command, timeout: Duration, generation: u64) -> Result<(), String> {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000);
+        }
         if self.ticket() != generation {
             return Err("Voice operation was cancelled".into());
         }
@@ -465,7 +510,12 @@ impl VoiceWorker {
         self.synthesize_for_character(text, style, language, "luna", ticket)
     }
     pub fn synthesize_for_character(
-        &self, text: &str, style: &str, language: &str, character: &str, ticket: u64,
+        &self,
+        text: &str,
+        style: &str,
+        language: &str,
+        character: &str,
+        ticket: u64,
     ) -> Result<Vec<u8>, String> {
         if !cfg!(target_os = "macos") {
             return Err("System speech output is currently supported on macOS only".into());
@@ -474,18 +524,29 @@ impl VoiceWorker {
             return Err("Speech text must contain 1–2000 characters".into());
         }
         let character_voice = match character {
-            "luna" => "Samantha", "miku" => "Sandy (English (US))",
-            "kitsune" => "Flo (English (US))", "stella" => "Shelley (English (US))",
-            "teto" => "Karen", "neru" => "Moira", "snow" => "Tessa",
-            "silver" => "Flo (English (UK))", "azure" => "Sandy (English (UK))", "goth" => "Shelley (English (UK))",
+            "luna" => "Samantha",
+            "miku" => "Sandy (English (US))",
+            "kitsune" => "Flo (English (US))",
+            "stella" => "Shelley (English (US))",
+            "teto" => "Karen",
+            "neru" => "Moira",
+            "snow" => "Tessa",
+            "silver" => "Flo (English (UK))",
+            "azure" => "Sandy (English (UK))",
+            "goth" => "Shelley (English (UK))",
             _ => "Samantha",
         };
         let (natural_rate, bright_rate) = match character {
-            "miku" => ("178", "203"), "kitsune" => ("184", "209"),
-            "stella" => ("190", "215"), "teto" => ("196", "221"),
-            "neru" => ("172", "197"), "snow" => ("158", "183"),
-            "silver" => ("162", "187"), "azure" => ("180", "205"),
-            "goth" => ("154", "179"), _ => ("170", "195"),
+            "miku" => ("178", "203"),
+            "kitsune" => ("184", "209"),
+            "stella" => ("190", "215"),
+            "teto" => ("196", "221"),
+            "neru" => ("172", "197"),
+            "snow" => ("158", "183"),
+            "silver" => ("162", "187"),
+            "azure" => ("180", "205"),
+            "goth" => ("154", "179"),
+            _ => ("170", "195"),
         };
         let (voice, rate) = match (style, language) {
             ("natural", _) => (character_voice, natural_rate),
@@ -537,20 +598,33 @@ impl VoiceWorker {
             let _ = std::fs::write(Path::new(&dir).join(format!("utterance-{stamp}.wav")), wav);
         }
         let (binary, model) = (&config.binary, &config.model);
-        if !binary.is_absolute() || !binary.is_file() || !model.is_absolute() || !model.is_file() {
-            return Err(
-                "Configure absolute MIVUNEKO_WHISPER_BIN and MIVUNEKO_WHISPER_MODEL paths".into(),
-            );
-        }
-        let tail: String = context.chars().rev().take(200).collect::<Vec<_>>().into_iter().rev().collect();
+        let tail: String = context
+            .chars()
+            .rev()
+            .take(200)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
         let prompt = format!("Mivuneko, Luna. {}", tail.replace('\n', " ").trim());
         if let Some(sherpa) = &config.sherpa {
             match self.transcribe_sherpa(wav, sherpa, ticket) {
                 Ok(text) => return Ok(text),
                 Err(e) if self.ticket() != ticket => return Err(e),
                 // Parakeet unavailable: free it and fall back to the configured whisper model.
-                Err(_) => self.shutdown(),
+                Err(error) => {
+                    self.shutdown();
+                    if !binary.is_file() || !model.is_file() {
+                        return Err(format!("Parakeet could not transcribe: {error}. Retry or reinstall it in Settings → Voice & input."));
+                    }
+                }
             }
+        }
+        if !binary.is_absolute() || !binary.is_file() || !model.is_absolute() || !model.is_file() {
+            return Err(
+                "Speech recognition is unavailable. Download a model in Settings → Voice & input."
+                    .into(),
+            );
         }
         if Self::mode(config) == "server" {
             match self.transcribe_server(wav, config, &prompt, ticket) {
@@ -717,30 +791,89 @@ mod tests {
 /// slots (the foreign-language ones) so each mood can have its own timbre.
 pub mod kokoro {
     pub const SPEAKERS: [&str; 54] = [
-        "af_alloy", "af_aoede", "af_bella", "af_heart", "af_jessica", "af_kore", "af_nicole",
-        "af_nova", "af_river", "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir",
-        "am_liam", "am_michael", "am_onyx", "am_puck", "am_santa", "bf_alice", "bf_emma",
-        "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george", "bm_lewis", "ef_dora",
-        "em_alex", "ff_siwis", "hf_alpha", "hf_beta", "hm_omega", "hm_psi", "if_sara",
-        "im_nicola", "jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo",
-        "pf_dora", "pm_alex", "pm_santa", "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi",
-        "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang", "em_santa",
+        "af_alloy",
+        "af_aoede",
+        "af_bella",
+        "af_heart",
+        "af_jessica",
+        "af_kore",
+        "af_nicole",
+        "af_nova",
+        "af_river",
+        "af_sarah",
+        "af_sky",
+        "am_adam",
+        "am_echo",
+        "am_eric",
+        "am_fenrir",
+        "am_liam",
+        "am_michael",
+        "am_onyx",
+        "am_puck",
+        "am_santa",
+        "bf_alice",
+        "bf_emma",
+        "bf_isabella",
+        "bf_lily",
+        "bm_daniel",
+        "bm_fable",
+        "bm_george",
+        "bm_lewis",
+        "ef_dora",
+        "em_alex",
+        "ff_siwis",
+        "hf_alpha",
+        "hf_beta",
+        "hm_omega",
+        "hm_psi",
+        "if_sara",
+        "im_nicola",
+        "jf_alpha",
+        "jf_gongitsune",
+        "jf_nezumi",
+        "jf_tebukuro",
+        "jm_kumo",
+        "pf_dora",
+        "pm_alex",
+        "pm_santa",
+        "zf_xiaobei",
+        "zf_xiaoni",
+        "zf_xiaoxiao",
+        "zf_xiaoyi",
+        "zm_yunjian",
+        "zm_yunxi",
+        "zm_yunxia",
+        "zm_yunyang",
+        "em_santa",
     ];
     /// Slot 40 holds the character's neutral voice; moods follow in this fixed order.
     pub const NEUTRAL_SLOT: usize = 40;
     pub const MOODS: [&str; 8] = [
-        "happy", "celebrating", "surprised", "curious", "confused", "concerned", "sad", "angry",
+        "happy",
+        "celebrating",
+        "surprised",
+        "curious",
+        "confused",
+        "concerned",
+        "sad",
+        "angry",
     ];
     pub const FLOATS_PER_SPEAKER: usize = 510 * 256;
     pub fn speaker_id(name: &str) -> Option<usize> {
         SPEAKERS.iter().position(|s| *s == name)
     }
     pub fn mood_slot(mood: &str) -> Option<usize> {
-        MOODS.iter().position(|m| *m == mood).map(|i| NEUTRAL_SLOT + 1 + i)
+        MOODS
+            .iter()
+            .position(|m| *m == mood)
+            .map(|i| NEUTRAL_SLOT + 1 + i)
     }
     /// `table` is the stock voices.bin (54 x 510 x 256 float32, little endian). Each
     /// recipe is (slot, [(speaker id, weight)]); weights are normalised. Returns the new table.
-    pub fn blend_table(table: &[u8], recipes: &[(usize, Vec<(usize, f32)>)]) -> Result<Vec<u8>, String> {
+    pub fn blend_table(
+        table: &[u8],
+        recipes: &[(usize, Vec<(usize, f32)>)],
+    ) -> Result<Vec<u8>, String> {
         let stride = FLOATS_PER_SPEAKER * 4;
         if table.len() != SPEAKERS.len() * stride {
             return Err("Unexpected Kokoro voices.bin size".into());
@@ -751,7 +884,8 @@ pub mod kokoro {
                 return Err("Voice slot out of range".into());
             }
             let total: f32 = parts.iter().map(|(_, w)| w.max(0.0)).sum();
-            if parts.is_empty() || total <= 0.0 || parts.iter().any(|(id, _)| *id >= SPEAKERS.len()) {
+            if parts.is_empty() || total <= 0.0 || parts.iter().any(|(id, _)| *id >= SPEAKERS.len())
+            {
                 return Err("Invalid voice blend".into());
             }
             let mut mix = vec![0f32; FLOATS_PER_SPEAKER];
@@ -796,7 +930,11 @@ pub mod kokoro {
         }
         #[test]
         fn blends_are_weighted_normalised_and_leave_other_voices_alone() {
-            let out = blend_table(&table(), &[(40, vec![(2, 1.0), (10, 3.0)]), (41, vec![(3, 5.0)])]).unwrap();
+            let out = blend_table(
+                &table(),
+                &[(40, vec![(2, 1.0), (10, 3.0)]), (41, vec![(3, 5.0)])],
+            )
+            .unwrap();
             assert!((first(&out, 40) - (2.0 * 0.25 + 10.0 * 0.75)).abs() < 1e-5);
             assert!((first(&out, 41) - 3.0).abs() < 1e-5);
             assert_eq!(first(&out, 3), 3.0);
@@ -805,7 +943,10 @@ pub mod kokoro {
         #[test]
         fn bad_recipes_are_rejected() {
             let t = table();
-            assert!(blend_table(&t, &[(5, vec![(1, 1.0)])]).is_err(), "real voices are never overwritten");
+            assert!(
+                blend_table(&t, &[(5, vec![(1, 1.0)])]).is_err(),
+                "real voices are never overwritten"
+            );
             assert!(blend_table(&t, &[(40, vec![])]).is_err());
             assert!(blend_table(&t, &[(40, vec![(99, 1.0)])]).is_err());
             assert!(blend_table(&t[..100], &[]).is_err());

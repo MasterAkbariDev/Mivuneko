@@ -17,3 +17,7 @@ Luna's `luna-emotions-v2.png` and `luna-actions-v2.png` were generated from the 
 - Kokoro-82M v1.0 (sherpa-onnx export): Apache-2.0. Individual voice styles carry the Kokoro project's terms.
 - These are fetched by `npm run setup:voice` / `npm run setup:sherpa` into `.local/` (git-ignored). Verify each licence before redistributing a build that bundles them.
 
+
+## Bundled VRoid character
+
+Haru (display alias for AvatarSample_B v1.1) is an official VRoid Project character © pixiv Inc., sourced from pixiv/ChatVRM. Original VRM metadata and rights are preserved. See the Haru provenance file for the pinned source, checksum and redistribution conditions. The model retains its own license and must not be relicensed as CC0.

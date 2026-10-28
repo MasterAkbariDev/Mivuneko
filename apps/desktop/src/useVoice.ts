@@ -25,21 +25,9 @@ export function useVoice(
   const preferences = usePreferences();
   const cloud = preferences.voiceProvider === "gemini";
   const requests = useRef(new Set<string>());
-  async function cloudInvoke<T>(
-    command: string,
-    args: Record<string, unknown>,
-  ): Promise<T> {
-    const requestId = crypto.randomUUID();
-    requests.current.add(requestId);
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      return await invoke<T>(command, { ...args, requestId });
-    } finally {
-      requests.current.delete(requestId);
-    }
-  }
   const [recording, setRecording] = useState(false),
     [speaking, setSpeaking] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const recorder = useRef<MediaRecorder | null>(null),
     stream = useRef<MediaStream | null>(null),
     context = useRef<AudioContext | null>(null),
@@ -76,6 +64,7 @@ export function useVoice(
     cancelAnimationFrame(frame.current);
     setRecording(false);
     setSpeaking(false);
+    setPreparing(false);
     onMood("idle");
     publishPet("idle", "", 0);
     if (isNative) {
@@ -253,6 +242,7 @@ export function useVoice(
         if (!started) {
           started = true;
           setSpeaking(true);
+          setPreparing(false);
           onMood("speaking");
           const samples = new Float32Array(analyser.fftSize);
           let shown = 0;
@@ -283,11 +273,116 @@ export function useVoice(
     }
     return true;
   }
+  async function speakCloud(
+    text: string,
+    volume: number,
+    emotion: Mood,
+    ticket: number,
+    played: { value: boolean },
+  ) {
+    const audio = context.current!;
+    await audio.resume();
+    const analyser = audio.createAnalyser(),
+      gain = audio.createGain();
+    gain.gain.value = volume;
+    analyser.connect(gain);
+    gain.connect(audio.destination);
+    const requestId = crypto.randomUUID();
+    let nextAt = audio.currentTime + 0.04;
+    let lastEnded: Promise<void> | undefined;
+    let playbackError: unknown;
+    const { listen } = await import("@tauri-apps/api/event");
+    const { invoke } = await import("@tauri-apps/api/core");
+    const unlisten = await listen<{
+      requestId: string;
+      pcm: number[];
+      sampleRate: number;
+    }>("voice-audio", (event) => {
+      if (
+        event.payload.requestId !== requestId ||
+        ticket !== generation.current ||
+        playbackError
+      )
+        return;
+      try {
+        const { pcm, sampleRate } = event.payload;
+        if (!pcm.length) return;
+        if (pcm.length % 2 || sampleRate < 8000 || sampleRate > 48000)
+          throw Error("Unsupported speech audio chunk");
+        const bytes = new Uint8Array(pcm),
+          view = new DataView(bytes.buffer),
+          buffer = audio.createBuffer(1, bytes.length / 2, sampleRate),
+          samples = buffer.getChannelData(0);
+        for (let i = 0; i < samples.length; i++)
+          samples[i] = view.getInt16(i * 2, true) / 32768;
+        const node = audio.createBufferSource();
+        node.buffer = buffer;
+        node.connect(analyser);
+        lastEnded = new Promise<void>((done) => {
+          node.onended = () => {
+            node.disconnect();
+            done();
+          };
+        });
+        const at = Math.max(audio.currentTime + 0.025, nextAt);
+        nextAt = at + buffer.duration;
+        phrases.current.push(node);
+        node.start(at);
+        if (!played.value) {
+          played.value = true;
+          setPreparing(false);
+          setSpeaking(true);
+          onMood("speaking");
+          const meter = new Float32Array(analyser.fftSize);
+          let shown = 0;
+          const animate = (now: number) => {
+            if (ticket !== generation.current) return;
+            if (now - shown > 60) {
+              analyser.getFloatTimeDomainData(meter);
+              publishPet("speaking", text, rms(meter), emotion);
+              shown = now;
+            }
+            frame.current = requestAnimationFrame(animate);
+          };
+          frame.current = requestAnimationFrame(animate);
+        }
+      } catch (e) {
+        playbackError = e;
+        void invoke("cancel_gemini", { requestId }).catch(() => {});
+      }
+    });
+    requests.current.add(requestId);
+    try {
+      if (ticket !== generation.current) return;
+      await invoke("gemini_speak_stream", {
+        requestId,
+        text: text.slice(0, 2000),
+        emotion,
+        character: preferences.character,
+      });
+      if (playbackError) throw playbackError;
+      if (!played.value) throw Error("No speech audio was returned");
+      await lastEnded;
+    } finally {
+      requests.current.delete(requestId);
+      unlisten();
+      analyser.disconnect();
+      gain.disconnect();
+    }
+    if (ticket === generation.current) {
+      cancelAnimationFrame(frame.current);
+      phrases.current = [];
+      setSpeaking(false);
+      setPreparing(false);
+      onMood(emotion);
+      publishPet(emotion, text, 0);
+    }
+  }
   async function speak(text: string, volume: number, emotion: Mood = "happy") {
     if (!isNative) return;
     await stop();
     const ticket = generation.current;
-    setSpeaking(true);
+    setPreparing(true);
     try {
       prepare();
       const { invoke } = await import("@tauri-apps/api/core");
@@ -309,14 +404,16 @@ export function useVoice(
         });
       let bytes: number[];
       if (cloud) {
+        const played = { value: false };
         try {
-          bytes = await cloudInvoke<number[]>("gemini_speak", {
-            text: text.slice(0, 2000),
-            emotion,
-            character: preferences.character,
-          });
+          await speakCloud(text, volume, emotion, ticket, played);
+          return;
         } catch (e) {
           if (ticket !== generation.current) return;
+          if (played.value)
+            throw Error(
+              "Speech was interrupted. You can still read the full reply.",
+            );
           onError(
             `Gemini speech unavailable (${String(e)}). Using the local character voice.`,
           );
@@ -341,6 +438,7 @@ export function useVoice(
       gain.connect(audio.destination);
       source.current = node;
       setSpeaking(true);
+      setPreparing(false);
       onMood("speaking");
       const samples = new Float32Array(analyser.fftSize);
       let last = 0;
@@ -377,6 +475,7 @@ export function useVoice(
         phrases.current = [];
         cancelAnimationFrame(frame.current);
         setSpeaking(false);
+        setPreparing(false);
         onMood("idle");
         publishPet("idle", "", 0);
         onError(String(e));
@@ -414,5 +513,14 @@ export function useVoice(
       document.removeEventListener("visibilitychange", hidden);
     };
   }, []);
-  return { recording, speaking, record, finishRecording, speak, stop, prepare };
+  return {
+    recording,
+    speaking,
+    preparing,
+    record,
+    finishRecording,
+    speak,
+    stop,
+    prepare,
+  };
 }

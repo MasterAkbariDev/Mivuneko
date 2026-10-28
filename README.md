@@ -1,4 +1,4 @@
-# Mivuneko · v0.3.2 developer build
+# Mivuneko
 
 Latest on `codex/macos-pet-voice`: in-app speech-recognition downloads, microphone selection
 and level checks, patient turn-taking, configurable app shortcuts, refreshed settings, and
@@ -66,7 +66,7 @@ cargo test -p os-broker -p agent-client -p desktop-core -p gemini-client --locke
 cargo clippy -p os-broker -p agent-client -p desktop-core -p gemini-client --all-targets --locked -- -D warnings
 ```
 
-`MIVUNEKO_CHROMIUM_PATH` can select a cloud-installed Chromium. Browser tests use synthetic audio and native IPC fixtures; they do not prove real Google inference or OS permissions. CI includes frontend/core checks, macOS Intel/Apple Silicon builds, and a Windows unsigned build. No remote repository or published release was created. Initialize/commit/push to your own GitHub destination after reviewing credentials and license choices.
+`MIVUNEKO_CHROMIUM_PATH` can select a cloud-installed Chromium. Browser tests use synthetic audio and native IPC fixtures; they do not prove real Google inference or OS permissions. CI includes frontend/core checks, macOS Intel/Apple Silicon builds, and a Windows unsigned build. Source is published at https://github.com/MasterAkbariDev/Mivuneko. Distributed installers are unsigned unless explicitly stated otherwise.
 
 ## Architecture and handoff
 
@@ -97,4 +97,6 @@ The project `.env` accepts `GEMINI_API_KEY` or a quoted multiline `GEMINI_API_KE
 
 Select **Open mic + replies** in Characters, then press **Start open mic** in Conversations. Microphone audio is transcribed on this device with Whisper; a draft is refreshed as speech is recognized and the final phrase is sent after a quiet gap. The microphone pauses while the assistant responds, stops when the window is hidden, and can be stopped explicitly. The model receives the completed phrase rather than a word-by-word audio stream; supported provider responses appear incrementally. Recognition quality and delay depend on the local Whisper model and machine.
 
-Luna's first prototype has individual expression frames and separate walking, running and sitting artwork, with timed cross-fades and motion. It is animated 2D artwork, not a generated video. Local macOS voices are selected per character; macOS may substitute a default voice if a requested voice is not installed.
+Luna's 2D character has individual expression frames and separate walking, running and sitting artwork, with timed cross-fades and motion. It is animated 2D artwork, not a generated video. Local macOS voices are selected per character; macOS may substitute a default voice if a requested voice is not installed.
+
+Voice and recognition are configured in **Settings → Voice & input**. Whisper and Parakeet have in-app download buttons with persistent progress. Gemini speech streams audio as it is generated. **Characters** contains 2D artwork, the licensed VRoid character Haru, VRM import, effects and companion behavior. See [settings and characters](docs/SETTINGS_AND_3D.md).

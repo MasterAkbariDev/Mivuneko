@@ -13,8 +13,8 @@ export function CharacterStudio() {
         <div>
           <h2>Meet your companions</h2>
           <p>
-            Choose a character, then try expressions, movement and voice below.
-            Changes update the desktop pet live.
+            Choose a character, then try expressions, movement and effects
+            below. Changes update the desktop pet live.
           </p>
         </div>
         <div
@@ -35,7 +35,7 @@ export function CharacterStudio() {
             key={id}
             type="button"
             className="character-choice"
-            aria-pressed={p.character === id}
+            aria-pressed={p.renderer === "2d" && p.character === id}
             onClick={() => updatePreferences({ character: id, renderer: "2d" })}
           >
             <span
@@ -48,9 +48,9 @@ export function CharacterStudio() {
       </div>
       <p className="hint">
         Luna has individual expression artwork and smooth transitions. The other
-        characters use six drawn poses. The 3D sample and imported VRM models
-        use live expressions, lip sync and gaze. Walking and running move the
-        desktop window.
+        characters use six drawn poses. Haru and imported VRM models use live
+        expressions, lip sync and gaze. Walking and running move the desktop
+        window.
       </p>
       <PetSettings />
     </section>

@@ -13,6 +13,7 @@ import { agentFor } from "./agent";
 import { InstalledApps } from "./InstalledApps";
 import { BackendSettings } from "./BackendSettings";
 import { SettingsHome } from "./SettingsHome";
+import { SpeechDownloadDock } from "./speechDownloads";
 import { matchesShortcut } from "../../../packages/shared-schemas/shortcuts.ts";
 import { useVoice } from "./useVoice";
 import { useOpenMic } from "./useOpenMic";
@@ -490,7 +491,7 @@ export function App() {
               ? "Gemini + Groq"
               : preferences.backend === "hermes"
                 ? "Hermes local"
-                : "Offline demo"}{" "}
+                : "Offline utilities"}{" "}
             · {isNative ? "Desktop" : "Browser preview"}
           </span>
         </header>
@@ -596,13 +597,15 @@ export function App() {
                         ? "open mic on"
                         : voice.recording
                           ? "microphone recording"
-                          : voice.speaking
-                            ? "speaking"
-                            : preferences.voice === "off"
-                              ? "text only"
-                              : preferences.voiceProvider === "gemini"
-                                ? "Gemini voice"
-                                : "local voice"}
+                          : voice.preparing
+                            ? "preparing voice…"
+                            : voice.speaking
+                              ? "speaking"
+                              : preferences.voice === "off"
+                                ? "text only"
+                                : preferences.voiceProvider === "gemini"
+                                  ? "Gemini voice"
+                                  : "local voice"}
                   </small>
                   {preferences.voice === "open-mic" && (
                     <MicButton
@@ -800,7 +803,7 @@ export function App() {
               <>
                 <SettingsHome />
                 <button type="button" onClick={() => setTab("Characters")}>
-                  Companion and voice settings
+                  Open character studio
                 </button>
                 <button
                   onClick={() => {
@@ -817,6 +820,7 @@ export function App() {
           </section>
         )}
       </main>
+      <SpeechDownloadDock />
       {showApps ? (
         <InstalledApps
           onClose={() => setShowApps(false)}
@@ -904,7 +908,9 @@ export function App() {
             </h2>
             <p>Meet Mivuneko, your little desktop companion.</p>
             <ul>
-              <li>Illustrated 2D companions with expressions and effects</li>
+              <li>
+                Expressive 2D and 3D companions with expressions and effects
+              </li>
               <li>
                 App launches ask first by default; change this in Permissions
               </li>
@@ -914,9 +920,9 @@ export function App() {
               </li>
             </ul>
             <p>
-              Use Assist mode and type “Open Telegram”. Browser previews
-              simulate apps; Windows builds discover a small allowlisted
-              catalog.
+              Choose a companion in Characters, then connect your conversation
+              provider and microphone in Settings. Voice starts only when you
+              turn it on.
             </p>
             <button
               autoFocus

@@ -53,7 +53,7 @@ export function agentFor(
         if (groq) choices.push("groq");
         if (!choices.length)
           throw Error(
-            "No cloud providers configured. Add keys to the project .env and restart, or choose Offline demo.",
+            "No conversation provider is connected. Add your credentials in Settings → Connections.",
           );
         const start = nextCloud++ % choices.length;
         const errors: string[] = [];

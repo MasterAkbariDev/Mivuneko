@@ -20,7 +20,7 @@ export function BackendSettings() {
           <option value="auto" disabled={!isNative}>
             Automatic · Gemini + Groq
           </option>
-          <option value="offline">Offline demo</option>
+          <option value="offline">Offline utilities</option>
           <option value="hermes" disabled={!isNative}>
             Local Hermes Agent
           </option>

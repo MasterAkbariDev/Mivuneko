@@ -78,27 +78,122 @@ pub async fn gemini_speak(
     character: Option<String>,
     state: State<'_, Service>,
 ) -> Result<Vec<u8>, String> {
-    state.speak_character(request_id, text, emotion, character.unwrap_or_else(|| "luna".into())).await
+    state
+        .speak_character(
+            request_id,
+            text,
+            emotion,
+            character.unwrap_or_else(|| "luna".into()),
+        )
+        .await
 }
 
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-struct StreamChunk { request_id: String, delta: String }
+struct VoiceAudio {
+    request_id: String,
+    pcm: Vec<u8>,
+    sample_rate: u32,
+}
+#[tauri::command]
+pub async fn gemini_speak_stream(
+    window: tauri::Window,
+    request_id: String,
+    text: String,
+    emotion: String,
+    character: Option<String>,
+    state: State<'_, Service>,
+) -> Result<(), String> {
+    use tauri::Emitter;
+    let id = request_id.clone();
+    state
+        .speak_stream(
+            request_id,
+            text,
+            emotion,
+            character.unwrap_or_else(|| "luna".into()),
+            std::sync::Arc::new(move |pcm, sample_rate| {
+                let _ = window.emit(
+                    "voice-audio",
+                    VoiceAudio {
+                        request_id: id.clone(),
+                        pcm,
+                        sample_rate,
+                    },
+                );
+            }),
+        )
+        .await
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StreamChunk {
+    request_id: String,
+    delta: String,
+}
 fn progress(window: tauri::Window, id: String) -> std::sync::Arc<dyn Fn(String) + Send + Sync> {
     use tauri::Emitter;
-    std::sync::Arc::new(move |delta| { let _ = window.emit("provider-stream", StreamChunk { request_id: id.clone(), delta }); })
+    std::sync::Arc::new(move |delta| {
+        let _ = window.emit(
+            "provider-stream",
+            StreamChunk {
+                request_id: id.clone(),
+                delta,
+            },
+        );
+    })
 }
 #[tauri::command]
-pub async fn gemini_chat_stream(window: tauri::Window, request_id: String, messages: Vec<Message>, mode: String, state: State<'_, Service>, broker: State<'_, std::sync::Arc<std::sync::Mutex<os_broker::Broker>>>) -> Result<String, String> {
+pub async fn gemini_chat_stream(
+    window: tauri::Window,
+    request_id: String,
+    messages: Vec<Message>,
+    mode: String,
+    state: State<'_, Service>,
+    broker: State<'_, std::sync::Arc<std::sync::Mutex<os_broker::Broker>>>,
+) -> Result<String, String> {
     let broker = broker.inner().clone();
-    let apps = tauri::async_runtime::spawn_blocking(move || broker.lock().map(|b| b.list_apps().into_iter().map(|a| a.name).collect()).map_err(|_| "Broker unavailable".to_string())).await.map_err(|_| "App discovery failed")??;
-    state.chat_stream(request_id.clone(), messages, mode, apps, progress(window, request_id)).await
+    let apps = tauri::async_runtime::spawn_blocking(move || {
+        broker
+            .lock()
+            .map(|b| b.list_apps().into_iter().map(|a| a.name).collect())
+            .map_err(|_| "Broker unavailable".to_string())
+    })
+    .await
+    .map_err(|_| "App discovery failed")??;
+    state
+        .chat_stream(
+            request_id.clone(),
+            messages,
+            mode,
+            apps,
+            progress(window, request_id),
+        )
+        .await
 }
 #[tauri::command]
-pub fn groq_status(state: State<'_, gemini_client::groq::GroqService>) -> bool { state.configured() }
+pub fn groq_status(state: State<'_, gemini_client::groq::GroqService>) -> bool {
+    state.configured()
+}
 #[tauri::command]
-pub fn cancel_groq(request_id: String, state: State<'_, gemini_client::groq::GroqService>) { state.cancel(&request_id); }
+pub fn cancel_groq(request_id: String, state: State<'_, gemini_client::groq::GroqService>) {
+    state.cancel(&request_id);
+}
 #[tauri::command]
-pub async fn groq_chat(window: tauri::Window, request_id: String, messages: Vec<Message>, mode: String, state: State<'_, gemini_client::groq::GroqService>) -> Result<String, String> {
-    state.chat(request_id.clone(), messages, mode, progress(window, request_id)).await
+pub async fn groq_chat(
+    window: tauri::Window,
+    request_id: String,
+    messages: Vec<Message>,
+    mode: String,
+    state: State<'_, gemini_client::groq::GroqService>,
+) -> Result<String, String> {
+    state
+        .chat(
+            request_id.clone(),
+            messages,
+            mode,
+            progress(window, request_id),
+        )
+        .await
 }

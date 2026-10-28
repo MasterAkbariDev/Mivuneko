@@ -31,7 +31,7 @@ export function CompanionVisual({
       try {
         let bytes: ArrayBuffer | null = null;
         if (p.renderer === "sample-vrm") {
-          sample ??= fetch("/models/pixiv-expression-sample.vrm")
+          sample ??= fetch("/models/haru.vrm")
             .then((r) => {
               if (!r.ok) throw Error("Bundled model unavailable");
               return r.arrayBuffer();
@@ -102,7 +102,12 @@ export function CompanionVisual({
             </div>
           }
         >
-          <CharacterScene model={model} state={state} reduced={p.reduced} />
+          <CharacterScene
+            model={model}
+            state={state}
+            reduced={p.reduced}
+            effects={p.petEffects}
+          />
         </Suspense>
       ) : (
         <div className="model-placeholder" role="status">

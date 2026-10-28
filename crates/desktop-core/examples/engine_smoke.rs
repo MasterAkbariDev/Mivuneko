@@ -3,11 +3,19 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 fn first_dir(dir: PathBuf) -> PathBuf {
-    std::fs::read_dir(dir).unwrap().flatten().map(|e| e.path()).find(|p| p.is_dir()).unwrap()
+    std::fs::read_dir(dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .find(|p| p.is_dir())
+        .unwrap()
 }
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    assert!(args.len() >= 5, "Usage: engine_smoke SHERPA_ROOT WHISPER_CLI WHISPER_MODEL WAV...");
+    assert!(
+        args.len() >= 5,
+        "Usage: engine_smoke SHERPA_ROOT WHISPER_CLI WHISPER_MODEL WAV..."
+    );
     let root = Path::new(&args[1]);
     let runtime = first_dir(root.join("runtime/x"));
     let config = desktop_core::WhisperConfig {
@@ -27,7 +35,11 @@ fn main() {
             let bytes = std::fs::read(wav).unwrap();
             let t = Instant::now();
             let text = worker.transcribe(&bytes, &config, "", worker.ticket());
-            println!("pass {pass} {:>6.0} ms  {:?}", t.elapsed().as_secs_f64() * 1000.0, text);
+            println!(
+                "pass {pass} {:>6.0} ms  {:?}",
+                t.elapsed().as_secs_f64() * 1000.0,
+                text
+            );
         }
     }
     worker.shutdown();

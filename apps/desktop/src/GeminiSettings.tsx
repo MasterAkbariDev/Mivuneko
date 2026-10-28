@@ -19,7 +19,7 @@ const session = {
   keys: "",
   proxy: "",
   chatModel: "gemini-3.1-flash-lite",
-  speechModel: "gemini-2.5-flash-preview-tts",
+  speechModel: "gemini-3.8-flash-lite-tts",
   voice: "Kore",
   results: [] as TestResult[],
   proxyResult: "",
@@ -273,27 +273,29 @@ export function GeminiSettings() {
           {draft.proxyResult}
         </p>
       )}
-      <div className="provider-grid">
-        {(
-          [
-            ["chatModel", "Chat / transcription model", "Gemini chat model"],
-            ["speechModel", "Speech model", "Gemini speech model"],
-            ["voice", "Voice name", "Gemini voice"],
-          ] as const
-        ).map(([field, label, aria]) => (
-          <label className="provider-field" key={field}>
-            {label}
-            <input
-              aria-label={aria}
-              disabled={!!busy}
-              value={draft[field]}
-              onChange={(e) =>
-                patch({ [field]: e.target.value, results: [], message: "" })
-              }
-            />
-          </label>
-        ))}
-      </div>
+      <details className="advanced-settings">
+        <summary>Advanced provider options</summary>
+        <div className="provider-grid">
+          {(
+            [
+              ["chatModel", "Chat / transcription model", "Gemini chat model"],
+              ["speechModel", "Speech model", "Gemini speech model"],
+            ] as const
+          ).map(([field, label, aria]) => (
+            <label className="provider-field" key={field}>
+              {label}
+              <input
+                aria-label={aria}
+                disabled={!!busy}
+                value={draft[field]}
+                onChange={(e) =>
+                  patch({ [field]: e.target.value, results: [], message: "" })
+                }
+              />
+            </label>
+          ))}
+        </div>
+      </details>
       <div className="actions">
         <button
           disabled={!isNative || !!busy}
@@ -338,7 +340,7 @@ export function GeminiSettings() {
         </p>
       )}
       <p className="hint">
-        Voice output and transcription use the local macOS voice and Whisper
+        Voice output and transcription use your selected speech engines and
         model.
       </p>
       <p className="hint">

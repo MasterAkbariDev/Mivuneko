@@ -1,8 +1,10 @@
+import { RangeSlider } from "./RangeSlider";
 import { useEffect, useRef, useState } from "react";
 import { isNative } from "./broker";
 import { updatePreferences, usePreferences } from "./preferences";
 import { useVoice } from "./useVoice";
 import { MicrophoneSettings } from "./MicrophoneSettings";
+import { useSpeechDownload, startSpeechDownload } from "./speechDownloads";
 
 interface Engine {
   id: string;
@@ -25,59 +27,19 @@ interface TestResult {
 export function SpeechSettings() {
   const p = usePreferences();
   const [engines, setEngines] = useState<Engine[]>([]);
-  const [download, setDownload] = useState<{
-    engine: string;
-    stage: string;
-    received: number;
-    total: number;
-  } | null>(null);
-  const [installing, setInstalling] = useState("");
+  const download = useSpeechDownload();
+  const installing = download?.active ? download.engine : "";
   async function refreshEngines() {
     const { invoke } = await import("@tauri-apps/api/core");
-    setEngines(await invoke<Engine[]>("voice_engines"));
+    const result = await invoke<Engine[]>("voice_engines");
+    setEngines(Array.isArray(result) ? result : []);
   }
   useEffect(() => {
     if (!isNative) return;
     void import("@tauri-apps/api/core")
       .then(({ invoke }) => invoke<Engine[]>("voice_engines"))
-      .then(setEngines)
+      .then((result) => setEngines(Array.isArray(result) ? result : []))
       .catch(() => setEngines([]));
-  }, []);
-  useEffect(() => {
-    if (!isNative) return;
-    let off: (() => void) | undefined,
-      disposed = false;
-    void import("@tauri-apps/api/event")
-      .then(({ listen }) =>
-        listen<{
-          engine: string;
-          stage: string;
-          received: number;
-          total: number;
-        }>("voice-install-progress", (event) => {
-          if (event.payload.stage === "Ready to use") {
-            setInstalling("");
-            setDownload(null);
-            void refreshEngines();
-          } else if (event.payload.stage.startsWith("Setup stopped")) {
-            setInstalling("");
-            setDownload(null);
-            setError(event.payload.stage);
-          } else {
-            setDownload(event.payload);
-            setInstalling(event.payload.engine);
-          }
-        }),
-      )
-      .then((fn) => {
-        if (disposed) fn();
-        else off = fn;
-      })
-      .catch(() => {});
-    return () => {
-      disposed = true;
-      off?.();
-    };
   }, []);
   const [results, setResults] = useState<TestResult[]>([]);
   const [error, setError] = useState("");
@@ -99,23 +61,12 @@ export function SpeechSettings() {
   );
   async function install(engine: string) {
     setError("");
-    setInstalling(engine);
-    setDownload({
-      engine,
-      stage: "Preparing download…",
-      received: 0,
-      total: 0,
-    });
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("install_voice_engine", { engine });
+      await startSpeechDownload(engine);
       await refreshEngines();
       updatePreferences({ sttEngine: engine });
     } catch (e) {
       setError(String(e));
-    } finally {
-      setInstalling("");
-      setDownload(null);
     }
   }
   const selected =
@@ -144,10 +95,6 @@ export function SpeechSettings() {
           engine and model together. No terminal commands or environment
           variables are needed.
         </p>
-        <p className="hint">
-          Windows installs a prebuilt engine. On macOS, first-time setup builds
-          the official source and requires CMake and Xcode Command Line Tools.
-        </p>
         {!engines.some((e) => e.installed) && (
           <div className="setup-callout">
             <strong>Let’s set up your voice</strong>
@@ -163,30 +110,6 @@ export function SpeechSettings() {
               {installing
                 ? "Setting up…"
                 : "Set up speech recognition · 148 MB"}
-            </button>
-          </div>
-        )}
-        {download && (
-          <div className="download-progress" role="status">
-            <strong>{download.stage}</strong>
-            <progress
-              max={download.total || 1}
-              value={download.total ? download.received : undefined}
-            />
-            <small>
-              {download.total
-                ? `${Math.round((download.received / download.total) * 100)}% · ${(download.received / 1048576).toFixed(1)} / ${(download.total / 1048576).toFixed(1)} MB`
-                : "Preparing files…"}
-            </small>
-            <button
-              type="button"
-              onClick={() =>
-                void import("@tauri-apps/api/core").then(({ invoke }) =>
-                  invoke("cancel_voice_install"),
-                )
-              }
-            >
-              Cancel download
             </button>
           </div>
         )}
@@ -206,9 +129,9 @@ export function SpeechSettings() {
             <span className="engine-body">
               <b>Auto — recommended</b>
               <small>
-                Uses Parakeet when it is installed, otherwise the Whisper model
-                in voice.json (set by npm run setup:voice). Also the fallback if
-                a chosen engine is missing or fails.
+                Selects the best installed recognition engine. Parakeet is
+                preferred for English; Whisper remains available for
+                multilingual conversations.
               </small>
             </span>
           </label>
@@ -243,7 +166,7 @@ export function SpeechSettings() {
                   {e.installed ? "Engine + model ready" : "Not installed"}
                 </small>
               </span>
-              {e.id.startsWith("whisper:") && !e.installed && (
+              {!e.installed && (
                 <button
                   type="button"
                   className="engine-download"
@@ -254,11 +177,6 @@ export function SpeechSettings() {
                     ? "Downloading…"
                     : `Download · ${e.sizeMb} MB`}
                 </button>
-              )}
-              {e.id.startsWith("parakeet:") && !e.installed && (
-                <small className="install">
-                  Advanced setup · see docs/VOICE.md
-                </small>
               )}
             </div>
           ))}
@@ -337,8 +255,7 @@ export function SpeechSettings() {
         </p>
         <label className="setting">
           End-of-speech pause: {p.endPauseMs} ms
-          <input
-            type="range"
+          <RangeSlider
             min={1500}
             max={10000}
             step={250}

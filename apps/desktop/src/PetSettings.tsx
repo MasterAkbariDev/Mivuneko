@@ -1,41 +1,12 @@
 import { CompanionControls } from "./CompanionControls";
 import { isNative } from "./broker";
 import { usePreferences, updatePreferences } from "./preferences";
-import { characters } from "./lunaModel";
-import { useVoice } from "./useVoice";
-import { useState } from "react";
-import { SpeechSettings } from "./SpeechSettings";
-import { CharacterVoice } from "./CharacterVoice";
 export function PetSettings() {
   const p = usePreferences();
-  const [voiceError, setVoiceError] = useState("");
-  const preview = useVoice(
-    () => {},
-    () => {},
-    setVoiceError,
-  );
   return (
     <div className="pet-settings">
       <h3 className="settings-heading">Companion</h3>
       <CompanionControls />
-      <label className="setting">
-        Character
-        <select
-          aria-label="Character"
-          value={p.character}
-          onChange={(e) =>
-            updatePreferences({
-              character: e.target.value as typeof p.character,
-            })
-          }
-        >
-          {Object.entries(characters).map(([id, character]) => (
-            <option key={id} value={id}>
-              {character.name}
-            </option>
-          ))}
-        </select>
-      </label>
       <label className="setting">
         Movement
         <select
@@ -49,43 +20,6 @@ export function PetSettings() {
           <option value="roaming">Roam screen edge</option>
         </select>
       </label>
-      <h3 className="settings-heading">Voice</h3>
-      <label className="setting">
-        Voice
-        <select
-          aria-label="Voice mode"
-          value={p.voice}
-          onChange={(e) =>
-            updatePreferences({ voice: e.target.value as typeof p.voice })
-          }
-        >
-          <option value="off">Text only</option>
-          <option value="push-to-talk">
-            {isNative ? "Push to talk + replies" : "Push to talk · preview"}
-          </option>
-          <option value="open-mic">Open mic + replies</option>
-          <option value="spoken">
-            {isNative ? "Spoken replies" : "Spoken replies · preview"}
-          </option>
-        </select>
-      </label>
-      <p className="hint">
-        {isNative
-          ? "Open mic starts only when you press Start open mic in Conversations. Recognition runs locally. Choose a speech engine below for spoken replies."
-          : "Voice is a preview in the browser; no microphone is opened or audio generated."}{" "}
-      </p>
-      <SpeechSettings />
-      <h3 className="settings-heading">Voice output</h3>
-      <CharacterVoice
-        character={p.character}
-        preview={preview}
-        volume={p.volume}
-      />
-      {voiceError && (
-        <p className="error" role="alert">
-          {voiceError}
-        </p>
-      )}
       <label className="setting">
         Occasional check-ins
         <input
@@ -165,20 +99,6 @@ export function PetSettings() {
         />
       </label>
       <label className="setting">
-        Speech volume
-        <input
-          aria-label="Speech volume"
-          type="range"
-          min="0"
-          max="1"
-          step="0.05"
-          value={p.volume}
-          onChange={(e) =>
-            updatePreferences({ volume: Number(e.target.value) })
-          }
-        />
-      </label>
-      <label className="setting">
         Do not disturb
         <input
           type="checkbox"
@@ -201,14 +121,6 @@ export function PetSettings() {
         When enabled, the pet ignores clicks. Recover using menu bar → Show pet,
         or turn this off in Chat → Settings.
       </p>
-      <label className="setting">
-        Reduce motion
-        <input
-          type="checkbox"
-          checked={p.reduced}
-          onChange={(e) => updatePreferences({ reduced: e.target.checked })}
-        />
-      </label>
     </div>
   );
 }

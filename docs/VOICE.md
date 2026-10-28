@@ -1,7 +1,6 @@
 # Voice: listening, speaking and how to change them
 
-Everything here runs on this Mac. No audio is sent anywhere unless you choose the Gemini
-voice provider in Settings.
+Speech recognition runs on your device. Gemini speech sends reply text to Google when selected; it does not upload your microphone recording.
 
 ```
 you speak ─► mic (AudioWorklet) ─► voice detector ─► 16 kHz WAV ─► speech recognition ─► text ─► chat
@@ -14,7 +13,7 @@ reply ─► speech line / speakable text ─► pronunciation fixes ─► phra
 ## 1. Install
 
 The desktop app now has an installer at **Settings → Voice & input → Speech recognition**.
-Press **Set up speech recognition** for Base English, or Download on a different Whisper model.
+Press **Set up speech recognition** for Base English, or Download on any Whisper or Parakeet model.
 The app installs the runtime as well as the model, verifies the published model SHA-256,
 shows progress, and writes `voice.json` automatically. No `MIVUNEKO_WHISPER_BIN` is needed.
 Downloads can be cancelled and retried. Partial or failed downloads never activate a new configuration.
@@ -22,7 +21,7 @@ Models and the runtime live in the app data directory under `speech/` and are ne
 
 Windows x64 uses the official pinned whisper.cpp runtime (b5454), verified against its published
 SHA-256. macOS builds the official v1.9.5 source and needs CMake plus Xcode Command Line Tools.
-Parakeet remains an optional advanced installation through the setup script below.
+Parakeet installs the verified sherpa-onnx v2.0.1 runtime and NVIDIA Parakeet TDT 0.6B v2 int8 model automatically on Windows x64 and both Mac architectures. No terminal setup is needed. Its download is about 485 MB including the runtime. The persistent download panel stays visible when you change sections.
 
 Choose an **Input device** and use **Check microphone** to see a local level meter. This check
 does not save audio. Echo cancellation, noise suppression and automatic level control apply
@@ -43,6 +42,8 @@ are checked against the SHA-256 digest the publisher lists; a mismatch deletes t
 The Kokoro worker is compiled with `clang` (Xcode Command Line Tools) from `tools/luna-tts/luna-tts.c`.
 
 Restart the app afterwards. Settings → **Speech recognition** shows what is installed.
+
+Gemini speech uses `gemini-3.8-flash-lite-tts` by default and streams PCM directly into playback, with lip sync. First audio in one live proxy-backed check arrived in 1.29 seconds (2.21 seconds to finish generation). Network and model load affect latency; this is not a guarantee. Advanced provider options can select another model. Older 2.x speech models use complete-response playback.
 
 ## 2. Speech recognition (your voice → text)
 

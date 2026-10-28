@@ -9,8 +9,8 @@ test("2D choices and expressions update the desktop pet", async ({
   await page.goto("/?view=chat");
   await page.getByRole("button", { name: "Meet Mivuneko" }).click();
   await page.getByRole("button", { name: "Characters", exact: true }).click();
-  const picker = page.getByLabel("Character", { exact: true });
-  await expect(picker.locator("option")).toHaveCount(10);
+  const picker = page.getByRole("group", { name: "Choose a companion" });
+  await expect(picker.getByRole("button")).toHaveCount(10);
   const pet = await context.newPage();
   await pet.goto("/");
   for (const [id, name] of [
@@ -25,7 +25,7 @@ test("2D choices and expressions update the desktop pet", async ({
     ["azure", "Aoi"],
     ["goth", "Raven"],
   ]) {
-    await picker.selectOption(id);
+    await picker.getByRole("button", { name: new RegExp(`^${name}`) }).click();
     await expect(
       pet.getByRole("img", { name: new RegExp(`${name}.*2D companion`) }),
     ).toBeVisible();
@@ -34,84 +34,13 @@ test("2D choices and expressions update the desktop pet", async ({
   await page.getByLabel("Pet expression").selectOption("love");
   await expect(pet.locator(".luna-model")).toHaveAttribute("data-pose", "love");
   await expect(pet.locator(".effect-hearts")).toBeVisible();
-  await page.getByLabel("Local voice style").selectOption("multilingual");
-  await page.getByLabel("Speech language").selectOption("ja");
-  await expect(page.getByLabel("Speech language")).toHaveValue("ja");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Preview voice" }),
+    page
+      .locator(".mood-previews")
+      .getByRole("button", { name: "Happy", exact: true }),
   ).toBeDisabled();
   expect(errors).toEqual([]);
-});
-
-test("native voice preview sends the selected style and language", async ({
-  page,
-}) => {
-  await page.addInitScript(() => {
-    const w = window as any;
-    w.__calls = [];
-    w.__TAURI_INTERNALS__ = {
-      transformCallback: () => 1,
-      unregisterCallback: () => {},
-      invoke: async (command: string, args: unknown) => {
-        w.__calls.push({ command, args });
-        if (command !== "synthesize_speech") return null;
-        const samples = 1600;
-        const data = new Uint8Array(44 + samples * 2);
-        const view = new DataView(data.buffer);
-        for (const [offset, tag] of [
-          [0, "RIFF"],
-          [8, "WAVE"],
-          [12, "fmt "],
-          [36, "data"],
-        ] as const)
-          for (let i = 0; i < tag.length; i++)
-            data[offset + i] = tag.charCodeAt(i);
-        view.setUint32(4, data.length - 8, true);
-        view.setUint32(16, 16, true);
-        view.setUint16(20, 1, true);
-        view.setUint16(22, 1, true);
-        view.setUint32(24, 16000, true);
-        view.setUint32(28, 32000, true);
-        view.setUint16(32, 2, true);
-        view.setUint16(34, 16, true);
-        view.setUint32(40, samples * 2, true);
-        for (let i = 0; i < samples; i++)
-          view.setInt16(44 + i * 2, Math.sin(i / 8) * 10000, true);
-        return Array.from(data);
-      },
-    };
-  });
-  await page.goto("/?view=chat");
-  await page.getByRole("button", { name: "Meet Mivuneko" }).click();
-  await page.getByRole("button", { name: "Characters", exact: true }).click();
-  await page.getByLabel("Local voice style").selectOption("bright");
-  await page.getByRole("button", { name: "Preview voice" }).click();
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (window as any).__calls
-            .filter((c: any) => c.command === "synthesize_speech")
-            .at(-1)?.args?.style,
-      ),
-    )
-    .toBe("bright");
-  await expect(
-    page.getByRole("button", { name: "Preview voice" }),
-  ).toBeEnabled();
-  await page.getByLabel("Local voice style").selectOption("multilingual");
-  await page.getByLabel("Speech language").selectOption("ja");
-  await page.getByRole("button", { name: "Preview voice" }).click();
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (window as any).__calls
-            .filter((c: any) => c.command === "synthesize_speech")
-            .at(-1)?.args?.language,
-      ),
-    )
-    .toBe("ja");
 });
 
 test("Luna previews unique expression and movement frames", async ({
@@ -120,7 +49,7 @@ test("Luna previews unique expression and movement frames", async ({
   await page.goto("/?view=chat");
   await page.getByRole("button", { name: "Meet Mivuneko" }).click();
   await page.getByRole("button", { name: "Characters", exact: true }).click();
-  await page.getByLabel("Character", { exact: true }).selectOption("luna");
+  await page.getByRole("button", { name: "Luna", exact: true }).click();
   const preview = page
     .getByLabel("Live character preview")
     .locator(".luna-model");

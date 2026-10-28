@@ -64,8 +64,8 @@ export function ModelSettings() {
           aria-pressed={p.renderer === "sample-vrm"}
           onClick={() => updatePreferences({ renderer: "sample-vrm" })}
         >
-          <b>3D VRM sample</b>
-          <small>Ready to try · no download</small>
+          <b>Haru · 3D</b>
+          <small>Expressive VRoid companion</small>
         </button>
         <button
           type="button"
@@ -127,8 +127,8 @@ export function ModelSettings() {
       )}
       {p.renderer === "sample-vrm" && (
         <p className="hint">
-          Bundled pixiv expression sample. Attribution and usage terms are
-          included in licenses/pixiv-expression-sample.json.
+          Haru uses AvatarSample_B by VRoid Project / pixiv. Included under the
+          creator’s usage terms, with original permissions preserved.
         </p>
       )}
       {error && (

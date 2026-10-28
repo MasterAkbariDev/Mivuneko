@@ -137,6 +137,7 @@ fn quit_app(app: tauri::AppHandle) {
 }
 
 fn agent_config() -> agent_client::Config {
+    #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
     let mut key = std::env::var("MIVUNEKO_HERMES_KEY").unwrap_or_default();
     #[cfg(target_os = "macos")]
     if key.is_empty() {
@@ -184,15 +185,19 @@ async fn hermes_chat(
 // Characters without a pack keep the system voice. See docs/VOICE.md.
 fn embedded_pack(character: &str) -> Option<&'static str> {
     match character {
-        "luna" => Some(include_str!("../../../../assets/characters/luna/voice/voice.json")),
+        "luna" => Some(include_str!(
+            "../../../../assets/characters/luna/voice/voice.json"
+        )),
         _ => None,
     }
 }
 fn tts_root(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
     let voice = voice_json(app);
-    let models_dir = voice["model"]
-        .as_str()
-        .and_then(|m| std::path::Path::new(m).parent().map(std::path::Path::to_path_buf))?;
+    let models_dir = voice["model"].as_str().and_then(|m| {
+        std::path::Path::new(m)
+            .parent()
+            .map(std::path::Path::to_path_buf)
+    })?;
     voice["tts"]
         .as_str()
         .map(std::path::PathBuf::from)
@@ -252,9 +257,12 @@ fn character_voices(
     for byte in format!("{recipes:?}").bytes() {
         hash = (hash ^ byte as u64).wrapping_mul(0x100000001b3);
     }
-    let target = root.join("voices").join(format!("{character}-{hash:016x}.bin"));
+    let target = root
+        .join("voices")
+        .join(format!("{character}-{hash:016x}.bin"));
     if !target.is_file() {
-        let stock = std::fs::read(model_dir.join("voices.bin")).map_err(|_| "Cannot read Kokoro voices")?;
+        let stock =
+            std::fs::read(model_dir.join("voices.bin")).map_err(|_| "Cannot read Kokoro voices")?;
         let table = desktop_core::kokoro::blend_table(&stock, recipes)?;
         std::fs::create_dir_all(root.join("voices")).map_err(|_| "Cannot create voice cache")?;
         let temp = target.with_extension("part");
@@ -272,9 +280,11 @@ fn tts_config(app: &tauri::AppHandle) -> Option<desktop_core::TtsConfig> {
         .map(|e| e.path())
         .find(|p| p.is_dir() && p.join("model.onnx").is_file())?;
     let worker = root.join("luna-tts");
-    worker
-        .is_file()
-        .then_some(desktop_core::TtsConfig { worker, model_dir, voices: None })
+    worker.is_file().then_some(desktop_core::TtsConfig {
+        worker,
+        model_dir,
+        voices: None,
+    })
 }
 /// The voice pack for a character, or null when it uses the system voice (or the
 /// Kokoro engine is not installed).
@@ -307,8 +317,11 @@ async fn synthesize_phrase(
         // Mood voice if the pack defines one, else its neutral blend, else a stock voice.
         let speaker = desktop_core::kokoro::mood_slot(&mood)
             .filter(|s| has(*s))
-            .or(has(desktop_core::kokoro::NEUTRAL_SLOT).then_some(desktop_core::kokoro::NEUTRAL_SLOT))
-            .or(pack["speaker"].as_str().and_then(desktop_core::kokoro::speaker_id))
+            .or(has(desktop_core::kokoro::NEUTRAL_SLOT)
+                .then_some(desktop_core::kokoro::NEUTRAL_SLOT))
+            .or(pack["speaker"]
+                .as_str()
+                .and_then(desktop_core::kokoro::speaker_id))
             .unwrap_or(3) as u32;
         let wav = worker.synthesize_phrase(&config, &text, speaker, speed.clamp(0.5, 1.6))?;
         if worker.ticket() != ticket {
@@ -339,8 +352,8 @@ async fn synthesize_speech(
             ticket,
         )
     })
-        .await
-        .map_err(|_| "Speech worker failed")?
+    .await
+    .map_err(|_| "Speech worker failed")?
 }
 // Selectable speech recognition engines. Only measured numbers appear in `detail`.
 struct EngineSpec {
@@ -448,7 +461,11 @@ fn sherpa_install(
     };
     let runtime = first(root.join("runtime/x"))?;
     let model_dir = first(root.join("models/x"))?;
-    let server = runtime.join("bin/sherpa-onnx-offline-websocket-server");
+    let server = runtime.join(if cfg!(windows) {
+        "bin/sherpa-onnx-offline-websocket-server.exe"
+    } else {
+        "bin/sherpa-onnx-offline-websocket-server"
+    });
     (server.is_file() && model_dir.join("encoder.int8.onnx").is_file()).then_some(
         desktop_core::SherpaConfig {
             server,
@@ -469,11 +486,12 @@ fn whisper_config(
             .map(std::path::PathBuf::from)
             .or_else(|| voice_config[key].as_str().map(std::path::PathBuf::from))
     };
-    let binary = path("MIVUNEKO_WHISPER_BIN", "binary")
-        .ok_or("Speech recognition is not installed. Open Settings → Voice & input and download a speech model; the engine is installed with it.")?;
-    let mut model = path("MIVUNEKO_WHISPER_MODEL", "model")
-        .ok_or("No speech model is installed. Open Settings → Voice & input to download one.")?;
-    let models_dir = model.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+    let binary = path("MIVUNEKO_WHISPER_BIN", "binary").unwrap_or_default();
+    let mut model = path("MIVUNEKO_WHISPER_MODEL", "model").unwrap_or_default();
+    let models_dir = model
+        .parent()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_default();
     let mut sherpa = None;
     // "auto" (or nothing chosen) prefers Parakeet when it is installed.
     if matches!(engine, None | Some("auto") | Some("")) {
@@ -487,8 +505,18 @@ fn whisper_config(
         }
     }
     // Without an explicit server, use a whisper-server built next to whisper-cli.
-    let server = path("MIVUNEKO_WHISPER_SERVER", "server")
-        .or_else(|| binary.parent().map(|d| d.join(if cfg!(windows) {"whisper-server.exe"} else {"whisper-server"})));
+    if sherpa.is_none() && (!binary.is_file() || !model.is_file()) {
+        return Err("Speech recognition is not ready. Open Settings → Voice & input and download a speech model.".into());
+    }
+    let server = path("MIVUNEKO_WHISPER_SERVER", "server").or_else(|| {
+        binary.parent().map(|d| {
+            d.join(if cfg!(windows) {
+                "whisper-server.exe"
+            } else {
+                "whisper-server"
+            })
+        })
+    });
     let language = voice_config["language"]
         .as_str()
         .filter(|l| l.len() <= 8 && l.chars().all(|c| c.is_ascii_alphabetic() || c == '-'))
@@ -539,7 +567,11 @@ fn voice_engines(app: tauri::AppHandle) -> Vec<EngineInfo> {
     let voice = voice_json(&app);
     let models_dir = voice["model"]
         .as_str()
-        .and_then(|m| std::path::Path::new(m).parent().map(std::path::Path::to_path_buf))
+        .and_then(|m| {
+            std::path::Path::new(m)
+                .parent()
+                .map(std::path::Path::to_path_buf)
+        })
         .unwrap_or_default();
     ENGINES
         .iter()
@@ -555,7 +587,10 @@ fn voice_engines(app: tauri::AppHandle) -> Vec<EngineInfo> {
             installed: if e.family.starts_with("Parakeet") {
                 sherpa_install(&voice, &models_dir).is_some()
             } else {
-                models_dir.join(e.file).is_file() && voice["binary"].as_str().is_some_and(|b|std::path::Path::new(b).is_file())
+                models_dir.join(e.file).is_file()
+                    && voice["binary"]
+                        .as_str()
+                        .is_some_and(|b| std::path::Path::new(b).is_file())
             },
         })
         .collect()
@@ -563,6 +598,10 @@ fn voice_engines(app: tauri::AppHandle) -> Vec<EngineInfo> {
 #[tauri::command]
 fn cancel_voice(state: tauri::State<'_, Arc<desktop_core::VoiceWorker>>) {
     state.cancel()
+}
+#[tauri::command]
+fn voice_capabilities() -> serde_json::Value {
+    serde_json::json!({"systemSpeech":cfg!(target_os="macos")})
 }
 fn history_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     app.path()
@@ -674,6 +713,7 @@ fn main() {
             gemini::cancel_groq,
             gemini::gemini_transcribe,
             gemini::gemini_speak,
+            gemini::gemini_speak_stream,
             list_apps,
             request_launch,
             resolve_launch,
@@ -688,6 +728,7 @@ fn main() {
             synthesize_phrase,
             transcribe_audio,
             voice_engines,
+            voice_capabilities,
             voice_install::install_voice_engine,
             voice_install::cancel_voice_install,
             cancel_voice,
@@ -724,7 +765,10 @@ mod voice_pack_tests {
         let pack = serde_json::json!({"neutral":[{"speaker":"nobody","weight":1.0}],"moods":{"sad":{"blend":[]}}});
         assert!(pack_recipes(&pack).is_empty());
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(character_voices(dir.path(), dir.path(), "x", &[]).unwrap(), None);
+        assert_eq!(
+            character_voices(dir.path(), dir.path(), "x", &[]).unwrap(),
+            None
+        );
     }
     #[test]
     fn blended_tables_are_written_once_and_cached_by_recipe() {
@@ -740,14 +784,23 @@ mod voice_pack_tests {
         }
         std::fs::write(model.join("voices.bin"), &stock).unwrap();
         let recipes = pack_recipes(&luna());
-        let first = character_voices(dir.path(), &model, "luna", &recipes).unwrap().unwrap();
+        let first = character_voices(dir.path(), &model, "luna", &recipes)
+            .unwrap()
+            .unwrap();
         assert!(first.is_file());
-        assert_eq!(std::fs::metadata(&first).unwrap().len() as usize, stock.len());
-        let again = character_voices(dir.path(), &model, "luna", &recipes).unwrap().unwrap();
+        assert_eq!(
+            std::fs::metadata(&first).unwrap().len() as usize,
+            stock.len()
+        );
+        let again = character_voices(dir.path(), &model, "luna", &recipes)
+            .unwrap()
+            .unwrap();
         assert_eq!(first, again);
         let mut edited = recipes.clone();
         edited[0].1[0].1 = 0.9;
-        let other = character_voices(dir.path(), &model, "luna", &edited).unwrap().unwrap();
+        let other = character_voices(dir.path(), &model, "luna", &edited)
+            .unwrap()
+            .unwrap();
         assert_ne!(first, other, "a changed blend gets its own file");
     }
     #[test]

@@ -37,6 +37,7 @@ const SAMPLES: [Mood, string, string][] = [
 ];
 interface Preview {
   speaking: boolean;
+  preparing?: boolean;
   prepare: () => void;
   speak: (text: string, volume: number, emotion?: Mood) => Promise<void>;
   stop: () => Promise<void>;
@@ -54,6 +55,16 @@ export function CharacterVoice({
 }) {
   const preferences = usePreferences();
   const [own, setOwn] = useState<boolean | null>(null);
+  const [systemSpeech, setSystemSpeech] = useState(false);
+  useEffect(() => {
+    if (isNative)
+      void import("@tauri-apps/api/core")
+        .then(({ invoke }) =>
+          invoke<{ systemSpeech: boolean }>("voice_capabilities"),
+        )
+        .then((result) => setSystemSpeech(result?.systemSpeech === true))
+        .catch(() => {});
+  }, []);
   useEffect(() => {
     if (!isNative) return;
     setOwn(null);
@@ -63,7 +74,9 @@ export function CharacterVoice({
       .catch(() => setOwn(false));
   }, [character]);
   const name =
-    characters[character as keyof typeof characters]?.name ?? character;
+    preferences.renderer === "sample-vrm"
+      ? "Haru"
+      : (characters[character as keyof typeof characters]?.name ?? character);
   return (
     <section className="settings-group" aria-label="Character voice">
       <label className="setting">
@@ -79,7 +92,11 @@ export function CharacterVoice({
         >
           <option value="local">Local character voice · Kokoro</option>
           <option value="gemini">Expressive character voice · Gemini</option>
-          <option value="system">macOS system voice · basic</option>
+          {(systemSpeech || preferences.voiceProvider === "system") && (
+            <option value="system" disabled={!systemSpeech}>
+              System voice{!systemSpeech ? " · unavailable on this device" : ""}
+            </option>
+          )}
         </select>
       </label>
       <p className="hint">
@@ -88,7 +105,7 @@ export function CharacterVoice({
           {preferences.voiceProvider === "gemini"
             ? `${name} · expressive cloud voice`
             : preferences.voiceProvider === "system"
-              ? "macOS system voice"
+              ? "System voice"
               : own === null
                 ? "checking…"
                 : own
@@ -97,17 +114,17 @@ export function CharacterVoice({
         </b>
         .{" "}
         {preferences.voiceProvider === "gemini"
-          ? "Reply text is sent to Gemini for speech. Luna uses a light, warm voice with expressive delivery. Configure Gemini keys or add them to .env and restart."
+          ? "Expressive speech streams as it is generated. Reply text is sent to Gemini using your connection settings."
           : preferences.voiceProvider === "system"
-            ? "Basic system speech is available on macOS. Choose a character engine for a more expressive voice."
-            : "Runs on your device. Install Kokoro with npm run setup:sherpa -- kokoro. Luna keeps the same voice across emotions."}
+            ? "Uses the voice service built into your device. Availability depends on your system."
+            : "Runs on your device when the character voice engine is installed. Choose Gemini for expressive streaming speech."}
       </p>
       <div className="mood-previews">
         {SAMPLES.map(([mood, label, line]) => (
           <button
             key={mood}
             type="button"
-            disabled={!isNative || preview.speaking}
+            disabled={!isNative || preview.speaking || preview.preparing}
             onClick={() => {
               preview.prepare();
               void preview.speak(line, volume, mood);
@@ -118,7 +135,7 @@ export function CharacterVoice({
         ))}
         <button
           type="button"
-          disabled={!preview.speaking}
+          disabled={!preview.speaking && !preview.preparing}
           onClick={() => void preview.stop()}
         >
           Stop

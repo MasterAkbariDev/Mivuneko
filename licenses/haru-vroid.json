@@ -1,0 +1,27 @@
+{
+  "originalName": "AvatarSample_B",
+  "displayName": "Haru",
+  "metadata": {
+    "name": "AvatarSample_B",
+    "version": "1.1",
+    "authors": ["VRoid Project"],
+    "copyrightInformation": "pixiv Inc.",
+    "contactInformation": "https://www.pixiv.net/support.php?mode=select_vroid",
+    "thumbnailImage": 29,
+    "licenseUrl": "https://vrm.dev/licenses/1.0/",
+    "avatarPermission": "everyone",
+    "allowExcessivelyViolentUsage": true,
+    "allowExcessivelySexualUsage": true,
+    "commercialUsage": "corporation",
+    "allowPoliticalOrReligiousUsage": true,
+    "allowAntisocialOrHateUsage": false,
+    "creditNotation": "unnecessary",
+    "allowRedistribution": true,
+    "modification": "allowModificationRedistribution",
+    "otherLicenseUrl": "https://vroid.pixiv.help/hc/ja/articles/4402394424089-AvatarSample-A-B-C"
+  },
+  "sha256": "ffbd8c92a9e67c0a948f69c7a2eec91e5c282c9ae70e9184309fc164d74cbc27",
+  "note": "Unmodified original VRM. Not CC0. Haru is an application display name; this is not an original Mivuneko model.",
+  "conditions": "https://vroid.pixiv.help/hc/en-us/articles/4402394424089",
+  "source": "https://github.com/pixiv/ChatVRM/blob/b542aa00e19dccf9fc48ba340cf7eee011d2329a/public/AvatarSample_B.vrm"
+}

@@ -13,6 +13,108 @@
   --text-scale: 1;
   color-scheme: dark;
 }
+.speech-download-dock {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: min(430px, calc(100vw - 100px));
+  z-index: 1000;
+  padding: 22px;
+  border: 1px solid #b5a0ff80;
+  background: #20263af5;
+  border-radius: 18px;
+  box-shadow: 0 16px 70px #0009;
+  backdrop-filter: blur(20px);
+}
+.download-heading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 18px;
+}
+.download-heading > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.download-heading strong {
+  font-size: 15px;
+  color: #f0ebff;
+}
+.download-heading small {
+  font-size: 12px;
+}
+.download-heading button {
+  padding: 0;
+  width: 30px;
+  min-height: 30px;
+  font-size: 22px;
+  border: 0;
+  background: #ffffff08;
+}
+.download-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: #b5a0ff22;
+  color: #dbcfff;
+  font-size: 24px;
+}
+.download-track {
+  height: 13px;
+  width: 100%;
+  background: #0d1222;
+  border: 1px solid #8894b33d;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 5px #0005;
+}
+.download-track > div {
+  height: 100%;
+  min-width: 0;
+  background: linear-gradient(90deg, #9c82ff, #b9acff, #8be3d2);
+  border-radius: 9px;
+  box-shadow: 0 0 15px #b5a0ff80;
+  transition: width 0.15s linear;
+}
+.download-track.indeterminate > div {
+  animation: download-pulse 1.4s ease-in-out infinite;
+}
+.download-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #bdc5d9;
+}
+.download-meta b {
+  color: #e3d9ff;
+}
+.speech-download-dock .error {
+  margin: 12px 0 0;
+}
+.speech-download-dock:has(.error) .download-track > div {
+  background: #ef8da0;
+}
+@keyframes download-pulse {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(380%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .download-track.indeterminate > div {
+    animation: none;
+    width: 100% !important;
+    opacity: 0.5;
+  }
+}
 body {
   font-size: calc(14px * var(--text-scale));
   line-height: 1.6;
@@ -1041,4 +1143,51 @@ header p {
   .page > h2 {
     font-size: 21px;
   }
+}
+
+input.range-control {
+  appearance: none;
+  height: 28px;
+  padding: 0;
+  cursor: pointer;
+}
+input.range-control::-webkit-slider-runnable-track {
+  height: 10px;
+  border: 1px solid #737e99;
+  border-radius: 8px;
+  background: linear-gradient(
+    to right,
+    #b5a0ff 0%,
+    #8cded0 var(--range-fill),
+    #303a51 var(--range-fill),
+    #303a51 100%
+  );
+}
+input.range-control::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: #e3d9ff;
+  border: 3px solid #a88deb;
+  box-shadow: 0 2px 8px #080b1455;
+}
+input.range-control::-moz-range-track {
+  height: 10px;
+  background: #303a51;
+  border: 1px solid #737e99;
+  border-radius: 8px;
+}
+input.range-control::-moz-range-progress {
+  height: 10px;
+  border-radius: 8px;
+  background: linear-gradient(to right, #b5a0ff, #8cded0);
+}
+input.range-control::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #a88deb;
+  border-radius: 50%;
+  background: #e3d9ff;
 }

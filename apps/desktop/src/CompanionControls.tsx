@@ -1,3 +1,4 @@
+import { RangeSlider } from "./RangeSlider";
 import { useEffect, useState } from "react";
 import { isNative } from "./broker";
 import { updatePreferences, usePreferences } from "./preferences";
@@ -90,9 +91,9 @@ export function CompanionControls() {
       </label>
       <label className="setting">
         Companion size · {Math.round(p.petScale * 100)}%
-        <input
+        <RangeSlider
           aria-label="Companion size"
-          type="range"
+
           min="0.5"
           max="1.8"
           step="0.05"

@@ -1,3 +1,4 @@
+import { RangeSlider } from "./RangeSlider";
 import { useState } from "react";
 import { BackendSettings } from "./BackendSettings";
 import { SpeechSettings } from "./SpeechSettings";
@@ -5,8 +6,9 @@ import { CharacterVoice } from "./CharacterVoice";
 import { ShortcutSettings } from "./ShortcutSettings";
 import { usePreferences, updatePreferences } from "./preferences";
 import { useVoice } from "./useVoice";
+let activeCategory = "Voice & input";
 export function SettingsHome() {
-  const [tab, setTab] = useState("Voice & input");
+  const [tab, setTab] = useState(activeCategory);
   const [error, setError] = useState("");
   const p = usePreferences();
   const preview = useVoice(
@@ -25,6 +27,7 @@ export function SettingsHome() {
               aria-pressed={tab === name}
               onClick={() => {
                 void preview.stop();
+                activeCategory = name;
                 setTab(name);
               }}
             >
@@ -58,9 +61,9 @@ export function SettingsHome() {
               </label>
               <label className="setting">
                 Reply volume · {Math.round(p.volume * 100)}%
-                <input
+                <RangeSlider
                   aria-label="Reply volume"
-                  type="range"
+
                   min="0"
                   max="1"
                   step="0.05"
@@ -93,8 +96,7 @@ export function SettingsHome() {
             <h3>Comfort in the details</h3>
             <label className="setting">
               Text size · {Math.round(p.textScale * 100)}%
-              <input
-                type="range"
+              <RangeSlider
                 aria-label="Text size"
                 min="0.9"
                 max="1.25"

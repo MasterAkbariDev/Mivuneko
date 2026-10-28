@@ -13,9 +13,9 @@ fn audible_wav(bytes: &[u8]) -> bool {
             return false;
         };
         if &bytes[pos..pos + 4] == b"data" {
-            return bytes[start..end].chunks_exact(2).any(|sample| {
-                i16::from_le_bytes([sample[0], sample[1]]).unsigned_abs() > 100
-            });
+            return bytes[start..end]
+                .chunks_exact(2)
+                .any(|sample| i16::from_le_bytes([sample[0], sample[1]]).unsigned_abs() > 100);
         }
         pos = end + size % 2;
     }
@@ -40,11 +40,23 @@ fn main() {
         "voice styles should produce different audio"
     );
     let mut voices = Vec::new();
-    for character in ["luna", "miku", "kitsune", "stella", "teto", "neru", "snow", "silver", "azure", "goth"] {
-        let wav = worker.synthesize_for_character(text, "natural", "en", character, worker.ticket()).expect(character);
+    for character in [
+        "luna", "miku", "kitsune", "stella", "teto", "neru", "snow", "silver", "azure", "goth",
+    ] {
+        let wav = worker
+            .synthesize_for_character(text, "natural", "en", character, worker.ticket())
+            .expect(character);
         assert!(audible_wav(&wav), "{character} produced silent audio");
         voices.push(wav);
     }
-    for (i, pair) in voices.windows(2).enumerate() { if pair[0] == pair[1] { println!("Adjacent voices {} and {} use the same system fallback", i, i + 1); } }
+    for (i, pair) in voices.windows(2).enumerate() {
+        if pair[0] == pair[1] {
+            println!(
+                "Adjacent voices {} and {} use the same system fallback",
+                i,
+                i + 1
+            );
+        }
+    }
     println!("All ten local character settings produced non-silent WAV audio. macOS may substitute voices.");
 }

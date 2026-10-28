@@ -17,6 +17,10 @@ async function chat(page: any) {
   await page.goto("/?view=chat");
   await page.getByRole("button", { name: "Meet Mivuneko" }).click();
 }
+async function settings(page: any, category = "Voice & input") {
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: category, exact: true }).click();
+}
 async function ask(page: any, text: string) {
   await page.getByLabel("Message Mivuneko", { exact: true }).fill(text);
   await page.getByRole("button", { name: "Send" }).click();
@@ -92,7 +96,7 @@ test("settings and chat activity synchronize to an already open pet", async ({
   const main = await context.newPage();
   await chat(main);
   await main.getByRole("button", { name: "Characters", exact: true }).click();
-  await main.getByLabel("Character", { exact: true }).selectOption("miku");
+  await main.getByRole("button", { name: /^Miku/ }).click();
   await expect(
     page.getByRole("img", { name: /Miku · unofficial fan art 2D companion/ }),
   ).toBeVisible();
@@ -176,7 +180,7 @@ test("opt-in history survives reload and disabling it deletes storage", async ({
   page,
 }) => {
   await chat(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await settings(page, "Connections");
   await page.getByLabel("Remember conversations on this device").check();
   await page
     .getByRole("button", { name: "Conversations", exact: true })
@@ -189,7 +193,7 @@ test("opt-in history survives reload and disabling it deletes storage", async ({
     .toContain("A remembered hello");
   await page.reload();
   await expect(page.getByRole("log")).toContainText("A remembered hello");
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await settings(page, "Connections");
   await page.getByLabel("Remember conversations on this device").uncheck();
   await expect
     .poll(() =>
@@ -331,6 +335,10 @@ test("Gemini configuration stays private while speech uses local commands", asyn
   await fakeNative(page);
   await page.addInitScript(() => {
     const w = window as any;
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ voiceProvider: "system" }),
+    );
     const previous = w.__TAURI_INTERNALS__.invoke;
     let configured = false;
     w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
@@ -393,7 +401,7 @@ test("Gemini configuration stays private while speech uses local commands", asyn
     };
   });
   await chat(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await settings(page, "Connections");
   await page
     .getByLabel("Gemini API keys")
     .fill("test_key_12345\n\n test_key_67890 \ntest_key_12345");
@@ -412,7 +420,7 @@ test("Gemini configuration stays private while speech uses local commands", asyn
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(
     "test_key",
   );
-  await page.getByRole("button", { name: "Characters", exact: true }).click();
+  await settings(page);
   await page
     .getByLabel("Voice mode", { exact: true })
     .selectOption("push-to-talk");
@@ -456,7 +464,7 @@ test("connection drafts and masked previews survive tab changes", async ({
   page,
 }) => {
   await chat(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await settings(page, "Connections");
   const keys = "AIzaTEST_FIRST_1234\nAIzaTEST_SECOND_5678\nAIzaTEST_FIRST_1234";
   await page.getByLabel("Gemini API keys", { exact: true }).fill(keys);
   await page
@@ -470,7 +478,7 @@ test("connection drafts and masked previews survive tab changes", async ({
     page.getByLabel("Gemini proxy", { exact: true }),
   ).toHaveAttribute("type", "text");
   await page.getByRole("button", { name: "Activity", exact: true }).click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await settings(page, "Connections");
   await expect(page.getByLabel("Gemini API keys", { exact: true })).toHaveValue(
     keys,
   );
@@ -533,7 +541,7 @@ test("native diagnostics identify each key, retain results and preserve proxy on
     };
   });
   await chat(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await settings(page, "Connections");
   await page
     .getByLabel("Gemini API keys", { exact: true })
     .fill("AIzaTEST_FIRST_1234\nAIzaTEST_SECOND_5678");
@@ -544,7 +552,7 @@ test("native diagnostics identify each key, retain results and preserve proxy on
     .getByRole("button", { name: "Test all keys", exact: true })
     .click();
   await page.getByRole("button", { name: "Activity", exact: true }).click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await settings(page, "Connections");
   await expect(page.locator(".key-row").first()).toContainText("Working");
   await expect(page.locator(".key-row").nth(1)).toContainText("Rejected");
   await expect(
@@ -600,7 +608,7 @@ test("redesigned settings remain usable on a narrow viewport", async ({
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await chat(page);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await settings(page, "Connections");
   await page
     .getByLabel("Gemini API keys", { exact: true })
     .fill("AIzaDEMO_FIRST_1234");
@@ -614,10 +622,10 @@ test("redesigned settings remain usable on a narrow viewport", async ({
     ),
   ).toBe(true);
   await page.getByRole("button", { name: "Characters", exact: true }).click();
-  await page.getByLabel("Character", { exact: true }).selectOption("luna");
-  await expect(page.getByLabel("Character", { exact: true })).toHaveValue(
-    "luna",
-  );
+  await page.getByRole("button", { name: "Luna", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Luna", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
 });
 
 test("approval policy automatically denies or approves recognized app launches", async ({
@@ -800,7 +808,7 @@ for (const turnTaking of ["automatic", "manual"] as const) {
       };
     });
     await chat(page);
-    await page.getByRole("button", { name: "Characters", exact: true }).click();
+    await settings(page);
     await page.getByLabel("Voice mode").selectOption("open-mic");
     await page.getByLabel("Voice message submission").selectOption(turnTaking);
     await page
@@ -936,7 +944,7 @@ test("character playback completes and recovers from a failed later phrase", asy
     };
   });
   await chat(page);
-  await page.getByRole("button", { name: "Characters", exact: true }).click();
+  await settings(page);
   const happy = page
     .locator(".mood-previews")
     .getByRole("button", { name: "Happy", exact: true });
@@ -967,9 +975,9 @@ test("saved Gemini speech selection survives startup and reload", async ({
     );
   });
   await chat(page);
-  await page.getByRole("button", { name: "Characters", exact: true }).click();
+  await settings(page);
   await expect(page.getByLabel("Speech engine")).toHaveValue("gemini");
   await page.reload();
-  await page.getByRole("button", { name: "Characters", exact: true }).click();
+  await settings(page);
   await expect(page.getByLabel("Speech engine")).toHaveValue("gemini");
 });

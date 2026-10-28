@@ -21,12 +21,20 @@ function notify() {
 window.addEventListener("storage", (e) => {
   if (e.key === "mivuneko.preferences.v1") {
     try {
-      state = parsePreferences(JSON.parse(e.newValue ?? "null"));
+      // A queued event may describe an older write from another app window.
+      state = parsePreferences(
+        JSON.parse(localStorage.getItem("mivuneko.preferences.v1") ?? "null"),
+      );
       notify();
     } catch {}
   }
 });
 export function updatePreferences(patch: Partial<Preferences>) {
+  try {
+    state = parsePreferences(
+      JSON.parse(localStorage.getItem("mivuneko.preferences.v1") ?? "null"),
+    );
+  } catch {}
   state = parsePreferences({ ...state, ...patch });
   try {
     localStorage.setItem("mivuneko.preferences.v1", JSON.stringify(state));

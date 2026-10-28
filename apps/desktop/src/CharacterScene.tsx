@@ -3,10 +3,12 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 import type { CharacterState } from "../../../packages/character/controller.ts";
+import { vrmFace, vrmEffect } from "../../../packages/character/expressions.ts";
 interface Props {
   state: CharacterState;
   model: ArrayBuffer | null;
   reduced: boolean;
+  effects?: boolean;
 }
 function mesh(geometry: THREE.BufferGeometry, color: number) {
   return new THREE.Mesh(
@@ -96,6 +98,36 @@ function effectTexture(kind: string) {
     ctx.bezierCurveTo(20, 67, 25, 105, 64, 108);
     ctx.bezierCurveTo(103, 105, 108, 67, 64, 15);
     ctx.fill();
+  } else if (kind === "hearts") {
+    ctx.fillStyle = "#ff9fc4";
+    ctx.beginPath();
+    ctx.moveTo(64, 112);
+    ctx.bezierCurveTo(2, 70, 8, 15, 42, 23);
+    ctx.bezierCurveTo(55, 25, 61, 33, 64, 42);
+    ctx.bezierCurveTo(78, 7, 117, 16, 119, 45);
+    ctx.bezierCurveTo(122, 72, 90, 96, 64, 112);
+    ctx.fill();
+  } else if (kind === "question") {
+    ctx.strokeStyle = "#c3b1ff";
+    ctx.beginPath();
+    ctx.arc(61, 41, 24, Math.PI, Math.PI * 2.4);
+    ctx.lineTo(61, 80);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(61, 105, 5, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (kind === "blush") {
+    ctx.strokeStyle = "#ff9ab5";
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.moveTo(24 + i * 19, 75);
+      ctx.lineTo(35 + i * 19, 44);
+      ctx.stroke();
+    }
+  } else if (kind === "sleep") {
+    ctx.fillStyle = "#c3b1ff";
+    ctx.font = "bold 75px sans-serif";
+    ctx.fillText("Z", 35, 87);
   } else if (kind === "surprised") {
     ctx.beginPath();
     ctx.moveTo(64, 20);
@@ -117,12 +149,19 @@ function effectTexture(kind: string) {
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
-export function CharacterScene({ state, model, reduced }: Props) {
+export function CharacterScene({
+  state,
+  model,
+  reduced,
+  effects = true,
+}: Props) {
   const host = useRef<HTMLDivElement>(null),
     stateRef = useRef(state),
     reducedRef = useRef(reduced);
   const [error, setError] = useState("");
   const [modelReady, setModelReady] = useState(false);
+  const effectsRef = useRef(effects);
+  effectsRef.current = effects;
   stateRef.current = state;
   reducedRef.current = reduced;
   useEffect(() => {
@@ -144,7 +183,7 @@ export function CharacterScene({ state, model, reduced }: Props) {
     host.current.appendChild(renderer.domElement);
     renderer.domElement.setAttribute(
       "aria-label",
-      model ? "Imported VRM character" : "Original chibi prototype character",
+      model ? "Animated 3D companion" : "Character loading",
     );
     renderer.domElement.setAttribute("role", "img");
     const scene = new THREE.Scene(),
@@ -156,12 +195,19 @@ export function CharacterScene({ state, model, reduced }: Props) {
     light.position.set(-2, 3, 4);
     scene.add(light);
     const fallback = prototype();
+    fallback.root.visible = !model;
     scene.add(fallback.root);
     const textures = Object.fromEntries(
-      ["angry", "sad", "surprised", "celebrating"].map((kind) => [
-        kind,
-        effectTexture(kind),
-      ]),
+      [
+        "angry",
+        "sad",
+        "surprised",
+        "celebrating",
+        "hearts",
+        "question",
+        "blush",
+        "sleep",
+      ].map((kind) => [kind, effectTexture(kind)]),
     );
     const effectMaterial = new THREE.SpriteMaterial({
       map: textures.angry,
@@ -232,7 +278,9 @@ export function CharacterScene({ state, model, reduced }: Props) {
         })
         .catch((e) => {
           if (!disposed)
-            setError(`VRM load failed: ${String(e)}. Showing prototype.`);
+            setError(
+              `This character could not be loaded. ${String(e)} Choose another model in Characters.`,
+            );
         });
     }
     function animate(now: number) {
@@ -244,37 +292,18 @@ export function CharacterScene({ state, model, reduced }: Props) {
       const blink = quiet ? 1 : Math.sin(phase * 0.6) > 0.996 ? 0.08 : 1;
       if (vrm) {
         const ex = vrm.expressionManager;
-        for (const name of ["happy", "sad", "angry", "surprised", "relaxed"])
-          ex?.setValue(name, 0);
-        ex?.setValue(
-          "happy",
-          s.expression === "happy" || s.expression === "celebrating"
-            ? 0.55
-            : (s.expression as string) === "shy"
-              ? 0.2
-              : 0,
-        );
-        ex?.setValue(
-          "sad",
-          s.expression === "sad"
-            ? 0.65
-            : s.expression === "concerned"
-              ? 0.3
-              : 0,
-        );
-        ex?.setValue("angry", s.expression === "angry" ? 0.65 : 0);
-        ex?.setValue(
-          "relaxed",
-          s.body === "sleep"
-            ? 0.6
-            : (s.expression as string) === "shy"
-              ? 0.5
-              : s.expression === "idle"
-                ? 0.12
-                : 0,
-        );
-        ex?.setValue("surprised", s.expression === "surprised" ? 0.7 : 0);
+        const face = vrmFace(s.expression);
         const head = vrm.humanoid.getNormalizedBoneNode("head");
+        for (const name of [
+          "happy",
+          "sad",
+          "angry",
+          "surprised",
+          "relaxed",
+          "blinkLeft",
+          "blinkRight",
+        ])
+          ex?.setValue(name, face[name] ?? 0);
         if (head) {
           head.getWorldPosition(headPosition);
           gaze.position.lerp(
@@ -366,9 +395,10 @@ export function CharacterScene({ state, model, reduced }: Props) {
             s.expression === "celebrating" ? (i === 0 ? -1.8 : 1.8) : 0;
         });
       }
-      effect.visible = !!textures[s.expression];
+      const effectKind = vrmEffect(s.expression);
+      effect.visible = effectsRef.current && !!textures[effectKind];
       if (effect.visible) {
-        effectMaterial.map = textures[s.expression];
+        effectMaterial.map = textures[effectKind];
         const head = vrm?.humanoid.getNormalizedBoneNode("head");
         if (head) head.getWorldPosition(headPosition);
         else headPosition.set(0, 1.22, 0);
