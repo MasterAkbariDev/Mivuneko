@@ -1,7 +1,7 @@
 {
   "identifier": "desktop",
   "description": "Local pet and conversations windows; no shell or filesystem plugins.",
-  "windows": ["main", "pet"],
+  "windows": ["main", "pet", "pet-monitor-*"],
   "permissions": [
     "core:default",
     "core:window:allow-show",

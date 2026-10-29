@@ -17,10 +17,14 @@ export function CompanionVisual({
   mood = "idle",
   mouth = 0,
   emotion: speechEmotion,
+  body,
+  direction = 0,
 }: {
   mood?: Mood;
   mouth?: number;
   emotion?: Mood;
+  body?: import("../../../packages/character/controller").BodyAction;
+  direction?: number;
 }) {
   const p = usePreferences();
   const [model, setModel] = useState<ArrayBuffer | null>(null);
@@ -83,15 +87,16 @@ export function CompanionVisual({
   const state = withMouth(
     characterFor(
       mood,
-      p.petMode === "sleep"
-        ? "sleep"
-        : p.petMode === "dance"
-          ? "dance"
-          : p.petMode === "walk" || p.petMode === "run"
-            ? "walk"
-            : p.petMode === "sit"
-              ? "sit"
-              : "idle",
+      body ??
+        (p.petMode === "sleep"
+          ? "sleep"
+          : p.petMode === "dance"
+            ? "dance"
+            : p.petMode === "walk" || p.petMode === "run"
+              ? "walk"
+              : p.petMode === "sit"
+                ? "sit"
+                : "idle"),
     ),
     mouth,
   );
@@ -111,6 +116,7 @@ export function CompanionVisual({
             state={state}
             reduced={p.reduced}
             effects={p.petEffects}
+            direction={direction}
           />
         </Suspense>
       ) : (

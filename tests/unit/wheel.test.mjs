@@ -18,10 +18,10 @@ test("line and page delta modes are normalised", () => {
   const w = createWheelScaler(() => 0);
   assert.equal(w.push(-3, 1, 1), 1.05);
 });
-test("the scale is clamped to 50%–180% and stale movement is dropped", () => {
+test("the scale is clamped to 50%–400% and stale movement is dropped", () => {
   let t = 0;
   const w = createWheelScaler(() => t);
-  assert.equal(w.push(-400, 0, 1.78), 1.8);
+  assert.equal(w.push(-400, 0, 3.98), 4);
   assert.equal(w.push(400, 0, 0.52), 0.5);
   t = 0;
   assert.equal(w.push(-30, 0, 1), null);

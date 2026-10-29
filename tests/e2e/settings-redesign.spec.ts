@@ -478,8 +478,16 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
     animateVrm(vrm, state, 0, 1, true);
     const arm = vrm.humanoid.getNormalizedBoneNode("rightUpperArm");
     const neutral = arm.quaternion.clone();
+    vrm.update(0.016);
+    vrm.scene.updateMatrixWorld(true);
+    const hand = vrm.humanoid.getRawBoneNode("rightHand");
+    const neutralHandZ = hand.getWorldPosition(hand.position.clone()).z;
     animateVrm(vrm, { ...state, expression: "happy" }, 1, 1, false);
     const gesture = neutral.angleTo(arm.quaternion);
+    vrm.update(0.016);
+    vrm.scene.updateMatrixWorld(true);
+    const forwardHand =
+      hand.getWorldPosition(hand.position.clone()).z - neutralHandZ;
     const expression = vrm.expressionManager.getExpression("angry");
     vrm.expressionManager.setValue("angry", 1);
     vrm.update(0.016);
@@ -492,6 +500,7 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
       ".character-scene canvas",
     ) as HTMLCanvasElement;
     return {
+      forwardHand,
       gesture,
       morphed,
       weight: expression.weight,
@@ -499,6 +508,7 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
     };
   });
   expect(result.gesture).toBeGreaterThan(0.5);
+  expect(result.forwardHand).toBeGreaterThan(0.05);
   expect(result.morphed).toBe(true);
   expect(result.weight).toBe(1);
   expect(result.ratio).toBeGreaterThanOrEqual(1.9);
@@ -506,4 +516,109 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
     .getByLabel("Pet expression", { exact: true })
     .selectOption("angry");
   await page.screenshot({ path: "test-results/haru-gesture.png" });
+});
+
+test("companion commands choose actions without a manual mode selector", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat&tab=Characters");
+  await expect(page.getByLabel("Pet mode", { exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .getByLabel("Pet display")
+      .getByRole("option", { name: /All monitors/ }),
+  ).toHaveCount(1);
+  await page.getByLabel("Pet display").selectOption("all");
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("mivuneko.preferences.v1") ?? "{}")
+          .monitor,
+    ),
+  ).toBe("all");
+  await page
+    .getByRole("button", { name: "Conversations", exact: true })
+    .click();
+  for (const [text, mode] of [
+    ["walk to the left", "walk"],
+    ["run to the top right", "run"],
+    ["sit down", "sit"],
+    ["resume automatic behavior", "auto"],
+  ]) {
+    await page.getByLabel("Message Mivuneko", { exact: true }).fill(text);
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            JSON.parse(localStorage.getItem("mivuneko.preferences.v1") ?? "{}")
+              .petMode,
+        ),
+      )
+      .toBe(mode);
+  }
+});
+test("screen help previews an image before any cloud request", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any,
+      previous = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+      if (command === "capture_screen") {
+        w.__calls.push({ command, args });
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = 16;
+        return Array.from(
+          atob(canvas.toDataURL("image/jpeg").split(",")[1]),
+          (c) => c.charCodeAt(0),
+        );
+      }
+      if (command === "analyze_screen") {
+        w.__calls.push({ command, args });
+        return "The screenshot shows the test desktop.";
+      }
+      return previous(command, args);
+    };
+  });
+  await page.goto("/?view=chat");
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("help me understand my screen");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Share a screenshot" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__calls.filter(
+          (c: any) => c.command === "analyze_screen",
+        ).length,
+    ),
+  ).toBe(0);
+  await page
+    .getByRole("button", { name: "Share screenshot with Gemini", exact: true })
+    .click();
+  await expect(page.getByRole("log")).toContainText("test desktop");
+});
+test("captions appearing do not change the character's position", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const character = page.getByRole("group", { name: /Mivuneko character/ });
+  const before = await character.boundingBox();
+  await page.evaluate(() => {
+    const channel = new BroadcastChannel("mivuneko.session");
+    channel.postMessage({
+      mood: "happy",
+      text: "Hello from a caption",
+      at: Date.now(),
+      mouth: 0,
+    });
+    channel.close();
+  });
+  await expect(page.getByText("Hello from a caption")).toBeVisible();
+  const after = await character.boundingBox();
+  expect(after!.y).toBe(before!.y);
 });

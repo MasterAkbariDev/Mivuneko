@@ -1,3 +1,9 @@
+import {
+  desktopIntent,
+  matchApps,
+} from "../../../packages/shared-schemas/desktop-intent";
+import { directCompanion } from "./companionTask";
+import { ScreenAssistant } from "./ScreenAssistant";
 import { CompanionCard } from "./CompanionCard";
 import { Icon } from "./Icon";
 import { useActivity, logActivity } from "./activity";
@@ -40,6 +46,7 @@ const tabs = [
   "Settings",
 ] as const;
 export function App() {
+  const [screenRequest, setScreenRequest] = useState<string | null>(null);
   const preferences = usePreferences();
   const [showApps, setShowApps] = useState(false);
   const [tab, setTab] = useState<string>(
@@ -109,7 +116,7 @@ export function App() {
       isNative &&
       tab === "Conversations" &&
       !onboard,
-    busy || !!pending || !historyReady,
+    busy || !!pending || !historyReady || !!screenRequest || voice.preparing,
     voice.speaking,
     setLiveTranscript,
     (text) => {
@@ -254,7 +261,14 @@ export function App() {
     setMood(result.ok ? "celebrating" : "idle");
   }
   async function send(text = input) {
-    if (!text.trim() || busy || pending || !historyReady || turnActive.current)
+    if (
+      !text.trim() ||
+      busy ||
+      pending ||
+      screenRequest ||
+      !historyReady ||
+      turnActive.current
+    )
       return;
     if (text.length > 4000) {
       setError("Messages are limited to 4000 characters.");
@@ -276,6 +290,36 @@ export function App() {
         if (preferences.voice !== "off") voice.prepare();
         setMood("thinking");
       }
+      const intent = desktopIntent(text);
+      if (intent?.kind === "screen") {
+        setScreenRequest(text);
+        setMood("idle");
+        return;
+      }
+      if (
+        intent?.kind === "sit" ||
+        intent?.kind === "automatic" ||
+        intent?.kind === "move"
+      ) {
+        if (intent.kind === "move") directCompanion(intent.destination);
+        updatePreferences({
+          petMode:
+            intent.kind === "sit"
+              ? "sit"
+              : intent.kind === "automatic"
+                ? "auto"
+                : intent.gait,
+        });
+        add(
+          intent.kind === "sit"
+            ? "I'll sit here."
+            : intent.kind === "automatic"
+              ? "I'll choose when to move and rest again."
+              : `On my way ${intent.destination === "elsewhere" ? "to another spot" : `to the ${intent.destination}`}!`,
+        );
+        setMood("happy");
+        return;
+      }
       const reply = await agentFor(preferences.backend).reply(
         text,
         mode,
@@ -291,11 +335,16 @@ export function App() {
         if (!enabled) throw Error("App launching is disabled in Permissions.");
         const apps = await broker.listApps();
         c.signal.throwIfAborted();
-        const matches = apps.filter(
-          (a) => a.name.toLowerCase() === reply.appQuery!.toLowerCase(),
-        );
+        const matches = matchApps(reply.appQuery, apps);
         if (matches.length !== 1)
-          throw Error("No unique installed app matched. Try its exact name.");
+          throw Error(
+            matches.length
+              ? `Several apps match: ${matches
+                  .slice(0, 5)
+                  .map((a) => a.name)
+                  .join(", ")}. Use the full name or Installed apps.`
+              : "No unique installed app matched. Try its exact name or open Installed apps.",
+          );
         const p = await broker.requestLaunch(matches[0].id);
         if (c.signal.aborted) {
           await broker.revoke();
@@ -821,6 +870,24 @@ export function App() {
         )}
       </main>
       <SpeechDownloadDock />
+      {screenRequest && (
+        <ScreenAssistant
+          prompt={screenRequest}
+          onClose={() => setScreenRequest(null)}
+          onAnswer={(answer) => {
+            add(answer);
+            setScreenRequest(null);
+            setMood("happy");
+            if (preferences.voice !== "off" && isNative)
+              void voice.speak(
+                speakable({ text: answer }),
+                preferences.volume,
+                "curious",
+              );
+          }}
+        />
+      )}
+
       {showApps ? (
         <InstalledApps
           onClose={() => setShowApps(false)}

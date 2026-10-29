@@ -1,0 +1,129 @@
+{
+  "engine": "kokoro",
+  "speed": 1.0,
+  "gain": 1,
+  "neutral": [
+    {
+      "speaker": "af_kore",
+      "weight": 0.65
+    },
+    {
+      "speaker": "af_nicole",
+      "weight": 0.35
+    }
+  ],
+  "moods": {
+    "happy": {
+      "speed": 1.05,
+      "pause": 0.8,
+      "blend": [
+        {
+          "speaker": "af_kore",
+          "weight": 0.65
+        },
+        {
+          "speaker": "af_nicole",
+          "weight": 0.35
+        }
+      ]
+    },
+    "celebrating": {
+      "speed": 1.1,
+      "pause": 0.7,
+      "blend": [
+        {
+          "speaker": "af_kore",
+          "weight": 0.65
+        },
+        {
+          "speaker": "af_nicole",
+          "weight": 0.35
+        }
+      ]
+    },
+    "surprised": {
+      "speed": 1.05,
+      "pause": 0.8,
+      "blend": [
+        {
+          "speaker": "af_kore",
+          "weight": 0.65
+        },
+        {
+          "speaker": "af_nicole",
+          "weight": 0.35
+        }
+      ]
+    },
+    "curious": {
+      "speed": 1,
+      "pause": 1.1,
+      "blend": [
+        {
+          "speaker": "af_kore",
+          "weight": 0.65
+        },
+        {
+          "speaker": "af_nicole",
+          "weight": 0.35
+        }
+      ]
+    },
+    "confused": {
+      "speed": 0.96,
+      "pause": 1.25,
+      "blend": [
+        {
+          "speaker": "af_kore",
+          "weight": 0.65
+        },
+        {
+          "speaker": "af_nicole",
+          "weight": 0.35
+        }
+      ]
+    },
+    "concerned": {
+      "speed": 0.94,
+      "pause": 1.2,
+      "blend": [
+        {
+          "speaker": "af_kore",
+          "weight": 0.45
+        },
+        {
+          "speaker": "af_nicole",
+          "weight": 0.55
+        }
+      ]
+    },
+    "sad": {
+      "speed": 0.91,
+      "pause": 1.4,
+      "blend": [
+        {
+          "speaker": "af_kore",
+          "weight": 0.45
+        },
+        {
+          "speaker": "af_nicole",
+          "weight": 0.55
+        }
+      ]
+    },
+    "angry": {
+      "speed": 1.04,
+      "pause": 0.8,
+      "blend": [
+        {
+          "speaker": "af_kore",
+          "weight": 0.65
+        },
+        {
+          "speaker": "af_nicole",
+          "weight": 0.35
+        }
+      ]
+    }
+  }
+}

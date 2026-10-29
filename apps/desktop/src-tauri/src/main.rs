@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod gemini;
+mod pet_displays;
+mod screen;
 use os_broker::{AppInfo, Broker, LaunchRequest, LaunchResult};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -187,6 +189,36 @@ fn embedded_pack(character: &str) -> Option<&'static str> {
     match character {
         "luna" => Some(include_str!(
             "../../../../assets/characters/luna/voice/voice.json"
+        )),
+        "haru" => Some(include_str!(
+            "../../../../assets/characters/haru/voice/voice.json"
+        )),
+        "miku" => Some(include_str!(
+            "../../../../assets/characters/miku/voice/voice.json"
+        )),
+        "kitsune" => Some(include_str!(
+            "../../../../assets/characters/kitsune/voice/voice.json"
+        )),
+        "stella" => Some(include_str!(
+            "../../../../assets/characters/stella/voice/voice.json"
+        )),
+        "teto" => Some(include_str!(
+            "../../../../assets/characters/teto/voice/voice.json"
+        )),
+        "neru" => Some(include_str!(
+            "../../../../assets/characters/neru/voice/voice.json"
+        )),
+        "snow" => Some(include_str!(
+            "../../../../assets/characters/snow/voice/voice.json"
+        )),
+        "silver" => Some(include_str!(
+            "../../../../assets/characters/silver/voice/voice.json"
+        )),
+        "azure" => Some(include_str!(
+            "../../../../assets/characters/azure/voice/voice.json"
+        )),
+        "goth" => Some(include_str!(
+            "../../../../assets/characters/goth/voice/voice.json"
         )),
         _ => None,
     }
@@ -744,6 +776,9 @@ fn main() {
             gemini::gemini_transcribe,
             gemini::gemini_speak,
             gemini::gemini_speak_stream,
+            screen::capture_screen,
+            screen::analyze_screen,
+            pet_displays::sync_pet_displays,
             list_apps,
             request_launch,
             resolve_launch,
@@ -837,6 +872,7 @@ mod voice_pack_tests {
     fn only_known_characters_have_embedded_packs() {
         assert!(embedded_pack("luna").is_some());
         assert!(embedded_pack("../../etc/passwd").is_none());
-        assert!(embedded_pack("miku").is_none());
+        assert!(embedded_pack("miku").is_some());
+        assert!(embedded_pack("haru").is_some());
     }
 }

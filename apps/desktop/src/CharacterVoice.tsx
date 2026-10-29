@@ -55,6 +55,8 @@ export function CharacterVoice({
   volume: number;
 }) {
   const preferences = usePreferences();
+  const voiceCharacter =
+    preferences.renderer === "sample-vrm" ? "haru" : character;
   const [own, setOwn] = useState<boolean | null>(null);
   const [systemSpeech, setSystemSpeech] = useState(false);
   const download = useSpeechDownload();
@@ -64,7 +66,9 @@ export function CharacterVoice({
     try {
       await startSpeechDownload("kokoro:v1");
       const { invoke } = await import("@tauri-apps/api/core");
-      setOwn(!!(await invoke("character_voice", { character })));
+      setOwn(
+        !!(await invoke("character_voice", { character: voiceCharacter })),
+      );
     } catch (error) {
       setInstallError(String(error));
     }
@@ -82,10 +86,12 @@ export function CharacterVoice({
     if (!isNative) return;
     setOwn(null);
     void import("@tauri-apps/api/core")
-      .then(({ invoke }) => invoke<unknown>("character_voice", { character }))
+      .then(({ invoke }) =>
+        invoke<unknown>("character_voice", { character: voiceCharacter }),
+      )
       .then((pack) => setOwn(!!pack))
       .catch(() => setOwn(false));
-  }, [character]);
+  }, [voiceCharacter]);
   const name =
     preferences.renderer === "sample-vrm"
       ? "Haru"

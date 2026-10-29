@@ -1,0 +1,129 @@
+{
+  "engine": "kokoro",
+  "speed": 1.03,
+  "gain": 1,
+  "neutral": [
+    {
+      "speaker": "af_bella",
+      "weight": 0.7
+    },
+    {
+      "speaker": "af_heart",
+      "weight": 0.30000000000000004
+    }
+  ],
+  "moods": {
+    "happy": {
+      "speed": 1.05,
+      "pause": 0.8,
+      "blend": [
+        {
+          "speaker": "af_bella",
+          "weight": 0.7
+        },
+        {
+          "speaker": "af_heart",
+          "weight": 0.30000000000000004
+        }
+      ]
+    },
+    "celebrating": {
+      "speed": 1.1,
+      "pause": 0.7,
+      "blend": [
+        {
+          "speaker": "af_bella",
+          "weight": 0.7
+        },
+        {
+          "speaker": "af_heart",
+          "weight": 0.30000000000000004
+        }
+      ]
+    },
+    "surprised": {
+      "speed": 1.05,
+      "pause": 0.8,
+      "blend": [
+        {
+          "speaker": "af_bella",
+          "weight": 0.7
+        },
+        {
+          "speaker": "af_heart",
+          "weight": 0.30000000000000004
+        }
+      ]
+    },
+    "curious": {
+      "speed": 1,
+      "pause": 1.1,
+      "blend": [
+        {
+          "speaker": "af_bella",
+          "weight": 0.7
+        },
+        {
+          "speaker": "af_heart",
+          "weight": 0.30000000000000004
+        }
+      ]
+    },
+    "confused": {
+      "speed": 0.96,
+      "pause": 1.25,
+      "blend": [
+        {
+          "speaker": "af_bella",
+          "weight": 0.7
+        },
+        {
+          "speaker": "af_heart",
+          "weight": 0.30000000000000004
+        }
+      ]
+    },
+    "concerned": {
+      "speed": 0.94,
+      "pause": 1.2,
+      "blend": [
+        {
+          "speaker": "af_bella",
+          "weight": 0.49999999999999994
+        },
+        {
+          "speaker": "af_heart",
+          "weight": 0.5
+        }
+      ]
+    },
+    "sad": {
+      "speed": 0.91,
+      "pause": 1.4,
+      "blend": [
+        {
+          "speaker": "af_bella",
+          "weight": 0.49999999999999994
+        },
+        {
+          "speaker": "af_heart",
+          "weight": 0.5
+        }
+      ]
+    },
+    "angry": {
+      "speed": 1.04,
+      "pause": 0.8,
+      "blend": [
+        {
+          "speaker": "af_bella",
+          "weight": 0.7
+        },
+        {
+          "speaker": "af_heart",
+          "weight": 0.30000000000000004
+        }
+      ]
+    }
+  }
+}

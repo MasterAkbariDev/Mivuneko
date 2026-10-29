@@ -31,29 +31,14 @@ export function CompanionControls() {
         Double-click the character for Conversations, or right-click for
         Characters.
       </p>
-      <label className="setting">
-        Companion mode
-        <select
-          aria-label="Pet mode"
-          value={p.petMode}
-          onChange={(e) =>
-            updatePreferences({
-              petMode: e.target.value as typeof p.petMode,
-              petExpression: "auto",
-            })
-          }
-        >
-          <option value="auto">Automatic · follows the conversation</option>
-          <option value="cozy">Cozy · gentle and bashful</option>
-          <option value="playful">Playful · bright and cheerful</option>
-          <option value="focus">Focus · quiet company</option>
-          <option value="sleep">Sleep · curled up</option>
-          <option value="dance">Dance · little celebration</option>
-          <option value="walk">Walk · roam slowly</option>
-          <option value="run">Run · roam faster</option>
-          <option value="sit">Sit · settle in place</option>
-        </select>
-      </label>
+      <div className="setting">
+        <span>Companion behavior</span>
+        <strong>Automatic · conversation, movement and rest</strong>
+      </div>
+      <p className="hint">
+        Ask your companion to walk somewhere, run, sit down or resume automatic
+        behavior.
+      </p>
       <label className="setting">
         Expression preview
         <select
@@ -95,7 +80,7 @@ export function CompanionControls() {
           aria-label="Companion size"
 
           min="0.5"
-          max="1.8"
+          max="4"
           step="0.05"
           value={p.petScale}
           onChange={(e) =>
@@ -122,7 +107,8 @@ export function CompanionControls() {
             value={p.monitor}
             onChange={(e) => updatePreferences({ monitor: e.target.value })}
           >
-            <option value="current">Current monitor</option>
+            <option value="current">Follow me · current monitor</option>
+            <option value="all">All monitors · one companion on each</option>
             {monitors.map((m) => (
               <option key={m} value={m}>
                 {m.split(":")[0]}

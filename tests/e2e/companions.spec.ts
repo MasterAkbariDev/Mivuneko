@@ -70,7 +70,23 @@ test("Luna previews unique expression and movement frames", async ({
   await page.getByLabel("Pet expression").selectOption("auto");
   const moves = new Set<string>();
   for (const mode of ["walk", "run", "sit"]) {
-    await page.getByLabel("Pet mode").selectOption(mode);
+    await page
+      .getByRole("button", { name: "Conversations", exact: true })
+      .click();
+    await page
+      .getByLabel("Message Mivuneko", { exact: true })
+      .fill(mode === "sit" ? "sit down" : `${mode} to another place`);
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            JSON.parse(localStorage.getItem("mivuneko.preferences.v1") ?? "{}")
+              .petMode,
+        ),
+      )
+      .toBe(mode);
+    await page.getByRole("button", { name: "Characters", exact: true }).click();
     moves.add((await preview.getAttribute("data-frame"))!);
   }
   expect(moves.size).toBe(3);

@@ -62,10 +62,10 @@ export function animateVrm(
     pose.rightLowerArm = [0, -1.65, -0.5];
     pose.rightHand = [0.15, 0, -0.25];
   }
-  if (state.body === "walk") {
-    const stride = Math.sin(t * 6);
-    pose.leftUpperLeg = [stride * 0.42, 0, 0];
-    pose.rightUpperLeg = [-stride * 0.42, 0, 0];
+  if (state.body === "walk" || state.body === "run") {
+    const stride = Math.sin(t * (state.body === "run" ? 9 : 6));
+    pose.leftUpperLeg = [stride * (state.body === "run" ? 0.65 : 0.42), 0, 0];
+    pose.rightUpperLeg = [-stride * (state.body === "run" ? 0.65 : 0.42), 0, 0];
     pose.leftLowerLeg = [Math.max(0, -stride) * 0.5, 0, 0];
     pose.rightLowerLeg = [Math.max(0, stride) * 0.5, 0, 0];
     pose.leftUpperArm = [-stride * 0.3, 0, -1.35];
@@ -85,6 +85,12 @@ export function animateVrm(
     pose.rightUpperLeg = [-wave * 0.15, 0, 0.06];
   } else if (state.body === "sleep") pose.head = [0.25, 0, 0.22];
   if (state.activity === "speaking") pose.head[0] += Math.sin(t * 4) * 0.035;
+  // Normalized elbows bend forward with negative Y on the left, positive on the right.
+  // Keep the forearm hinge anatomically consistent across VRM skeletons.
+  pose.leftUpperArm[1] = -Math.abs(pose.leftUpperArm[1]);
+  pose.rightUpperArm[1] = Math.abs(pose.rightUpperArm[1]);
+  pose.leftLowerArm[1] = -Math.abs(pose.leftLowerArm[1]);
+  pose.rightLowerArm[1] = Math.abs(pose.rightLowerArm[1]);
   const alpha = 1 - Math.exp(-10 * delta),
     q = new THREE.Quaternion(),
     e = new THREE.Euler();
@@ -96,6 +102,6 @@ export function animateVrm(
   if (hips) {
     if (!origins.has(vrm)) origins.set(vrm, hips.position.clone());
     hips.position.copy(origins.get(vrm)!);
-    hips.position.y += state.body === "sit" ? -0.23 : breath * 0.004;
+    hips.position.y += state.body === "sit" ? -0.38 : breath * 0.004;
   }
 }

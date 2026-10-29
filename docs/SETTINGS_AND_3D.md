@@ -59,3 +59,15 @@ The standalone Windows release was checked with the packaged CSP: embedded VRM t
 The renderer resizes its drawing buffer to the displayed canvas, uses 2–3× pixel density and fits the complete body plus head effects into the camera. Pet zoom resizes the canvas instead of stretching it twice. No geometric placeholder character is constructed. Loading shows a text indicator.
 
 The bundled VRM has facial morphs but contains no animation clips. The website’s separate motion library is not embedded in that file. Mivuneko supplies authored humanoid gestures (waving, happy, angry, sad, surprised, curious), walking, seated poses and dancing with blended bone rotations. Facial presets blend independently from the optional icons and remain active while speaking. VRM gaze and spring bones still update. Browser checks verify actual skeleton rotation and mesh morph deformation; native checks cover textured rendering, enlarged canvas resolution and local voice playback.
+
+## Automatic behavior and displays
+
+Companion behavior runs automatically with rest, walking, running and seated periods. Talking and listening interrupt roaming. Explicit chat requests such as “walk to the left”, “run to the top right”, “sit down” and “resume automatic behavior” override the schedule. Walking and running turn the VRM toward its travel direction. Elbows use mirrored forward hinges, verified against actual hand positions in the bundled skeleton.
+
+Character size supports 50–400%; rendering fits the display when the requested size exceeds its work area. Captions occupy reserved space and window resizing preserves the lower anchor. Roaming retains the existing vertical position, and dragging takes priority and pauses movement. Display selection relocates the pet once; dragging to a different display switches back to following the current monitor. **All monitors** creates one pet on each connected display. Replicas share preferences and conversation state and do not speak check-ins independently.
+
+Native Windows validation covered two connected monitors: creation of a second companion, explicit display selection, manual cross-monitor positioning, and stable caption/foot placement. App discovery now uses Windows registered desktop and Store applications (262 apps on the validation device), retaining approved launch requests and stable catalog identifiers. Portable apps without a registered shortcut may still need registration in the Start menu.
+
+## Screen assistance
+
+Ask “help me understand my screen” in Conversations. Mivuneko hides its main window briefly, captures one display, deletes the temporary image after reading, and presents a local preview. Only **Share screenshot with Gemini** sends it to the configured provider. Images are not saved to chat history; the text explanation can be retained under the existing history preference. Capture and image-preview consent were checked natively/on browser; the image request contract is covered by a local HTTP fixture. Live cloud vision could not be validated in the final run because the configured proxy at port 10808 was offline. It requires a working Gemini connection.

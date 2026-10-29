@@ -1,0 +1,129 @@
+{
+  "engine": "kokoro",
+  "speed": 0.92,
+  "gain": 1,
+  "neutral": [
+    {
+      "speaker": "bf_lily",
+      "weight": 0.75
+    },
+    {
+      "speaker": "af_river",
+      "weight": 0.25
+    }
+  ],
+  "moods": {
+    "happy": {
+      "speed": 1.05,
+      "pause": 0.8,
+      "blend": [
+        {
+          "speaker": "bf_lily",
+          "weight": 0.75
+        },
+        {
+          "speaker": "af_river",
+          "weight": 0.25
+        }
+      ]
+    },
+    "celebrating": {
+      "speed": 1.1,
+      "pause": 0.7,
+      "blend": [
+        {
+          "speaker": "bf_lily",
+          "weight": 0.75
+        },
+        {
+          "speaker": "af_river",
+          "weight": 0.25
+        }
+      ]
+    },
+    "surprised": {
+      "speed": 1.05,
+      "pause": 0.8,
+      "blend": [
+        {
+          "speaker": "bf_lily",
+          "weight": 0.75
+        },
+        {
+          "speaker": "af_river",
+          "weight": 0.25
+        }
+      ]
+    },
+    "curious": {
+      "speed": 1,
+      "pause": 1.1,
+      "blend": [
+        {
+          "speaker": "bf_lily",
+          "weight": 0.75
+        },
+        {
+          "speaker": "af_river",
+          "weight": 0.25
+        }
+      ]
+    },
+    "confused": {
+      "speed": 0.96,
+      "pause": 1.25,
+      "blend": [
+        {
+          "speaker": "bf_lily",
+          "weight": 0.75
+        },
+        {
+          "speaker": "af_river",
+          "weight": 0.25
+        }
+      ]
+    },
+    "concerned": {
+      "speed": 0.94,
+      "pause": 1.2,
+      "blend": [
+        {
+          "speaker": "bf_lily",
+          "weight": 0.55
+        },
+        {
+          "speaker": "af_river",
+          "weight": 0.44999999999999996
+        }
+      ]
+    },
+    "sad": {
+      "speed": 0.91,
+      "pause": 1.4,
+      "blend": [
+        {
+          "speaker": "bf_lily",
+          "weight": 0.55
+        },
+        {
+          "speaker": "af_river",
+          "weight": 0.44999999999999996
+        }
+      ]
+    },
+    "angry": {
+      "speed": 1.04,
+      "pause": 0.8,
+      "blend": [
+        {
+          "speaker": "bf_lily",
+          "weight": 0.75
+        },
+        {
+          "speaker": "af_river",
+          "weight": 0.25
+        }
+      ]
+    }
+  }
+}

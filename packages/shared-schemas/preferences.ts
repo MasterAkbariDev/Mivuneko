@@ -218,7 +218,7 @@ export function parsePreferences(raw: unknown): Preferences {
     petCaptions: p.petCaptions !== false,
     petScale:
       typeof p.petScale === "number" && Number.isFinite(p.petScale)
-        ? Math.max(0.5, Math.min(1.8, p.petScale))
+        ? Math.max(0.5, Math.min(4, p.petScale))
         : 1,
     petAlwaysOnTop: p.petAlwaysOnTop !== false,
     backend:

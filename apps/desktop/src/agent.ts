@@ -1,3 +1,4 @@
+import { desktopIntent } from "../../../packages/shared-schemas/desktop-intent";
 import {
   parseAgentReply,
   boundedMessages,
@@ -34,6 +35,9 @@ export function agentFor(
   return {
     async reply(text, mode, signal, history = [], onProgress) {
       // Explicit user launch requests use the same constrained local intent path in every backend.
+      const local = desktopIntent(text);
+      if (local?.kind === "open")
+        return mockHermes.reply(`open ${local.query}`, mode, signal);
       if (backend === "offline" || /^open\s+/i.test(text.trim()))
         return mockHermes.reply(text, mode, signal);
       if (!isNative)

@@ -10,6 +10,7 @@ interface Props {
   model: ArrayBuffer | null;
   reduced: boolean;
   effects?: boolean;
+  direction?: number;
 }
 function effectTexture(kind: string) {
   const canvas = document.createElement("canvas");
@@ -93,12 +94,15 @@ export function CharacterScene({
   model,
   reduced,
   effects = true,
+  direction = 0,
 }: Props) {
   const host = useRef<HTMLDivElement>(null),
     stateRef = useRef(state),
     reducedRef = useRef(reduced);
   const [error, setError] = useState("");
   const [modelReady, setModelReady] = useState(false);
+  const facing = useRef(direction);
+  facing.current = direction;
   const effectsRef = useRef(effects);
   effectsRef.current = effects;
   stateRef.current = state;
@@ -163,6 +167,8 @@ export function CharacterScene({
       const { width, height } = host.current.getBoundingClientRect();
       const w = Math.max(1, width),
         h = Math.max(1, height);
+      const ratio = Math.min(Math.max(window.devicePixelRatio, 2), 3);
+      if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio);
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       const distance =
@@ -217,7 +223,13 @@ export function CharacterScene({
           setModelReady(true);
           VRMUtils.rotateVRM0(vrm);
           baseRotation = vrm.scene.rotation.y;
-          animateVrm(vrm, stateRef.current, 0, 1, true);
+          animateVrm(
+            vrm,
+            { ...stateRef.current, body: "idle", expression: "idle" },
+            0,
+            1,
+            true,
+          );
           vrm.update(0);
           scene.add(vrm.scene);
           vrm.scene.traverse((object) => {
@@ -284,9 +296,18 @@ export function CharacterScene({
           );
         }
         animateVrm(vrm, s, phase, delta, quiet);
-        vrm.scene.rotation.y =
+        const targetYaw =
           baseRotation +
-          (!quiet && s.body === "dance" ? Math.sin(phase * 2) * 0.12 : 0);
+          (s.body === "walk" || s.body === "run"
+            ? (facing.current * Math.PI) / 2
+            : !quiet && s.body === "dance"
+              ? Math.sin(phase * 2) * 0.12
+              : 0);
+        const turn = Math.atan2(
+          Math.sin(targetYaw - vrm.scene.rotation.y),
+          Math.cos(targetYaw - vrm.scene.rotation.y),
+        );
+        vrm.scene.rotation.y += turn * (1 - Math.exp(-8 * delta));
         vrm.update(delta);
       }
       const effectKind = vrmEffect(s.expression);

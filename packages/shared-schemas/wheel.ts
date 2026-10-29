@@ -1,5 +1,5 @@
 export const PET_SCALE_MIN = 0.5,
-  PET_SCALE_MAX = 1.8,
+  PET_SCALE_MAX = 4,
   WHEEL_STEP = 0.05,
   WHEEL_PIXELS = 40;
 // Turns wheel/trackpad deltas into pet-scale changes: mouse notches and trackpad

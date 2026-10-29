@@ -179,7 +179,8 @@ export function useVoice(
     emotion: Mood,
     ticket: number,
   ): Promise<boolean> {
-    const character = preferences.character;
+    const character =
+      preferences.renderer === "sample-vrm" ? "haru" : preferences.character;
     const { invoke } = await import("@tauri-apps/api/core");
     if (!packs.current.get(character))
       packs.current.set(
@@ -358,7 +359,10 @@ export function useVoice(
         requestId,
         text: text.slice(0, 2000),
         emotion,
-        character: preferences.character,
+        character:
+          preferences.renderer === "sample-vrm"
+            ? "haru"
+            : preferences.character,
       });
       if (playbackError) throw playbackError;
       if (!played.value) throw Error("No speech audio was returned");
@@ -400,7 +404,10 @@ export function useVoice(
           text: text.slice(0, 2000),
           style: preferences.localVoiceStyle,
           language: preferences.localVoiceLanguage,
-          character: preferences.character,
+          character:
+            preferences.renderer === "sample-vrm"
+              ? "haru"
+              : preferences.character,
         });
       let bytes: number[];
       if (cloud) {

@@ -1,3 +1,5 @@
+#[cfg(windows)]
+mod windows_catalog;
 use serde::Serialize;
 use std::{
     collections::HashMap,
@@ -21,6 +23,7 @@ pub struct LaunchResult {
     pub ok: bool,
     pub message: String,
 }
+#[derive(Clone)]
 struct Entry {
     info: AppInfo,
     path: PathBuf,
@@ -125,6 +128,20 @@ fn catalog() -> Vec<Entry> {
                 path: PathBuf::from(root).join("Telegram Desktop/Telegram.exe"),
             });
         }
+        #[cfg(windows)]
+        {
+            let mut discovered = windows_catalog::catalog();
+            for entry in entries.into_iter().filter(|e| e.path.is_file()) {
+                if !discovered
+                    .iter()
+                    .any(|e| e.info.name.eq_ignore_ascii_case(&entry.info.name))
+                {
+                    discovered.push(entry);
+                }
+            }
+            return discovered;
+        }
+        #[cfg(not(windows))]
         return entries.into_iter().filter(|e| e.path.is_file()).collect();
     }
     if cfg!(target_os = "macos") {
@@ -158,6 +175,29 @@ fn launch(entry: &Entry) -> Result<LaunchResult, String> {
         if !status.success() {
             return Err("macOS refused the application launch".into());
         }
+        return Ok(LaunchResult {
+            ok: true,
+            message: format!("Launch requested for {}.", entry.info.name),
+        });
+    }
+    #[cfg(windows)]
+    if entry.info.id.starts_with("win:") {
+        use std::os::windows::process::CommandExt;
+        let explorer =
+            PathBuf::from(std::env::var_os("SystemRoot").ok_or("Windows folder unavailable")?)
+                .join("explorer.exe");
+        std::process::Command::new(explorer)
+            .env_remove("MIVUNEKO_GEMINI_KEYS")
+            .env_remove("GEMINI_API_KEY")
+            .env_remove("GEMINI_API_KEYS")
+            .env_remove("GEMINI_KEYS")
+            .env_remove("GROQ_API_KEY")
+            .env_remove("MIVUNEKO_HERMES_KEY")
+            .env_remove("API_SERVER_KEY")
+            .arg(&entry.path)
+            .creation_flags(0x08000000)
+            .spawn()
+            .map_err(|_| "Windows could not open this app")?;
         return Ok(LaunchResult {
             ok: true,
             message: format!("Launch requested for {}.", entry.info.name),
