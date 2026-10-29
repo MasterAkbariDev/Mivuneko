@@ -13,7 +13,7 @@
 |---|---|
 | Plan + review committed; baseline recorded | done |
 | H1 — Rust-side launch policy, CSPRNG one-time approval tokens bound to action / payload / expiry / approval context, window checks, Tauri command ACL | pending |
-| Hermes `/v1/toolsets` accepts both response shapes, fails closed otherwise | pending |
+| Hermes `/v1/toolsets` accepts both response shapes, fails closed otherwise | done (stage 1) |
 | D5 — Gemini `propertyOrdering` (text no longer generated last) + golden prompt/schema tests | pending |
 | D13 — Groq `reasoning_effort` | pending (decided by benchmark) |
 | D11 — allow pinning Gemini or Groq | pending |
@@ -71,3 +71,8 @@ settings-redesign.spec.ts:1058 wake and movement clear sleeping overrides and th
 ## Stage log
 
 Entries are added as each stage is committed.
+
+### Stage 1 — Hermes toolsets shape
+- `validate_toolsets` accepts the documented bare array **and** the `{"object":"list","data":[…]}` object that the v0.22.5 code returns. Anything else still fails closed.
+- New test `toolsets_accept_the_list_object_and_still_fail_closed`. agent-client: 4/4 pass; fmt and clippy clean.
+- A live Hermes install was not tested; this only fixes the shape mismatch found in the source.

@@ -49,8 +49,14 @@ fn body(response: reqwest::blocking::Response) -> Result<Value, String> {
     serde_json::from_slice(&bytes).map_err(|_| "Invalid JSON from Hermes".into())
 }
 fn validate_toolsets(value: &Value) -> Result<(), String> {
+    // Hermes documents a bare array, but v0.22.5 returns {"object":"list","data":[...]}.
     let sets = value
         .as_array()
+        .or_else(|| {
+            (value["object"] == "list")
+                .then(|| value["data"].as_array())
+                .flatten()
+        })
         .ok_or("Hermes toolset discovery returned an unsupported shape")?;
     for set in sets {
         let enabled = set["enabled"]
@@ -152,6 +158,23 @@ mod tests {
         assert!(validate_toolsets(&json!([{"enabled":true,"tools":["terminal"]}])).is_err());
         assert!(validate_toolsets(&json!([{"tools":[]}])).is_err());
         assert!(validate_toolsets(&json!([])).is_ok());
+    }
+    #[test]
+    fn toolsets_accept_the_list_object_and_still_fail_closed() {
+        let wrap = |data: Value| json!({"object":"list","platform":"api_server","data":data});
+        assert!(validate_toolsets(&wrap(json!([]))).is_ok());
+        assert!(validate_toolsets(&wrap(json!([{"enabled":false,"tools":["terminal"]}]))).is_ok());
+        assert!(validate_toolsets(&wrap(json!([{"enabled":true,"tools":["terminal"]}]))).is_err());
+        assert!(validate_toolsets(&wrap(json!([{"tools":[]}]))).is_err());
+        for bad in [
+            json!({"data":[]}),
+            json!({"object":"list"}),
+            json!({"object":"list","data":{}}),
+            json!({}),
+            json!(null),
+        ] {
+            assert!(validate_toolsets(&bad).is_err(), "{bad}");
+        }
     }
     #[test]
     fn real_http_contract_uses_discovery_auth_and_bounded_chat() {
