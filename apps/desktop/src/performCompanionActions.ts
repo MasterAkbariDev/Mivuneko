@@ -1,4 +1,5 @@
 import { packInfo } from "./characterPackStore";
+import { wakeCompanion } from "../../../packages/shared-schemas/companion-wake";
 import { parsePreferences } from "./preferences";
 import {
   type CompanionAction,
@@ -32,6 +33,12 @@ export async function performCompanionActions(
   await runCompanionSequence(
     actions,
     async (action, index) => {
+      if (action.kind !== "expression" || action.expression !== "sleeping") {
+        const current = parsePreferences(
+          JSON.parse(localStorage.getItem("mivuneko.preferences.v1") || "null"),
+        );
+        updatePreferences(wakeCompanion(current));
+      }
       publishPet(
         "happy",
         `Step ${index + 1} of ${actions.length}: ${describeAction(action)}.`,
@@ -59,6 +66,9 @@ export async function performCompanionActions(
         updatePreferences({
           customPackPose: "",
           petExpression: action.expression,
+          ...(action.expression === "sleeping"
+            ? { petMode: "sleep" as const }
+            : {}),
         });
       else {
         cancelCompanionTask();

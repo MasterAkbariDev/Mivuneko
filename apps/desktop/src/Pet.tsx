@@ -1,4 +1,5 @@
 import { usePetPlacement } from "./usePetPlacement";
+import { wakeCompanion } from "../../../packages/shared-schemas/companion-wake";
 import { PetDock } from "./PetDock";
 import { hitsModel } from "./petHit";
 import { cancelCompanionTask, useCompanionTask } from "./companionTask";
@@ -58,6 +59,7 @@ export function Pet() {
   const [facing, setFacing] = useState(1);
 
   const [completed, setCompleted] = useState(0);
+  const [translating, setTranslating] = useState(false);
   const [dragPause, setDragPause] = useState(false);
   useEffect(() => {
     const timer = setInterval(
@@ -74,6 +76,14 @@ export function Pet() {
   }, [task?.at]);
   const prefs = usePreferences(),
     session = usePetSession();
+  useEffect(() => {
+    if (
+      ["walk", "run", "dance"].includes(prefs.petMode) &&
+      (prefs.petExpression === "sleeping" ||
+        /^(?:sleep|sleeping)$/.test(prefs.customPackPose))
+    )
+      updatePreferences(wakeCompanion(prefs));
+  }, [prefs.petMode, prefs.petExpression, prefs.customPackPose]);
   useEffect(() => {
     let next = Date.now() + 18000;
     let resting = true;
@@ -94,6 +104,7 @@ export function Pet() {
       }
       if (Date.now() < next) return;
       if (resting) {
+        updatePreferences(wakeCompanion(prefs));
         setAutomaticBody("walk");
         next = Date.now() + 5000 + Math.random() * 5000;
       } else {
@@ -407,6 +418,7 @@ export function Pet() {
     placing,
     resizeAnchor: resize,
     onDirection: setFacing,
+    onMotion: setTranslating,
     onComplete: setCompleted,
     onRest: () => setAutomaticBody("sit"),
     onError: setError,
@@ -539,7 +551,7 @@ export function Pet() {
           )}
       </div>
       <div
-        className={`pet-character body-${layout.fitted && !task && ["walk", "run"].includes(character.body) ? "idle" : character.body}`}
+        className={`pet-character body-${["walk", "run"].includes(character.body) && ((isNative && !translating) || (layout.fitted && !task)) ? "idle" : character.body}`}
         style={{ transform: `translateX(${offset}px)` }}
         tabIndex={0}
         role="group"
@@ -577,6 +589,7 @@ export function Pet() {
           }
           if (!drag.current) return;
           drag.current = null;
+          updatePreferences(wakeCompanion(prefs));
           manualUntil.current = Date.now() + 15000;
           setDragPause(true);
         }}
@@ -622,7 +635,8 @@ export function Pet() {
           mouth={session.mouth}
           emotion={session.emotion}
           body={
-            layout.fitted && !task && ["walk", "run"].includes(character.body)
+            ["walk", "run"].includes(character.body) &&
+            ((isNative && !translating) || (layout.fitted && !task))
               ? "idle"
               : character.body
           }

@@ -1,4 +1,5 @@
 import { cancelCompanionTask } from "./companionTask";
+import { wakeCompanion } from "../../../packages/shared-schemas/companion-wake";
 import { useEffect, useRef, useState } from "react";
 import { companionName } from "./companionName";
 import { Icon } from "./Icon";
@@ -126,6 +127,18 @@ export function PetDock({
             aria-label="Pet controls"
           >
             <strong>{companionName(p)}</strong>
+            {(p.petMode === "sleep" || p.petExpression === "sleeping") && (
+              <button
+                role="menuitem"
+                onClick={() => {
+                  updatePreferences({ ...wakeCompanion(p), petMode: "stand" });
+                  setMenu(false);
+                }}
+              >
+                <Icon name="sun" />
+                Wake up
+              </button>
+            )}
             <button
               role="menuitem"
               onClick={() => {
@@ -170,6 +183,7 @@ export function PetDock({
               onClick={() => {
                 cancelCompanionTask();
                 updatePreferences({
+                  ...wakeCompanion(p),
                   petMode: p.petMode === "auto" ? "stand" : "auto",
                 });
                 setMenu(false);

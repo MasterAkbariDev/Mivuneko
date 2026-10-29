@@ -80,8 +80,14 @@ export function desktopIntent(input: string): DesktopIntent | null {
     )
   )
     return { kind: "move", gait: "walk", destination: "unobtrusive" };
-  if (/^(?:stand(?: up)?|get up|on your feet)(?: now)?$/i.test(text))
+  if (
+    /^(?:stand(?: up)?|get up|on your feet|wake(?: up)?|wake yourself up|rise and shine)(?: now)?$/i.test(
+      text,
+    )
+  )
     return { kind: "stand" };
+  if (/^(?:sleep|go to sleep|take a nap|go to bed)$/i.test(text))
+    return { kind: "expression", expression: "sleeping" };
   if (
     /^(?:where (?:are you|did you go)|(?:i )?(?:can(?:not|'t) see you)|show yourself|come back)$/i.test(
       text,

@@ -1,4 +1,6 @@
 export type IconName =
+  | "plus"
+  | "more"
   | "pencil"
   | "chat"
   | "activity"
@@ -19,10 +21,12 @@ export type IconName =
   | "volume"
   | "sun";
 const paths: Record<IconName, string> = {
+  plus: "M12 5v14M5 12h14",
+  more: "M5 12h.01M12 12h.01M19 12h.01",
   pencil: "m4 16-1 5 5-1L20 8l-4-4L4 16Zm9-9 4 4M4 16l4 4",
   mic: "M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0V5Zm-3 6v1a6 6 0 0 0 12 0v-1m-6 7v4m-3 0h6",
   stop: "M6 6h12v12H6V6Z",
-  send: "m5 3 16 9-16 9 3-9-3-9Zm3 9h13",
+  send: "M12 19V5m-6 6 6-6 6 6",
   close: "m6 6 12 12M6 18 18 6",
   chevron: "m9 5 7 7-7 7",
   sparkle: "m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z",

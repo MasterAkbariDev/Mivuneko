@@ -1055,6 +1055,63 @@ test("LLM posture actions execute instead of only producing an acknowledgement",
   ).toBeVisible();
 });
 
+test("wake and movement clear sleeping overrides and the name placeholder follows the selected character", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({
+        renderer: "sample-vrm",
+        petMode: "sleep",
+        petExpression: "sleeping",
+        petScale: 4,
+        voice: "off",
+      }),
+    );
+    localStorage.setItem("mivuneko.automatic-behavior.v1", "1");
+  });
+  await page.goto("/?view=chat");
+  const input = page.getByLabel("Message Mivuneko", { exact: true });
+  await input.fill("wake up");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!)
+            .petExpression,
+      ),
+    )
+    .toBe("auto");
+  await page.evaluate(async () => {
+    const path = "/src/preferences.ts";
+    const { updatePreferences } = await import(path);
+    updatePreferences({ petExpression: "sleeping", petMode: "sleep" });
+  });
+  await input.fill("walk right");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const p = JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!);
+        return [p.petMode, p.petExpression, p.petScale];
+      }),
+    )
+    .toEqual(["walk", "auto", 4]);
+  await page.getByRole("button", { name: "Characters", exact: true }).click();
+  await expect(
+    page.getByLabel("Companion name", { exact: true }),
+  ).toHaveAttribute("placeholder", "Haru");
+  await page
+    .getByRole("tab", { name: "2D Illustrated poses", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Miku", exact: true }).click();
+  await expect(
+    page.getByLabel("Companion name", { exact: true }),
+  ).toHaveAttribute("placeholder", "Miku");
+});
+
 test("icon chat controls interrupt a pending reply and accept the next turn without a stale response", async ({
   page,
 }) => {
@@ -1092,7 +1149,11 @@ test("icon chat controls interrupt a pending reply and accept the next turn with
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Stop", exact: true }),
+    page.getByRole("button", {
+      name: "Stop",
+      exact: true,
+      includeHidden: true,
+    }),
   ).toBeDisabled();
   await composer.fill("Let's start fresh");
   await page.getByRole("button", { name: "Send", exact: true }).click();
@@ -1105,16 +1166,18 @@ test("icon chat controls interrupt a pending reply and accept the next turn with
   await expect(
     page.getByText("An obsolete answer", { exact: true }),
   ).toHaveCount(0);
-  const interruption = page.getByRole("button", {
-    name: "Allow voice interruption",
+  await page.getByLabel("Conversation options", { exact: true }).click();
+  const interruption = page.getByRole("checkbox", {
+    name: "Interrupt when I speak",
     exact: true,
   });
   await interruption.click();
-  await expect(interruption).toHaveAttribute("aria-pressed", "false");
+  await expect(interruption).not.toBeChecked();
+  await page.getByLabel("Conversation options", { exact: true }).click();
   for (const name of ["Send", "Apps", "Stop"])
-    await expect(page.getByRole("button", { name, exact: true })).toHaveText(
-      "",
-    );
+    await expect(
+      page.getByRole("button", { name, exact: true, includeHidden: true }),
+    ).toHaveText("");
   await page.screenshot({ path: "test-results/chat-redesign.png" });
   await page.setViewportSize({ width: 430, height: 820 });
   await expect

@@ -4,6 +4,7 @@ import { App } from "./App";
 import { Pet } from "./Pet";
 import "./style.css";
 import "./redesign.css";
+import "./chat.css";
 const pet = new URLSearchParams(location.search).get("view") !== "chat";
 if (pet) {
   document.body.classList.add("pet-body");

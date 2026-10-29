@@ -822,7 +822,7 @@ for (const turnTaking of ["automatic", "manual"] as const) {
       for (let i = 0; i < 9; i++) (window as any).__advanceAudio(0, 256);
     });
     await expect(
-      page.getByRole("log").getByText("YOU", { exact: true }),
+      page.getByRole("log").locator(".message.user:not([aria-live])"),
     ).toHaveCount(0);
     await page.evaluate(() => {
       // More than the former 20-second cap, still the same utterance.
@@ -836,13 +836,13 @@ for (const turnTaking of ["automatic", "manual"] as const) {
     });
     if (turnTaking === "manual") {
       await expect(
-        page.getByRole("log").getByText("YOU", { exact: true }),
+        page.getByRole("log").locator(".message.user:not([aria-live])"),
       ).toHaveCount(0);
       await page.getByRole("button", { name: "Done speaking" }).click();
     }
     await expect(page.getByRole("log")).toContainText("finished words");
     await expect(
-      page.getByRole("log").getByText("YOU", { exact: true }),
+      page.getByRole("log").locator(".message.user:not([aria-live])"),
     ).toHaveCount(1);
     await expect(page.getByRole("log").getByText("finished words")).toHaveCount(
       1,
@@ -864,7 +864,7 @@ for (const turnTaking of ["automatic", "manual"] as const) {
         page.getByLabel("Message Mivuneko", { exact: true }),
       ).toHaveValue("finished words");
       await expect(
-        page.getByRole("log").getByText("YOU", { exact: true }),
+        page.getByRole("log").locator(".message.user:not([aria-live])"),
       ).toHaveCount(1);
     }
   });

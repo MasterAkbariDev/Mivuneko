@@ -37,7 +37,7 @@ export function CompanionControls() {
           aria-label="Companion name"
           maxLength={40}
           value={p.companionName}
-          placeholder={companionName({ ...p, companionName: "" })}
+          placeholder={companionName(p)}
           onChange={(e) => updatePreferences({ companionName: e.target.value })}
         />
       </label>

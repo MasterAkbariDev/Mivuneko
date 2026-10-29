@@ -30,6 +30,7 @@ interface Options {
     current: { edge: string; anchor?: Point; factor?: number } | null;
   };
   onDirection: (n: number) => void;
+  onMotion: (moving: boolean) => void;
   onComplete: (at: number) => void;
   onRest: () => void;
   onError: (e: string) => void;
@@ -111,9 +112,7 @@ export function usePetPlacement(options: Options) {
           await import("@tauri-apps/api/dpi"),
         o = latest.current;
       monitor = nearestDisplay(position, size, all);
-      const requested = o.prefs.petAvoiding
-          ? Math.min(o.prefs.petScale, 0.7)
-          : o.prefs.petScale,
+      const requested = o.prefs.petScale,
         f = petWindowSize(requested, monitor, o.prefs.renderer === "2d");
       const signature = [
         monitor.scaleFactor,
@@ -183,6 +182,7 @@ export function usePetPlacement(options: Options) {
     async function tick() {
       if (busy || disposed) return;
       busy = true;
+      let translated = false;
       const now = performance.now(),
         dt = Math.min(0.05, (now - last) / 1000);
       last = now;
@@ -347,13 +347,15 @@ export function usePetPlacement(options: Options) {
           }
         }
         if (point.x !== position.x || point.y !== position.y) {
+          const previous = { ...position };
           const { PhysicalPosition } = await import("@tauri-apps/api/dpi");
           if (disposed || o.dragging || Date.now() < o.manualUntil.current)
             return;
           await w.setPosition(
             new PhysicalPosition(Math.round(point.x), Math.round(point.y)),
           );
-          position = point;
+          position = await w.outerPosition();
+          translated = position.x !== previous.x || position.y !== previous.y;
         }
       } catch (e) {
         if (!disposed) {
@@ -369,6 +371,7 @@ export function usePetPlacement(options: Options) {
           }
         }
       } finally {
+        if (!disposed) latest.current.onMotion(translated);
         busy = false;
       }
     }

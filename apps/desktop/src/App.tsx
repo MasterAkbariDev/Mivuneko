@@ -1,4 +1,5 @@
 import { CharacterGuide } from "./CharacterGuide";
+import { wakeCompanion } from "../../../packages/shared-schemas/companion-wake";
 import { performCompanionActions } from "./performCompanionActions";
 import {
   companionSequence,
@@ -296,6 +297,7 @@ export function App() {
       setError("Messages are limited to 4000 characters.");
       return;
     }
+    updatePreferences(wakeCompanion(preferences));
     setInput("");
     setStreaming("");
     setError("");
@@ -860,7 +862,7 @@ export function App() {
         }
         inert={onboard || !!pending || showApps}
       >
-        <header>
+        <header className={tab === "Conversations" ? "sr" : undefined}>
           <div>
             <h1>{tab}</h1>
             {tab !== "Conversations" && (
@@ -889,42 +891,11 @@ export function App() {
             <section className="chat">
               <div className="chat-head">
                 <div>
-                  <h3>
-                    <span className="chat-avatar">
-                      <Icon name="cat" />
-                    </span>
+                  <h2>
                     {name} <span className="dot" />
-                  </h3>
+                  </h2>
                 </div>
                 <div className="chat-head-tools">
-                  <span
-                    className="chat-privacy"
-                    role="img"
-                    aria-label={
-                      preferences.rememberHistory
-                        ? "History saved locally"
-                        : "Private conversation"
-                    }
-                    title={
-                      preferences.rememberHistory
-                        ? "History saved on this device"
-                        : "Conversation history is not saved"
-                    }
-                  >
-                    <Icon name="shield" />
-                  </span>
-                  <button
-                    type="button"
-                    className="chat-icon-button"
-                    aria-label="Allow voice interruption"
-                    aria-pressed={preferences.bargeIn}
-                    title="Speak to interrupt responses"
-                    onClick={() =>
-                      updatePreferences({ bargeIn: !preferences.bargeIn })
-                    }
-                  >
-                    <Icon name="activity" />
-                  </button>
                   <select
                     aria-label="Companion mode"
                     value={mode}
@@ -935,6 +906,47 @@ export function App() {
                       <option key={m}>{m}</option>
                     ))}
                   </select>
+                  <details className="conversation-options">
+                    <summary
+                      aria-label="Conversation options"
+                      title="Conversation options"
+                    >
+                      <Icon name="more" />
+                    </summary>
+                    <div className="conversation-options-panel">
+                      <label>
+                        Voice mode
+                        <select
+                          aria-label="Chat voice mode"
+                          value={preferences.voice}
+                          onChange={(e) =>
+                            updatePreferences({
+                              voice: e.target.value as typeof preferences.voice,
+                            })
+                          }
+                        >
+                          <option value="off">Text only</option>
+                          <option value="push-to-talk">Push to talk</option>
+                          <option value="open-mic">Open microphone</option>
+                        </select>
+                      </label>
+                      <label className="conversation-interruption">
+                        <input
+                          type="checkbox"
+                          checked={preferences.bargeIn}
+                          onChange={(e) =>
+                            updatePreferences({ bargeIn: e.target.checked })
+                          }
+                        />
+                        Interrupt when I speak
+                      </label>
+                      <small>
+                        {preferences.rememberHistory
+                          ? "History saved on this device"
+                          : "History is not saved"}
+                      </small>
+                    </div>
+                  </details>
                 </div>
               </div>
               <div
@@ -945,7 +957,10 @@ export function App() {
               >
                 {messages.map((m, i) => (
                   <div key={i} className={`message ${m.role}`}>
-                    <small>{m.role === "user" ? "YOU" : name}</small>
+                    {m.role === "assistant" &&
+                      messages[i - 1]?.role !== "assistant" && (
+                        <small>{name}</small>
+                      )}
                     {m.role === "assistant" ? (
                       <Markdown text={m.text} />
                     ) : (
@@ -991,7 +1006,7 @@ export function App() {
                 <textarea
                   id="message"
                   maxLength={4000}
-                  placeholder="Tell me something…"
+                  placeholder={`Message ${name}…`}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -1002,6 +1017,15 @@ export function App() {
                   }}
                 />
                 <div className="composer-actions">
+                  <button
+                    type="button"
+                    aria-label="Apps"
+                    title="Open an app"
+                    disabled={busy || !!pending || voice.recording}
+                    onClick={() => setShowApps(true)}
+                  >
+                    <Icon name="plus" />
+                  </button>
                   <small className="composer-status" role="status">
                     {openMicActive && openMic.working
                       ? "transcribing locally"
@@ -1051,18 +1075,11 @@ export function App() {
                       title={
                         !isNative
                           ? "Recording requires the native app"
-                          : preferences.voice !== "push-to-talk"
-                            ? "Enable push-to-talk in Characters"
-                            : busy || pending
-                              ? "Wait for the current request"
-                              : "Record your voice"
+                          : busy || pending
+                            ? "Wait for the current request"
+                            : "Record your voice"
                       }
-                      disabled={
-                        !isNative ||
-                        preferences.voice !== "push-to-talk" ||
-                        busy ||
-                        !!pending
-                      }
+                      disabled={!isNative || busy || !!pending}
                       onClick={() =>
                         voice.recording
                           ? voice.finishRecording()
@@ -1072,15 +1089,6 @@ export function App() {
                       <Icon name="mic" />
                     </button>
                   )}
-                  <button
-                    type="button"
-                    aria-label="Apps"
-                    title="Open an app"
-                    disabled={busy || !!pending || voice.recording}
-                    onClick={() => setShowApps(true)}
-                  >
-                    <Icon name="grid" />
-                  </button>
                   <button
                     type="button"
                     aria-label="Stop"
