@@ -1,3 +1,4 @@
+import { speechChunks } from "../../../packages/shared-schemas/speech";
 import { useEffect, useRef, useState } from "react";
 import { usePreferences } from "./preferences";
 import type { Mood } from "../../../packages/shared-schemas/index.ts";
@@ -179,18 +180,23 @@ export function useVoice(
     emotion: Mood,
     ticket: number,
   ): Promise<boolean> {
+    const system = preferences.voiceProvider === "system";
     const character =
       preferences.renderer === "sample-vrm" ? "haru" : preferences.character;
     const { invoke } = await import("@tauri-apps/api/core");
-    if (!packs.current.get(character))
+    if (!system && !packs.current.get(character))
       packs.current.set(
         character,
         await invoke<VoicePack | null>("character_voice", { character }).catch(
           () => null,
         ),
       );
-    const pack = packs.current.get(character);
-    const parts = splitSpeech(pronounce(text));
+    const pack: VoicePack | null | undefined = system
+      ? { engine: "kokoro", speed: 1, gain: 1 }
+      : packs.current.get(character);
+    const parts = speechChunks(pronounce(text), 220).flatMap((part) =>
+      splitSpeech(part),
+    );
     if (!pack || !parts.length || ticket !== generation.current) return false;
     const delivery = deliveryFor(emotion, pack);
     const audio = context.current!;
@@ -201,12 +207,17 @@ export function useVoice(
     analyser.connect(out);
     out.connect(audio.destination);
     const make = (phrase: string) => {
-      const request = invoke<number[]>("synthesize_phrase", {
-        text: phrase,
-        character,
-        mood: emotion,
-        speed: delivery.speed,
-      }).then((bytes) => audio.decodeAudioData(new Uint8Array(bytes).buffer));
+      const request = invoke<number[]>(
+        system ? "synthesize_speech" : "synthesize_phrase",
+        {
+          style: preferences.localVoiceStyle,
+          language: preferences.localVoiceLanguage,
+          text: phrase,
+          character,
+          mood: emotion,
+          speed: delivery.speed,
+        },
+      ).then((bytes) => audio.decodeAudioData(new Uint8Array(bytes).buffer));
       request.catch(() => {});
       return request;
     };
@@ -355,15 +366,18 @@ export function useVoice(
     requests.current.add(requestId);
     try {
       if (ticket !== generation.current) return;
-      await invoke("gemini_speak_stream", {
-        requestId,
-        text: text.slice(0, 2000),
-        emotion,
-        character:
-          preferences.renderer === "sample-vrm"
-            ? "haru"
-            : preferences.character,
-      });
+      for (const part of speechChunks(text)) {
+        if (ticket !== generation.current) return;
+        await invoke("gemini_speak_stream", {
+          requestId,
+          text: part,
+          emotion,
+          character:
+            preferences.renderer === "sample-vrm"
+              ? "haru"
+              : preferences.character,
+        });
+      }
       if (playbackError) throw playbackError;
       if (!played.value) throw Error("No speech audio was returned");
       await lastEnded;
@@ -391,25 +405,16 @@ export function useVoice(
       prepare();
       const { invoke } = await import("@tauri-apps/api/core");
       if (ticket !== generation.current) return;
-      if (preferences.voiceProvider === "local") {
+      if (
+        preferences.voiceProvider === "local" ||
+        preferences.voiceProvider === "system"
+      ) {
         if (await speakCharacter(text, volume, emotion, ticket)) return;
         throw new Error(
           "Local character voice is not installed. Install Kokoro or choose Gemini in Character voice settings.",
         );
       }
       if (ticket !== generation.current) return;
-      // Basic system speech is an explicit selection, never a silent fallback.
-      const localSpeech = () =>
-        invoke<number[]>("synthesize_speech", {
-          text: text.slice(0, 2000),
-          style: preferences.localVoiceStyle,
-          language: preferences.localVoiceLanguage,
-          character:
-            preferences.renderer === "sample-vrm"
-              ? "haru"
-              : preferences.character,
-        });
-      let bytes: number[];
       if (cloud) {
         const played = { value: false };
         try {
@@ -429,49 +434,7 @@ export function useVoice(
             "Gemini speech is unavailable and the local character voice is not installed. Your reply is still available as text.",
           );
         }
-      } else bytes = await localSpeech();
-      if (ticket !== generation.current) return;
-      const audio = context.current!;
-      await audio.resume();
-      const buffer = await audio.decodeAudioData(new Uint8Array(bytes).buffer);
-      if (ticket !== generation.current) return;
-      const node = audio.createBufferSource(),
-        analyser = audio.createAnalyser(),
-        gain = audio.createGain();
-      gain.gain.value = volume;
-      node.buffer = buffer;
-      node.connect(analyser);
-      analyser.connect(gain);
-      gain.connect(audio.destination);
-      source.current = node;
-      setSpeaking(true);
-      setPreparing(false);
-      onMood("speaking");
-      const samples = new Float32Array(analyser.fftSize);
-      let last = 0;
-      function animate(now: number) {
-        if (ticket !== generation.current) return;
-        if (now - last > 80) {
-          analyser.getFloatTimeDomainData(samples);
-          publishPet("speaking", text, rms(samples), emotion);
-          last = now;
-        }
-        frame.current = requestAnimationFrame(animate);
       }
-      frame.current = requestAnimationFrame(animate);
-      node.onended = () => {
-        cancelAnimationFrame(frame.current);
-        if (source.current === node) source.current = null;
-        node.disconnect();
-        analyser.disconnect();
-        gain.disconnect();
-        if (ticket === generation.current) {
-          setSpeaking(false);
-          onMood(emotion);
-          publishPet(emotion, text, 0);
-        }
-      };
-      node.start();
     } catch (e) {
       if (ticket === generation.current) {
         for (const node of phrases.current) {
@@ -493,6 +456,7 @@ export function useVoice(
     const hidden = () => {
       if (
         document.hidden &&
+        !isNative &&
         (starting.current || recorder.current?.state === "recording")
       )
         void stop();

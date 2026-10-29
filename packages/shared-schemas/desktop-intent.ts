@@ -6,9 +6,11 @@ export type Destination =
   | "bottom-left"
   | "bottom-right"
   | "center"
-  | "elsewhere";
+  | "elsewhere"
+  | "unobtrusive";
 export type DesktopIntent =
   | { kind: "move"; gait: "walk" | "run"; destination: Destination }
+  | { kind: "stand" }
   | { kind: "sit" }
   | { kind: "automatic" }
   | { kind: "screen" }
@@ -21,7 +23,16 @@ export function desktopIntent(input: string): DesktopIntent | null {
       "",
     )
     .replace(/[.!?]+$/, "")
+    .replace(/\s+please$/i, "")
     .trim();
+  if (
+    /\b(?:out of (?:the |my )?(?:way|code|editor|screen|workspace)|in (?:the |my )way|(?:cannot|can.t) (?:code|work)|stop (?:blocking|covering)|not annoy|move aside|give me (?:some )?(?:space|room))\b/i.test(
+      text,
+    )
+  )
+    return { kind: "move", gait: "walk", destination: "unobtrusive" };
+  if (/^(?:stand(?: up)?|get up|on your feet)$/i.test(text))
+    return { kind: "stand" };
   const open = /^(?:open|launch|start)\s+(.{1,200})$/i.exec(text);
   if (open)
     return { kind: "open", query: open[1].replace(/\s+please$/i, "").trim() };

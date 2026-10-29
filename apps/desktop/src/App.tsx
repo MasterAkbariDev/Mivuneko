@@ -2,7 +2,7 @@ import {
   desktopIntent,
   matchApps,
 } from "../../../packages/shared-schemas/desktop-intent";
-import { directCompanion } from "./companionTask";
+import { cancelCompanionTask, directCompanion } from "./companionTask";
 import { ScreenAssistant } from "./ScreenAssistant";
 import { CompanionCard } from "./CompanionCard";
 import { Icon } from "./Icon";
@@ -111,11 +111,7 @@ export function App() {
     setError,
   );
   const openMic = useOpenMic(
-    openMicActive &&
-      preferences.voice === "open-mic" &&
-      isNative &&
-      tab === "Conversations" &&
-      !onboard,
+    openMicActive && preferences.voice === "open-mic" && isNative && !onboard,
     busy || !!pending || !historyReady || !!screenRequest || voice.preparing,
     voice.speaking,
     setLiveTranscript,
@@ -136,7 +132,7 @@ export function App() {
   useEffect(() => {
     if (preferences.voice !== "open-mic") setOpenMicActive(false);
     const hidden = () => {
-      if (document.hidden) setOpenMicActive(false);
+      if (document.hidden && !isNative) setOpenMicActive(false);
     };
     document.addEventListener("visibilitychange", hidden);
     return () => document.removeEventListener("visibilitychange", hidden);
@@ -297,25 +293,35 @@ export function App() {
         return;
       }
       if (
+        intent?.kind === "stand" ||
         intent?.kind === "sit" ||
         intent?.kind === "automatic" ||
         intent?.kind === "move"
       ) {
         if (intent.kind === "move") directCompanion(intent.destination);
+        else cancelCompanionTask();
         updatePreferences({
+          petAvoiding:
+            intent.kind === "move" && intent.destination === "unobtrusive",
           petMode:
-            intent.kind === "sit"
-              ? "sit"
-              : intent.kind === "automatic"
-                ? "auto"
-                : intent.gait,
+            intent.kind === "stand"
+              ? "stand"
+              : intent.kind === "sit"
+                ? "sit"
+                : intent.kind === "automatic"
+                  ? "auto"
+                  : intent.gait,
         });
         add(
-          intent.kind === "sit"
-            ? "I'll sit here."
-            : intent.kind === "automatic"
-              ? "I'll choose when to move and rest again."
-              : `On my way ${intent.destination === "elsewhere" ? "to another spot" : `to the ${intent.destination}`}!`,
+          intent.kind === "stand"
+            ? "Standing up."
+            : intent.kind === "sit"
+              ? "I'll sit here."
+              : intent.kind === "automatic"
+                ? "I'll choose when to move and rest again."
+                : intent.destination === "unobtrusive"
+                  ? "I'll move to a quiet edge and stay out of your way."
+                  : `On my way ${intent.destination === "elsewhere" ? "to another spot" : `to the ${intent.destination}`}!`,
         );
         setMood("happy");
         return;
@@ -430,23 +436,44 @@ export function App() {
       "Stopped; pending approvals revoked. Already launched apps remain open.",
     );
   }
+  const globalKeyAt = useRef(0);
   const shortcutActions = useRef<Record<string, () => void>>({});
   shortcutActions.current = {
     stop: () => void stop(),
+    "voice-toggle": () => {
+      setOnboard(false);
+      if (openMicActive || voice.recording) {
+        setOpenMicActive(false);
+        void voice.stop();
+      } else {
+        updatePreferences({ voice: "open-mic" });
+        setOpenMicActive(true);
+      }
+    },
+    edit: () =>
+      updatePreferences({ petEdit: !preferences.petEdit, clickThrough: false }),
+    clickThrough: () =>
+      updatePreferences({ clickThrough: !preferences.clickThrough }),
+    focus: () => updatePreferences({ focus: !preferences.focus }),
+    screen: () => {
+      setTab("Conversations");
+      setScreenRequest("Help me understand what is on my screen.");
+    },
     chat: () => setTab("Conversations"),
     characters: () => setTab("Characters"),
     settings: () => setTab("Settings"),
     record: () => {
-      if (busy || pending || onboard) return;
+      if (busy || pending) return;
+      setOnboard(false);
       if (preferences.voice === "open-mic") {
         if (openMic.phase === "hearing") openMic.finish();
         else setOpenMicActive((active) => !active);
       } else if (preferences.voice === "push-to-talk")
         voice.recording ? voice.finishRecording() : void voice.record();
-      else
-        setError(
-          "Choose Push to talk or Open mic in Settings → Voice & input first.",
-        );
+      else {
+        updatePreferences({ voice: "open-mic" });
+        setOpenMicActive(true);
+      }
     },
   };
   useEffect(() => {
@@ -460,13 +487,75 @@ export function App() {
       for (const [action, chord] of Object.entries(preferences.shortcuts))
         if (matchesShortcut(event, chord)) {
           event.preventDefault();
-          shortcutActions.current[action]?.();
+          if (isNative && event.key !== "Escape")
+            setTimeout(() => {
+              if (Date.now() - globalKeyAt.current > 100)
+                shortcutActions.current[action]?.();
+            }, 70);
+          else shortcutActions.current[action]?.();
           break;
         }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [preferences.shortcuts]);
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  useEffect(() => {
+    if (!isNative) return;
+    let disposed = false;
+    const offs: Array<() => void> = [];
+    void import("@tauri-apps/api/event").then(async ({ listen }) => {
+      for (const [name, fn] of [
+        [
+          "global-action",
+          (value: unknown) => {
+            globalKeyAt.current = Date.now();
+            shortcutActions.current[String(value)]?.();
+          },
+        ],
+        [
+          "pet-message",
+          (value: unknown) => {
+            if (typeof value === "string") void sendRef.current(value);
+          },
+        ],
+      ] as const) {
+        const off = await listen(name, (event) => fn(event.payload));
+        if (disposed) off();
+        else offs.push(off);
+      }
+    });
+    return () => {
+      disposed = true;
+      offs.forEach((f) => f());
+    };
+  }, []);
+  useEffect(() => {
+    if (!isNative) return;
+    void import("@tauri-apps/api/core")
+      .then(({ invoke }) =>
+        invoke<string[]>("configure_global_shortcuts", {
+          bindings: preferences.shortcuts,
+        }),
+      )
+      .then((errors) => {
+        if (Array.isArray(errors) && errors.length)
+          setError(errors.join(" · "));
+        window.dispatchEvent(
+          new CustomEvent("shortcut-status", {
+            detail: Array.isArray(errors) ? errors : [],
+          }),
+        );
+      })
+      .catch((e) => setError(`Shortcuts: ${String(e)}`));
+  }, [preferences.shortcuts]);
+  useEffect(() => {
+    if (!isNative) return;
+    void import("@tauri-apps/api/event").then(({ emit }) =>
+      emit("voice-active", openMicActive || voice.recording),
+    );
+  }, [openMicActive, voice.recording]);
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--text-scale",

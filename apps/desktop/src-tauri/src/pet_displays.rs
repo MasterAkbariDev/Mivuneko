@@ -61,6 +61,7 @@ pub async fn sync_pet_displays(
                     WebviewUrl::App(format!("index.html?view=pet&replica={i}").into()),
                 )
                 .title("Mivuneko")
+                .additional_browser_args("--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows")
                 .visible(false)
                 .inner_size(360.0, 440.0)
                 .transparent(true)

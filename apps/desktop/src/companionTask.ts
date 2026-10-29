@@ -26,6 +26,7 @@ function receive(value: unknown) {
       "bottom-right",
       "center",
       "elsewhere",
+      "unobtrusive",
     ].includes(p.destination) &&
     Date.now() - p.at < 120000
   ) {

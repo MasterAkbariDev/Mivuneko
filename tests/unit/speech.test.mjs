@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { speakable } from "../../packages/shared-schemas/speech.ts";
+import {
+  speakable,
+  speechChunks,
+} from "../../packages/shared-schemas/speech.ts";
 import {
   parseMarkdown,
   parseInline,
@@ -16,48 +19,47 @@ function counter() {
 \`\`\`
 
 Each call to \`counter()\` gets its own **n**. See https://developer.mozilla.org/closures`;
-test("a closure reply is spoken as a short sentence with no code", () => {
-  const said = speakable({ text: closure });
+test("closure narration keeps all prose before and after code", () => {
+  const said = speakable({ text: closure, speech: "A short summary." });
   assert.ok(
     said.startsWith("Sure! A closure is a function that remembers its scope."),
   );
-  assert.ok(said.endsWith("I put the code in the chat."));
-  assert.ok(!/[`{}=>*]|https?:|function counter/.test(said), said);
-  assert.ok(said.length < 300);
+  assert.ok(said.includes("A code example is available in our conversation."));
+  assert.ok(said.includes("Each call to counter() gets its own n."));
+  assert.ok(!/function counter|```|https?:/.test(said));
 });
-test("the model's speech field is preferred and bounded", () => {
+test("full explanation replaces a provider's short speech summary", () => {
+  const text = Array.from(
+    { length: 80 },
+    (_, i) => `Sentence number ${i} is here.`,
+  ).join(" ");
+  assert.equal(speakable({ text, speech: "Short summary." }), text);
+  const chunks = speechChunks(text, 220);
+  assert.equal(chunks.join(" "), text);
+  assert.ok(chunks.every((s) => s.length <= 220));
+});
+test("markdown is narrated without visual directions", () => {
   assert.equal(
-    speakable({ text: closure, speech: "  Here is a closure example. " }),
-    "Here is a closure example.",
+    speakable({ text: "# Plan\n- first thing\n- second thing" }),
+    "Plan. first thing. second thing.",
   );
-  assert.equal(speakable({ text: "x", speech: "a".repeat(400) }).length, 300);
-});
-test("urls, links, headings and list markers are stripped", () => {
   assert.equal(
     speakable({
       text: "Read [the docs](https://x.dev/a) or https://x.dev/b today",
     }),
     "Read the docs or the link today.",
   );
-  assert.equal(
-    speakable({ text: "# Plan\n- first thing\n- second thing" }),
-    "Plan. first thing.",
+  assert.ok(
+    !speakable({
+      text: "Here is the code below:\n```js\nlet x=1\n```\nAfter that, call it twice.",
+    }).includes("below"),
   );
-  assert.equal(
-    speakable({ text: "```sh\nrm -rf x\n```" }),
-    "I put the code in the chat.",
+  assert.ok(
+    speakable({ text: "```js\nx()\n```\nAfter that, call it twice." }).endsWith(
+      "After that, call it twice.",
+    ),
   );
   assert.equal(speakable({ text: "" }), "");
-});
-test("long replies are cut to about two sentences", () => {
-  const long = Array.from(
-    { length: 8 },
-    (_, i) => `Sentence number ${i} is here.`,
-  ).join(" ");
-  assert.equal(
-    speakable({ text: long }),
-    "Sentence number 0 is here. Sentence number 1 is here.",
-  );
 });
 test("markdown parses fences, lists and inline styles without producing html", () => {
   const blocks = parseMarkdown(closure);

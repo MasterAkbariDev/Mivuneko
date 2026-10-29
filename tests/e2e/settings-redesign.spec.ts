@@ -488,6 +488,13 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
     vrm.scene.updateMatrixWorld(true);
     const forwardHand =
       hand.getWorldPosition(hand.position.clone()).z - neutralHandZ;
+    animateVrm(vrm, { ...state, body: "sit" }, 2, 1, false);
+    const hips = vrm.humanoid.getNormalizedBoneNode("hips"),
+      seated = hips.position.y;
+    animateVrm(vrm, { ...state, body: "sit" }, 2, 1, false, true);
+    const dragLift = hips.position.y - seated;
+    animateVrm(vrm, { ...state, body: "sit" }, 2, 1, false);
+    const restoredPose = Math.abs(hips.position.y - seated);
     const expression = vrm.expressionManager.getExpression("angry");
     vrm.expressionManager.setValue("angry", 1);
     vrm.update(0.016);
@@ -501,12 +508,16 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
     ) as HTMLCanvasElement;
     return {
       forwardHand,
+      dragLift,
+      restoredPose,
       gesture,
       morphed,
       weight: expression.weight,
       ratio: canvas.width / canvas.getBoundingClientRect().width,
     };
   });
+  expect(result.dragLift).toBeGreaterThan(0.3);
+  expect(result.restoredPose).toBeLessThan(0.01);
   expect(result.gesture).toBeGreaterThan(0.5);
   expect(result.forwardHand).toBeGreaterThan(0.05);
   expect(result.morphed).toBe(true);
@@ -543,6 +554,10 @@ test("companion commands choose actions without a manual mode selector", async (
     ["walk to the left", "walk"],
     ["run to the top right", "run"],
     ["sit down", "sit"],
+    ["stand up", "stand"],
+    ["sit down", "sit"],
+    ["walk to the left", "walk"],
+    ["I cannot code, go out of the code screen", "walk"],
     ["resume automatic behavior", "auto"],
   ]) {
     await page.getByLabel("Message Mivuneko", { exact: true }).fill(text);
@@ -621,4 +636,72 @@ test("captions appearing do not change the character's position", async ({
   await expect(page.getByText("Hello from a caption")).toBeVisible();
   const after = await character.boundingBox();
   expect(after!.y).toBe(before!.y);
+});
+
+test("pet hover dock opens a compact composer and edit mode starts locked", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ renderer: "sample-vrm", petMode: "sit", petScale: 1.5 }),
+    );
+    localStorage.setItem("mivuneko.automatic-behavior.v1", "1");
+    const w = window as any,
+      previous = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.metadata = {
+      currentWindow: { label: "pet" },
+      currentWebview: { label: "pet" },
+    };
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+      if (command === "pet_cursor") return { x: 0, y: 0, down: false };
+      return previous(command, args);
+    };
+  });
+  await page.goto("/?view=pet");
+  await expect(
+    page.locator('.character-scene[data-model-ready="true"]'),
+  ).toBeVisible({ timeout: 30000 });
+  const points = await page.evaluate(() => {
+    const canvas = document.querySelector("canvas") as any,
+      r = canvas.getBoundingClientRect();
+    const inside: Array<{ x: number; y: number }> = [];
+    for (let y = r.top + 10; y < r.bottom; y += 12)
+      for (let x = r.left + 10; x < r.right; x += 12)
+        if (canvas.petHit(x, y)) inside.push({ x, y });
+    return { inside, corner: canvas.petHit(r.left + 2, r.top + 2) };
+  });
+  expect(points.inside.length).toBeGreaterThan(5);
+  expect(points.corner).toBe(false);
+  // Native cursor fixture is outside the pet; reveal just the dock for DOM behavior checks.
+  await page
+    .locator(".pet-dock")
+    .evaluate((el) => el.classList.add("is-visible"));
+  await page.getByRole("button", { name: "Quick chat", exact: true }).click();
+  const input = page.getByLabel("Message your companion");
+  await expect(input).toBeFocused();
+  await input.fill("stand up");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).__calls.some(
+          (c: any) =>
+            c.command === "plugin:event|emit_to" &&
+            c.args.event === "pet-message" &&
+            c.args.payload === "stand up",
+        ),
+      ),
+    )
+    .toBe(true);
+  await page
+    .locator(".pet-dock")
+    .evaluate((el) => el.classList.add("is-visible"));
+  await page.getByRole("button", { name: "Unlock pet editing" }).click();
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!).petEdit,
+    ),
+  ).toBe(true);
 });

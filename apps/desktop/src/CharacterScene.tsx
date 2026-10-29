@@ -11,6 +11,7 @@ interface Props {
   reduced: boolean;
   effects?: boolean;
   direction?: number;
+  dragging?: boolean;
 }
 function effectTexture(kind: string) {
   const canvas = document.createElement("canvas");
@@ -95,12 +96,15 @@ export function CharacterScene({
   reduced,
   effects = true,
   direction = 0,
+  dragging = false,
 }: Props) {
   const host = useRef<HTMLDivElement>(null),
     stateRef = useRef(state),
     reducedRef = useRef(reduced);
   const [error, setError] = useState("");
   const [modelReady, setModelReady] = useState(false);
+  const dragRef = useRef(dragging);
+  dragRef.current = dragging;
   const facing = useRef(direction);
   facing.current = direction;
   const effectsRef = useRef(effects);
@@ -256,10 +260,31 @@ export function CharacterScene({
             );
         });
     }
+    // A small alpha mask gives exact visible-model hits, including hair cutouts,
+    // without CPU skinning every vertex on every cursor poll.
+    const maskSize = 128,
+      mask = new Uint8Array(maskSize * maskSize * 4);
+    const hitTarget = new THREE.WebGLRenderTarget(maskSize, maskSize, {
+      depthBuffer: true,
+    });
+    let maskAt = -1000;
+    (renderer.domElement as import("./petHit").ModelCanvas).petHit = (x, y) => {
+      const r = renderer.domElement.getBoundingClientRect();
+      const px = Math.floor(((x - r.left) / r.width) * maskSize),
+        py = Math.floor((1 - (y - r.top) / r.height) * maskSize);
+      return (
+        px >= 0 &&
+        py >= 0 &&
+        px < maskSize &&
+        py < maskSize &&
+        mask[(py * maskSize + px) * 4 + 3] > 30
+      );
+    };
+    let metricsAt = 0;
     function animate(now: number) {
       const delta = Math.min((now - last) / 1000, 0.05);
       last = now;
-      phase += delta;
+      phase = Date.now() / 1000;
       const s = stateRef.current,
         quiet = reducedRef.current;
       const blink = quiet ? 1 : Math.sin(phase * 0.6) > 0.996 ? 0.08 : 1;
@@ -295,7 +320,7 @@ export function CharacterScene({
             0.08,
           );
         }
-        animateVrm(vrm, s, phase, delta, quiet);
+        animateVrm(vrm, s, phase, delta, quiet, dragRef.current);
         const targetYaw =
           baseRotation +
           (s.body === "walk" || s.body === "run"
@@ -326,6 +351,50 @@ export function CharacterScene({
         effectMaterial.rotation =
           s.expression === "angry" && !quiet ? Math.sin(phase * 8) * 0.08 : 0;
       }
+      if (vrm && now - metricsAt > 100) {
+        metricsAt = now;
+        const root = host.current?.closest<HTMLElement>(".pet-root"),
+          r = renderer.domElement.getBoundingClientRect();
+        if (root) {
+          const h = vrm.humanoid.getNormalizedBoneNode("head"),
+            foot = vrm.humanoid.getNormalizedBoneNode("leftFoot");
+          if (h && foot) {
+            const top = h
+              .getWorldPosition(new THREE.Vector3())
+              .add(new THREE.Vector3(0, modelHeight * 0.12, 0))
+              .project(camera);
+            const bottom = foot
+              .getWorldPosition(new THREE.Vector3())
+              .add(new THREE.Vector3(0, -modelHeight * 0.08, 0))
+              .project(camera);
+            root.style.setProperty(
+              "--model-top",
+              `${r.top + ((1 - top.y) * r.height) / 2}px`,
+            );
+            root.style.setProperty(
+              "--model-bottom",
+              `${r.top + ((1 - bottom.y) * r.height) / 2}px`,
+            );
+          }
+        }
+      }
+      if (vrm && now - maskAt > 100) {
+        maskAt = now;
+        const shown = effect.visible;
+        effect.visible = false;
+        renderer.setRenderTarget(hitTarget);
+        renderer.render(scene, camera);
+        renderer.readRenderTargetPixels(
+          hitTarget,
+          0,
+          0,
+          maskSize,
+          maskSize,
+          mask,
+        );
+        renderer.setRenderTarget(null);
+        effect.visible = shown;
+      }
       renderer.render(scene, camera);
       frame = requestAnimationFrame(animate);
     }
@@ -337,6 +406,7 @@ export function CharacterScene({
       observer.disconnect();
       if (vrm) VRMUtils.deepDispose(vrm.scene);
       Object.values(textures).forEach((texture) => texture.dispose());
+      hitTarget.dispose();
       effectMaterial.dispose();
       renderer.dispose();
       renderer.domElement.remove();

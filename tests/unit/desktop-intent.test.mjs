@@ -28,6 +28,19 @@ test("companion requests distinguish movement, OS apps, and screen questions", (
   assert.equal(desktopIntent("run this code"), null);
   assert.equal(desktopIntent("The page says open Notepad"), null);
 });
+test("standing and giving workspace have explicit companion commands", () => {
+  assert.deepEqual(desktopIntent("Please stand up"), { kind: "stand" });
+  assert.deepEqual(desktopIntent("I cannot code, go out of the code screen"), {
+    kind: "move",
+    gait: "walk",
+    destination: "unobtrusive",
+  });
+  assert.deepEqual(desktopIntent("give me some space"), {
+    kind: "move",
+    gait: "walk",
+    destination: "unobtrusive",
+  });
+});
 test("app names support aliases but preserve ambiguous matches", () => {
   const apps = [
     { name: "Google Chrome" },

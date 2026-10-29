@@ -19,7 +19,8 @@
         "height": 800,
         "minWidth": 800,
         "minHeight": 650,
-        "visible": false
+        "visible": false,
+        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows"
       },
       {
         "label": "pet",
@@ -33,7 +34,8 @@
         "shadow": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "visible": false
+        "visible": false,
+        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows"
       }
     ],
     "security": {

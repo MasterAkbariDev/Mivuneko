@@ -19,12 +19,14 @@ export function CompanionVisual({
   emotion: speechEmotion,
   body,
   direction = 0,
+  dragging = false,
 }: {
   mood?: Mood;
   mouth?: number;
   emotion?: Mood;
   body?: import("../../../packages/character/controller").BodyAction;
   direction?: number;
+  dragging?: boolean;
 }) {
   const p = usePreferences();
   const [model, setModel] = useState<ArrayBuffer | null>(null);
@@ -117,6 +119,7 @@ export function CompanionVisual({
             reduced={p.reduced}
             effects={p.petEffects}
             direction={direction}
+            dragging={dragging}
           />
         </Suspense>
       ) : (

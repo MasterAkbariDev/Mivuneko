@@ -29,12 +29,12 @@ to both open mic and push-to-talk. Changing the device or leaving the panel clos
 
 The commands below remain available for advanced setup:
 
-| Command | Installs | Download |
-| --- | --- | --- |
-| `npm run setup:voice` | whisper.cpp (`whisper-cli`, `whisper-server`) and a Whisper model | 78–574 MB, your pick |
-| `npm run setup:sherpa -- parakeet` | sherpa-onnx runtime + **Parakeet TDT 0.6B v2** (speech recognition) | ~503 MB |
-| `npm run setup:sherpa -- kokoro` | sherpa-onnx runtime with TTS + **Kokoro v1.0** + the `luna-tts` worker (Luna's voice) | ~356 MB |
-| `npm run setup:sherpa` | both of the above | ~860 MB |
+| Command                            | Installs                                                                              | Download             |
+| ---------------------------------- | ------------------------------------------------------------------------------------- | -------------------- |
+| `npm run setup:voice`              | whisper.cpp (`whisper-cli`, `whisper-server`) and a Whisper model                     | 78–574 MB, your pick |
+| `npm run setup:sherpa -- parakeet` | sherpa-onnx runtime + **Parakeet TDT 0.6B v2** (speech recognition)                   | ~503 MB              |
+| `npm run setup:sherpa -- kokoro`   | sherpa-onnx runtime with TTS + **Kokoro v1.0** + the `luna-tts` worker (Luna's voice) | ~356 MB              |
+| `npm run setup:sherpa`             | both of the above                                                                     | ~860 MB              |
 
 Everything lands in `.local/` (git-ignored). Downloads resume after a dropped connection and
 are checked against the SHA-256 digest the publisher lists; a mismatch deletes the file.
@@ -51,12 +51,12 @@ Settings → Speech recognition → pick an engine, then **Start test / Stop & t
 with your own voice. The time shown runs from Stop until the text appears. Measured on the
 developer's Intel i9 Mac (no usable GPU), short phrases:
 
-| Engine | Speed (warm) | Notes |
-| --- | --- | --- |
-| **Parakeet TDT 0.6B v2** | ~0.2–0.8 s | Best of those tried; English only; stays loaded in a local server |
-| Whisper small.en (q5_1) | 2.7 s as a one-shot run | Heard "open a Spotify" as profanity in one test |
-| Whisper large-v3-turbo (q5_0) | not benchmarked | Largest Whisper, multilingual |
-| Whisper base | fast | Mis-heard "What can you do?" as "What's in it?" |
+| Engine                        | Speed (warm)            | Notes                                                             |
+| ----------------------------- | ----------------------- | ----------------------------------------------------------------- |
+| **Parakeet TDT 0.6B v2**      | ~0.2–0.8 s              | Best of those tried; English only; stays loaded in a local server |
+| Whisper small.en (q5_1)       | 2.7 s as a one-shot run | Heard "open a Spotify" as profanity in one test                   |
+| Whisper large-v3-turbo (q5_0) | not benchmarked         | Largest Whisper, multilingual                                     |
+| Whisper base                  | fast                    | Mis-heard "What can you do?" as "What's in it?"                   |
 
 **Auto** (default) uses Parakeet when installed, otherwise the Whisper model in `voice.json`. If a
 chosen engine is missing or fails, the app falls back to Whisper and carries on.
@@ -64,6 +64,7 @@ The first phrase after starting the app (or switching engines) includes loading 
 seconds; later ones do not. Only one engine stays in memory.
 
 Microphone options (same panel):
+
 - **Microphone sensitivity**: Low / Normal / High. How loud you must be relative to the room.
 - **End-of-speech pause**: 1.5–10 seconds of quiet before a phrase is sent, default 3.5 seconds. Older short-pause preferences migrate once to the new default.
 - **Send my voice message**: choose automatic pause detection or **Only when I press Done speaking** for unlimited thinking pauses within a two-minute recording. **Done speaking** also works in automatic mode. The old 20-second automatic submission is removed. At two minutes, open mic stops and places the transcript in the composer as a draft instead of sending it mid-sentence.
@@ -74,14 +75,14 @@ Microphone options (same panel):
 
 `voice.json` (written by `setup:voice`, in the app data folder `~/Library/Application Support/dev.mivuneko.companion/` and `.local/`):
 
-| Key | Meaning |
-| --- | --- |
-| `binary`, `model` | `whisper-cli` and the default Whisper model (absolute paths) |
-| `server` | `whisper-server`; defaults to the one next to `whisper-cli` |
-| `vadModel` | Silero VAD model used by Whisper |
-| `language` | Whisper language, default `en` |
-| `sherpa` | root of the Parakeet install; default `<models dir>/../sherpa` |
-| `tts` | root of the Kokoro install; default `<models dir>/../tts` |
+| Key               | Meaning                                                        |
+| ----------------- | -------------------------------------------------------------- |
+| `binary`, `model` | `whisper-cli` and the default Whisper model (absolute paths)   |
+| `server`          | `whisper-server`; defaults to the one next to `whisper-cli`    |
+| `vadModel`        | Silero VAD model used by Whisper                               |
+| `language`        | Whisper language, default `en`                                 |
+| `sherpa`          | root of the Parakeet install; default `<models dir>/../sherpa` |
+| `tts`             | root of the Kokoro install; default `<models dir>/../tts`      |
 
 Environment overrides: `MIVUNEKO_WHISPER_BIN`, `MIVUNEKO_WHISPER_MODEL`, `MIVUNEKO_WHISPER_SERVER`,
 `MIVUNEKO_WHISPER_VAD`. To keep every utterance for debugging, launch with
@@ -120,25 +121,28 @@ then restart the app. `.env` remains git-ignored; never commit real credentials.
 ```jsonc
 {
   "engine": "kokoro",
-  "speed": 0.86,          // base pace; lower = slower (0.5–1.6). Kokoro's own pace is brisk.
-  "gain": 1.0,            // base loudness
-  "neutral": [            // the everyday voice: a weighted blend of stock voices
+  "speed": 0.86, // base pace; lower = slower (0.5–1.6). Kokoro's own pace is brisk.
+  "gain": 1.0, // base loudness
+  "neutral": [
+    // the everyday voice: a weighted blend of stock voices
     { "speaker": "af_sky", "weight": 0.45 },
     { "speaker": "af_heart", "weight": 0.35 },
-    { "speaker": "af_nova", "weight": 0.2 }
+    { "speaker": "af_nova", "weight": 0.2 },
   ],
-  "moods": {              // optional; any of the eight names below
+  "moods": {
+    // optional; any of the eight names below
     "sad": {
-      "speed": 0.9,       // multiplies "speed"
-      "pause": 1.5,       // multiplies pause lengths
-      "gain": 0.9,        // multiplies "gain"
-      "blend": [          // voice for this mood (falls back to "neutral" if omitted)
+      "speed": 0.9, // multiplies "speed"
+      "pause": 1.5, // multiplies pause lengths
+      "gain": 0.9, // multiplies "gain"
+      "blend": [
+        // voice for this mood (falls back to "neutral" if omitted)
         { "speaker": "af_nicole", "weight": 0.6 },
         { "speaker": "af_kore", "weight": 0.3 },
-        { "speaker": "bf_lily", "weight": 0.1 }
-      ]
-    }
-  }
+        { "speaker": "bf_lily", "weight": 0.1 },
+      ],
+    },
+  },
 }
 ```
 
@@ -195,12 +199,12 @@ DYLD_LIBRARY_PATH=${R}lib ${R}bin/sherpa-onnx-offline-tts --kokoro-model=${K}mod
 
 ## 4. What is actually spoken
 
-1. The model is asked to return a short `speech` field next to the formatted `text`. If present, that is spoken (≤ 300 characters).
-2. Otherwise the text is shortened to about two sentences: code blocks, URLs, Markdown symbols and emoji are dropped; if there was code she adds "I put the code in the chat."
+1. The full reply is narrated in order. A provider's optional short `speech` summary does not replace the explanation.
+2. Code blocks are saved in the conversation and replaced in audio with a short, location-independent notice. Prose after the code is still narrated. Visual directions such as “the code is below” are rewritten; opening the conversation window is optional.
 3. **Pronunciation fixes** (`packages/shared-schemas/pronounce.ts`) rewrite what is left for the engine: `OK` → "okay"
    (the engine spells it "oh kay"), `Mivuneko` → "Mee voo neh ko", `API` → "A P I", `&` → "and", `50%` → "50 percent", `e.g.` → "for example".
    **To fix a word**, add a line to `WORDS` in that file (a pattern and how it should be said) and add a case to `tests/unit/pronounce.test.mjs`.
-4. The result is split into phrases with pauses (`packages/shared-schemas/voice-style.ts`, `splitSpeech`).
+4. Long responses are queued in bounded chunks without dropping the tail. Local synthesis keeps one phrase ahead; streamed Gemini audio is scheduled in sequence. The result is split into phrases with pauses (`packages/shared-schemas/voice-style.ts`, `splitSpeech`).
 
 ## 5. Troubleshooting
 

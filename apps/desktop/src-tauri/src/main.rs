@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod gemini;
+mod global_keys;
 mod pet_displays;
 mod screen;
 use os_broker::{AppInfo, Broker, LaunchRequest, LaunchResult};
@@ -742,6 +743,7 @@ fn main() {
         let _ = gemini.configure(config);
     }
     tauri::Builder::default()
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(gemini)
         .manage(gemini_client::groq::GroqService::default())
         .setup(|_app| {
@@ -779,6 +781,10 @@ fn main() {
             screen::capture_screen,
             screen::analyze_screen,
             pet_displays::sync_pet_displays,
+            global_keys::configure_global_shortcuts,
+            global_keys::quiet_pet_position,
+            global_keys::pet_cursor,
+            global_keys::show_pet,
             list_apps,
             request_launch,
             resolve_launch,

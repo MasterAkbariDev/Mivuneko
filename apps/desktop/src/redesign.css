@@ -1272,3 +1272,151 @@ input.range-control::-moz-range-thumb {
   width: min(300px, 90vw);
   margin: 0;
 }
+
+.pet-root.pet-minimal {
+  overflow: visible;
+  height: 100vh;
+  --model-top: 85px;
+  --model-bottom: calc(100% - 105px);
+}
+.pet-minimal .pet-character {
+  cursor: default;
+}
+.pet-caption-slot .pet-bubble {
+  bottom: auto;
+  top: var(--model-top);
+  transform: translate(-50%, calc(-100% - 10px));
+  border-radius: 18px;
+  background: linear-gradient(145deg, #242638ed, #171b29ed);
+  box-shadow: 0 8px 28px #090c1730;
+  border: 1px solid #ffffff24;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 90px;
+  overflow: auto;
+}
+.pet-caption-slot {
+  position: static !important;
+}
+.pet-dock {
+  position: absolute;
+  z-index: 30;
+  top: calc(var(--model-bottom) + 9px);
+  left: 50%;
+  transform: translate(-50%, -5px) scale(0.94);
+  width: 148px;
+  height: 46px;
+  padding: 5px;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ffffff36;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #272b40f5, #181e2ef5);
+  box-shadow:
+    0 9px 28px #070a1845,
+    inset 0 1px #ffffff12;
+  backdrop-filter: blur(18px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    width 0.24s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.18s,
+    transform 0.24s;
+}
+.pet-dock.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+  pointer-events: auto;
+}
+.pet-dock.is-open {
+  width: min(340px, calc(100vw - 24px));
+  height: 52px;
+  border-color: #a5a0fc88;
+}
+.pet-dock button {
+  position: relative;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  min-width: 34px;
+  width: 36px;
+  height: 34px;
+  min-height: 0;
+  padding: 8px;
+  border-radius: 12px;
+  color: #d1d6eb;
+  display: grid;
+  place-items: center;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.15s;
+}
+.pet-dock button:hover {
+  background: #ffffff16 !important;
+  color: white;
+  transform: translateY(-1px);
+}
+.pet-dock button.is-active {
+  background: #aca3ff29 !important;
+  color: #c7baff;
+}
+.pet-dock button:disabled {
+  opacity: 0.3;
+}
+.pet-dock .icon {
+  width: 19px;
+  height: 19px;
+}
+.dock-divider {
+  width: 1px;
+  height: 19px;
+  background: #ffffff20;
+  margin: 0 2px;
+}
+.pet-dock form {
+  display: flex;
+  width: 100%;
+  gap: 2px;
+  align-items: center;
+}
+.pet-dock input {
+  min-width: 0;
+  flex: 1;
+  height: 38px;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 8px;
+  color: #f1f2ff;
+  font: 500 13px/1.4 inherit;
+  outline: none;
+}
+.pet-dock input::placeholder {
+  color: #a6aec6;
+}
+.voice-pulse {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #c6b5ff;
+  right: 3px;
+  top: 3px;
+  animation: dock-pulse 1.6s ease-in-out infinite;
+}
+@keyframes dock-pulse {
+  50% {
+    box-shadow: 0 0 0 4px #b29cff20;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pet-dock {
+    transition: none;
+  }
+  .voice-pulse {
+    animation: none;
+  }
+}

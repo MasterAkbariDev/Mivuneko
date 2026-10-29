@@ -30,10 +30,10 @@ Characters contains model choices, expression previews, effects and companion be
   audio processing, recognition downloads, recognition testing and pause/manual turn-taking.
 - **Connections:** reasoning provider, Gemini keys, proxy, connection tests and local history.
 - **Shortcuts:** editable key combinations, collision checks and restore defaults. These
-  shortcuts operate while Mivuneko is focused; they are not system-wide keyboard hooks.
+  shortcuts register with the operating system and keep working when the conversation is closed. Closing it hides the window; Quit exits the background app.
 - **Appearance:** text size from 90–125%, reduced motion and quiet focus mode.
 
-Default shortcuts are Alt+M (microphone), Escape (stop), Alt+1 (conversation),
+Default shortcuts are Alt+M (microphone), Ctrl+Alt+. (stop), Alt+1 (conversation),
 Alt+2 (characters) and Alt+, (settings). Keys captured in the shortcut editor do not
 trigger their actions. Input-device preferences contain device identifiers, never recorded audio.
 
@@ -71,3 +71,11 @@ Native Windows validation covered two connected monitors: creation of a second c
 ## Screen assistance
 
 Ask “help me understand my screen” in Conversations. Mivuneko hides its main window briefly, captures one display, deletes the temporary image after reading, and presents a local preview. Only **Share screenshot with Gemini** sends it to the configured provider. Images are not saved to chat history; the text explanation can be retained under the existing history preference. Capture and image-preview consent were checked natively/on browser; the image request contract is covered by a local HTTP fixture. Live cloud vision could not be validated in the final run because the configured proxy at port 10808 was offline. It requires a working Gemini connection.
+
+## Desktop interaction
+
+The hover dock sits just under the character's feet. It provides voice chat, an animated quick-message input, and a position lock. Edit mode starts locked; Ctrl+Alt+E toggles dragging and scroll resizing. Ctrl+Alt+X toggles click-through, Ctrl+Alt+F toggles focus, and Ctrl+Alt+S opens screen help. All shortcuts can be changed in Settings. Screen help still previews the image before sharing it.
+
+Transparent pixels outside the rendered 3D silhouette pass clicks to the application beneath. Dragging uses a dangling pose and spring-bone hair movement, then restores the prior behavior. Captions follow the head and opening quick chat does not resize the pet window. Monitor replicas share normalized placement, facing, animation time and completion state.
+
+“Stand up” ends a sitting command. Directed walking/running stops standing at its destination. “Get out of my way” or “I cannot code, go out of the code screen” chooses a quiet display corner using the top application's window rectangle and temporarily reduces the companion's footprint. It does not inspect screen contents. Say “resume” to restore automatic behavior and your preferred size.

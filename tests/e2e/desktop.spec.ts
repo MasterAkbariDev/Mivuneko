@@ -981,3 +981,96 @@ test("saved Gemini speech selection survives startup and reload", async ({
   await settings(page);
   await expect(page.getByLabel("Speech engine")).toHaveValue("gemini");
 });
+
+test("long spoken explanations retain every paragraph after code", async ({
+  page,
+}) => {
+  await fakeNative(page);
+  await page.addInitScript(() => {
+    const w = window as any,
+      previous = w.__TAURI_INTERNALS__.invoke;
+    w.__spoken = [];
+    const text =
+      Array.from(
+        { length: 24 },
+        (_, i) =>
+          `A closure remembers variable number ${i} from its surrounding function.`,
+      ).join(" ") +
+      "\n```js\nconst secretCode = () => 42;\n```\nThe final paragraph explains that each invocation has its own environment.";
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({
+        backend: "hermes",
+        voice: "push-to-talk",
+        voiceProvider: "system",
+      }),
+    );
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+      if (command === "hermes_chat")
+        return JSON.stringify({
+          text,
+          emotion: "happy",
+          speech: "Only a short summary.",
+        });
+      if (command === "synthesize_speech") {
+        w.__spoken.push(args.text);
+        return [0];
+      }
+      return previous(command, args);
+    };
+    w.AudioContext = class {
+      destination = {};
+      get currentTime() {
+        return performance.now() / 1000;
+      }
+      resume() {
+        return Promise.resolve();
+      }
+      close() {
+        return Promise.resolve();
+      }
+      decodeAudioData() {
+        return Promise.resolve({ duration: 0.01 });
+      }
+      createGain() {
+        return { gain: { value: 1 }, connect() {}, disconnect() {} };
+      }
+      createAnalyser() {
+        return {
+          fftSize: 32,
+          connect() {},
+          disconnect() {},
+          getFloatTimeDomainData(a: Float32Array) {
+            a.fill(0);
+          },
+        };
+      }
+      createBufferSource() {
+        return {
+          onended: null as (() => void) | null,
+          connect() {},
+          start() {
+            setTimeout(() => this.onended?.(), 10);
+          },
+          stop() {
+            this.onended?.();
+          },
+        };
+      }
+    };
+  });
+  await chat(page);
+  await ask(page, "Explain closures in detail.");
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__spoken.join(" ")))
+    .toContain(
+      "The final paragraph explains that each invocation has its own environment.",
+    );
+  const said = await page.evaluate(() => (window as any).__spoken.join(" "));
+  for (let i = 0; i < 24; i++)
+    expect(said).toContain(
+      `A closure remembers variable number ${i} from its surrounding function.`,
+    );
+  expect(said).not.toContain("secretCode");
+  expect(said).not.toContain("Only a short summary.");
+});

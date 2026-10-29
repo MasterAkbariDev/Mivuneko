@@ -3,6 +3,7 @@ import type { VRM, VRMHumanBoneName } from "@pixiv/three-vrm";
 import type { CharacterState } from "../../../packages/character/controller";
 
 // Authored humanoid gestures, blended rather than snapping between T poses.
+const hipOffsets = new WeakMap<VRM, number>();
 const origins = new WeakMap<VRM, THREE.Vector3>();
 export function animateVrm(
   vrm: VRM,
@@ -10,6 +11,7 @@ export function animateVrm(
   time: number,
   delta: number,
   reduced: boolean,
+  dragging = false,
 ) {
   const t = reduced ? 0 : time;
   const wave = Math.sin(t * 3),
@@ -85,6 +87,19 @@ export function animateVrm(
     pose.rightUpperLeg = [-wave * 0.15, 0, 0.06];
   } else if (state.body === "sleep") pose.head = [0.25, 0, 0.22];
   if (state.activity === "speaking") pose.head[0] += Math.sin(t * 4) * 0.035;
+  if (dragging) {
+    const swing = Math.sin(t * 4) * 0.12;
+    pose.leftUpperArm = [0.18 + swing, 0, -1.65];
+    pose.rightUpperArm = [0.18 - swing, 0, 1.65];
+    pose.leftLowerArm = [0, -0.15, 0];
+    pose.rightLowerArm = [0, 0.15, 0];
+    pose.leftUpperLeg = [0.12 + swing, 0, -0.08];
+    pose.rightUpperLeg = [0.12 - swing, 0, 0.08];
+    pose.leftLowerLeg = [0.2, 0, 0];
+    pose.rightLowerLeg = [0.25, 0, 0];
+    pose.chest = [-0.08, 0, swing * 0.4];
+    pose.head = [0.08, 0, -swing * 0.6];
+  }
   // Normalized elbows bend forward with negative Y on the left, positive on the right.
   // Keep the forearm hinge anatomically consistent across VRM skeletons.
   pose.leftUpperArm[1] = -Math.abs(pose.leftUpperArm[1]);
@@ -102,6 +117,10 @@ export function animateVrm(
   if (hips) {
     if (!origins.has(vrm)) origins.set(vrm, hips.position.clone());
     hips.position.copy(origins.get(vrm)!);
-    hips.position.y += state.body === "sit" ? -0.38 : breath * 0.004;
+    const target = state.body === "sit" && !dragging ? -0.38 : breath * 0.004;
+    const previous = hipOffsets.get(vrm) ?? target;
+    const next = THREE.MathUtils.lerp(previous, target, alpha);
+    hipOffsets.set(vrm, next);
+    hips.position.y += next;
   }
 }

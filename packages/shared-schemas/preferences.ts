@@ -1,5 +1,6 @@
 export type PetMode =
   | "auto"
+  | "stand"
   | "cozy"
   | "playful"
   | "focus"
@@ -52,7 +53,15 @@ export interface Preferences {
   autoGainControl: boolean;
   textScale: number;
   shortcuts: Record<
-    "record" | "stop" | "chat" | "characters" | "settings",
+    | "record"
+    | "stop"
+    | "chat"
+    | "characters"
+    | "settings"
+    | "edit"
+    | "clickThrough"
+    | "focus"
+    | "screen",
     string
   >;
   version: 1;
@@ -79,6 +88,8 @@ export interface Preferences {
   quietEnd: number;
   focus: boolean;
   clickThrough: boolean;
+  petEdit: boolean;
+  petAvoiding: boolean;
   voice: "off" | "push-to-talk" | "spoken" | "open-mic";
   // Speech recognition: engine id from the native registry ("auto" = configured model).
   sttEngine: string;
@@ -101,10 +112,14 @@ export const defaults: Preferences = {
   textScale: 1,
   shortcuts: {
     record: "Alt+M",
-    stop: "Escape",
+    stop: "Ctrl+Alt+.",
     chat: "Alt+1",
     characters: "Alt+2",
     settings: "Alt+,",
+    edit: "Ctrl+Alt+E",
+    clickThrough: "Ctrl+Alt+X",
+    focus: "Ctrl+Alt+F",
+    screen: "Ctrl+Alt+S",
   },
   version: 1,
   petMode: "auto",
@@ -130,6 +145,8 @@ export const defaults: Preferences = {
   quietEnd: 8,
   focus: false,
   clickThrough: false,
+  petEdit: false,
+  petAvoiding: false,
   voice: "off",
   sttEngine: "auto",
   micSensitivity: "normal",
@@ -167,6 +184,7 @@ export function parsePreferences(raw: unknown): Preferences {
         return [
           action,
           typeof value === "string" &&
+          value !== "Escape" &&
           /^(?:(?:Ctrl|Alt|Shift|Meta)\+){0,4}(?:[A-Za-z0-9,./;]|Escape|F\d{1,2})$/.test(
             value,
           )
@@ -177,6 +195,7 @@ export function parsePreferences(raw: unknown): Preferences {
     ) as Preferences["shortcuts"],
     petMode: [
       "auto",
+      "stand",
       "cozy",
       "playful",
       "focus",
@@ -190,6 +209,7 @@ export function parsePreferences(raw: unknown): Preferences {
       : "auto",
     petExpression: [
       "auto",
+      "stand",
       "idle",
       "happy",
       "surprised",
@@ -275,6 +295,8 @@ export function parsePreferences(raw: unknown): Preferences {
       : 8,
     focus: p.focus === true,
     clickThrough: p.clickThrough === true,
+    petEdit: p.petEdit === true,
+    petAvoiding: p.petAvoiding === true,
     voice:
       p.voice === "push-to-talk" ||
       p.voice === "spoken" ||
