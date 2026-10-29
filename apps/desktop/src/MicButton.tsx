@@ -11,6 +11,7 @@ export function MicButton({
   speaking,
   disabled,
   onClick,
+  compact = false,
 }: {
   active: boolean;
   phase: MicPhase;
@@ -18,6 +19,7 @@ export function MicButton({
   speaking: boolean;
   disabled: boolean;
   onClick: () => void;
+  compact?: boolean;
 }) {
   const fill = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -53,10 +55,11 @@ export function MicButton({
   return (
     <button
       type="button"
-      className={`mic-btn mic-${state}`}
+      className={`mic-btn mic-${state} ${compact ? "mic-compact" : ""}`}
       disabled={disabled}
       aria-pressed={active}
       aria-label={active ? `Stop open mic (${label})` : "Start open mic"}
+      title={active ? `${label} · click to turn off` : "Start open mic"}
       onClick={onClick}
     >
       <i ref={fill} className="mic-fill" />

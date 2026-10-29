@@ -114,7 +114,7 @@ export const characters: Record<
     sitPose: [3, 2, 1],
   },
   miku: {
-    name: "Miku · unofficial fan art",
+    name: "Miku",
     atlases: [
       "/characters/miku-fan-atlas.png",
       "/characters/miku-complete-v3.png",
@@ -129,7 +129,7 @@ export const characters: Record<
     poses: detailedBase(false),
   },
   kitsune: {
-    name: "Kiko · fox companion",
+    name: "Kiko",
     atlases: [
       "/characters/kitsune-atlas.png",
       "/characters/kitsune-complete-v3.png",
@@ -144,7 +144,7 @@ export const characters: Record<
     poses: detailedBase(false),
   },
   stella: {
-    name: "Stella · star companion",
+    name: "Stella",
     atlases: [
       "/characters/stella-atlas.png",
       "/characters/stella-complete-v3.png",
@@ -159,7 +159,7 @@ export const characters: Record<
     poses: detailedBase(false),
   },
   teto: {
-    name: "Teto · unofficial fan art",
+    name: "Teto",
     atlases: [
       "/characters/teto-fan-atlas.png",
       "/characters/teto-complete-v3.png",
@@ -174,7 +174,7 @@ export const characters: Record<
     poses: detailedBase(false),
   },
   neru: {
-    name: "Neru · unofficial fan art",
+    name: "Neru",
     atlases: [
       "/characters/neru-fan-atlas.png",
       "/characters/neru-complete-v3.png",
@@ -189,7 +189,7 @@ export const characters: Record<
     poses: detailedBase(false),
   },
   snow: {
-    name: "Yuki · white hair",
+    name: "Yuki",
     atlases: ["/characters/snow-atlas.png", "/characters/snow-complete-v3.png"],
     grids: [
       [3, 2],
@@ -201,7 +201,7 @@ export const characters: Record<
     poses: detailedBase(false),
   },
   silver: {
-    name: "Sora · silver hair",
+    name: "Sora",
     atlases: [
       "/characters/silver-atlas.png",
       "/characters/silver-complete-v3.png",
@@ -216,7 +216,7 @@ export const characters: Record<
     poses: detailedBase(true),
   },
   azure: {
-    name: "Aoi · blue eyes",
+    name: "Aoi",
     atlases: [
       "/characters/azure-atlas.png",
       "/characters/azure-complete-v3.png",
@@ -231,7 +231,7 @@ export const characters: Record<
     poses: detailedBase(true),
   },
   goth: {
-    name: "Raven · gothic",
+    name: "Raven",
     atlases: ["/characters/goth-atlas.png", "/characters/goth-complete-v3.png"],
     grids: [
       [3, 2],

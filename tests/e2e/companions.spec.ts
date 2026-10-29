@@ -1,5 +1,73 @@
 import { test, expect } from "@playwright/test";
 
+test("walk and run repaint every illustrated character even with a selected expression", async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.goto("/?view=chat&tab=Characters");
+  for (const id of [
+    "luna",
+    "miku",
+    "kitsune",
+    "stella",
+    "teto",
+    "neru",
+    "snow",
+    "silver",
+    "azure",
+    "goth",
+    "mochi",
+  ]) {
+    for (const mode of ["walk", "run"]) {
+      await page.evaluate(
+        async ({ id, mode }) => {
+          const path = "/src/preferences.ts";
+          const { updatePreferences } = await import(path);
+          updatePreferences({
+            renderer: "2d",
+            character: id,
+            illustrationDepth: id === "mochi",
+            activePackId: "",
+            petMode: mode,
+            petExpression: "crying",
+          });
+        },
+        { id, mode },
+      );
+      const preview = page
+        .getByLabel("Live character preview")
+        .locator(".luna-model");
+      await expect(preview).toHaveAttribute("data-model", id);
+      await expect(preview.locator("canvas")).toHaveCount(1);
+      await expect(preview.locator("canvas")).toHaveAttribute(
+        "data-ready",
+        "true",
+        { timeout: 15000 },
+      );
+      const hashes = await preview
+        .locator("canvas")
+        .evaluate(async (canvas: HTMLCanvasElement) => {
+          const hashes = new Set<number>();
+          for (let frame = 0; frame < 16; frame++) {
+            const pixels = canvas
+              .getContext("2d")!
+              .getImageData(0, 0, canvas.width, canvas.height).data;
+            let hash = 2166136261;
+            for (let i = 0; i < pixels.length; i += 64)
+              hash = Math.imul(hash ^ pixels[i] ^ pixels[i + 3], 16777619);
+            hashes.add(hash);
+            await new Promise((r) => setTimeout(r, 90));
+          }
+          return hashes.size;
+        });
+      expect(
+        hashes,
+        `${id} ${mode} must repaint actual limb frames`,
+      ).toBeGreaterThanOrEqual(3);
+    }
+  }
+});
+
 test("2D choices and expressions update the desktop pet", async ({
   page,
   context,

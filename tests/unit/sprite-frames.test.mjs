@@ -51,3 +51,24 @@ test("every illustrated model has distinct emotions and real directional walk/ru
     assert.equal(new Set(gaits).size, 8, id);
   }
 });
+
+test("a selected emotion never freezes locomotion for any character", () => {
+  for (const id of Object.keys(characters))
+    for (const mode of ["walk", "run"]) {
+      assert.equal(
+        spriteFrame(id, "crying", mode, -1, 0, false).mirror,
+        true,
+        `${id} ${mode} faces left`,
+      );
+      assert.equal(
+        new Set(
+          [0, 1, 2].map((t) => {
+            const f = spriteFrame(id, "crying", mode, 1, t, false);
+            return `${f.image}:${f.column}:${f.row}`;
+          }),
+        ).size,
+        3,
+        `${id} ${mode}`,
+      );
+    }
+});

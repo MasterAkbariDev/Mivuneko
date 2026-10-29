@@ -29,7 +29,7 @@ export function Luna({
   const pose = lunaPose(mood, mode, expression);
   const model = characters[character];
   const [tick, setTick] = useState(0);
-  const moving = expression === "auto" && (mode === "walk" || mode === "run");
+  const moving = mode === "walk" || mode === "run";
   useEffect(() => {
     setTick(0);
     if (!moving) return;
@@ -100,7 +100,7 @@ export function Luna({
     >
       {frames.map((item, index) => (
         <SpriteCanvas
-          key={item.key}
+          key={moving ? `locomotion-${index}` : item.key}
           frame={item}
           className={`luna-sprite ${frames.length > 1 && index === frames.length - 1 ? "luna-sprite-enter" : ""}`}
         />

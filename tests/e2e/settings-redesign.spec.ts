@@ -204,7 +204,7 @@ test("bundled and imported VRM models render and selection reaches the desktop p
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/?view=chat&tab=Characters");
   await page.getByRole("tab", { name: "3D Animated VRM", exact: true }).click();
-  await page.getByRole("button", { name: /Haru · 3D/ }).click();
+  await page.getByRole("button", { name: /^Haru/ }).click();
   await expect(
     page.locator('.character-scene[data-model-ready="true"]'),
   ).toBeVisible({ timeout: 20000 });
@@ -458,7 +458,7 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
   test.setTimeout(60000);
   await page.goto("/?view=chat&tab=Characters");
   await page.getByRole("tab", { name: "3D Animated VRM", exact: true }).click();
-  await page.getByRole("button", { name: /Haru · 3D/ }).click();
+  await page.getByRole("button", { name: /^Haru/ }).click();
   await expect(
     page.locator('.character-scene[data-model-ready="true"]'),
   ).toBeVisible({ timeout: 30000 });
@@ -1000,7 +1000,7 @@ test("dimensional galleries select models and expose the character manual", asyn
   await page.getByRole("button", { name: "Mochi", exact: true }).click();
   await expect(page.locator(".depth-illustration")).toBeVisible();
   await page.getByRole("tab", { name: "3D Animated VRM", exact: true }).click();
-  await expect(page.getByRole("button", { name: /Haru .*3D/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Haru/ })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Luna", exact: true }),
   ).toHaveCount(0);
@@ -1053,6 +1053,76 @@ test("LLM posture actions execute instead of only producing an acknowledgement",
       exact: true,
     }),
   ).toBeVisible();
+});
+
+test("icon chat controls interrupt a pending reply and accept the next turn without a stale response", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any,
+      previous = w.__TAURI_INTERNALS__.invoke;
+    let turn = 0;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+      if (command === "hermes_chat") {
+        if (++turn === 1)
+          return new Promise((resolve) => {
+            w.__releaseOldReply = () =>
+              resolve(
+                JSON.stringify({
+                  text: "An obsolete answer",
+                  emotion: "happy",
+                }),
+              );
+          });
+        return JSON.stringify({
+          text: "We can start fresh. What would you like to explore?",
+          emotion: "happy",
+        });
+      }
+      return previous(command, args);
+    };
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ backend: "hermes", voice: "off" }),
+    );
+  });
+  await page.goto("/?view=chat");
+  const composer = page.getByLabel("Message Mivuneko", { exact: true });
+  await composer.fill("Explain something slowly");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Stop", exact: true }),
+  ).toBeDisabled();
+  await composer.fill("Let's start fresh");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page.getByText("We can start fresh. What would you like to explore?", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.evaluate(() => (window as any).__releaseOldReply());
+  await expect(
+    page.getByText("An obsolete answer", { exact: true }),
+  ).toHaveCount(0);
+  const interruption = page.getByRole("button", {
+    name: "Allow voice interruption",
+    exact: true,
+  });
+  await interruption.click();
+  await expect(interruption).toHaveAttribute("aria-pressed", "false");
+  for (const name of ["Send", "Apps", "Stop"])
+    await expect(page.getByRole("button", { name, exact: true })).toHaveText(
+      "",
+    );
+  await page.screenshot({ path: "test-results/chat-redesign.png" });
+  await page.setViewportSize({ width: 430, height: 820 });
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    )
+    .toBe(true);
+  await page.screenshot({ path: "test-results/chat-redesign-mobile.png" });
 });
 
 test("Haru keeps both feet in the camera through sitting and standing", async ({

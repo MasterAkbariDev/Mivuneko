@@ -97,7 +97,7 @@ test("settings and chat activity synchronize to an already open pet", async ({
   await main.getByRole("button", { name: "Characters", exact: true }).click();
   await main.getByRole("button", { name: /^Miku/ }).click();
   await expect(
-    page.getByRole("img", { name: /Miku · unofficial fan art 2D companion/ }),
+    page.getByRole("img", { name: /Miku 2D companion/ }),
   ).toBeVisible();
   await main.getByLabel("Do not disturb", { exact: true }).check();
   await expect

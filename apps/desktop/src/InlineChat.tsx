@@ -224,6 +224,8 @@ export function InlineChat({ onClose }: { onClose: () => void }) {
         <div className="inline-actions">
           <button
             type="button"
+            aria-label={voice.recording ? "Finish recording" : "Microphone"}
+            title={voice.recording ? "Finish recording" : "Record your voice"}
             disabled={
               !isNative || prefs.voice !== "push-to-talk" || busy || !!pending
             }
@@ -232,17 +234,21 @@ export function InlineChat({ onClose }: { onClose: () => void }) {
             }
           >
             <Icon name="mic" />
-            <span>{voice.recording ? "Finish recording" : "Microphone"}</span>
           </button>
-          <button type="button" onClick={() => void stop()}>
+          <button
+            type="button"
+            aria-label="Stop"
+            title="Interrupt response"
+            onClick={() => void stop()}
+          >
             <Icon name="stop" />
-            <span>Stop</span>
           </button>
           <button
             className="primary"
+            aria-label="Send"
+            title="Send message"
             disabled={busy || !!pending || voice.recording || !input.trim()}
           >
-            <span>Send</span>
             <Icon name="send" />
           </button>
         </div>

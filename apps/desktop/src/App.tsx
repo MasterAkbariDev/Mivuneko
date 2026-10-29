@@ -126,8 +126,11 @@ export function App() {
   );
   const openMic = useOpenMic(
     openMicActive && preferences.voice === "open-mic" && isNative && !onboard,
-    busy || !!pending || !historyReady || !!screenRequest || voice.preparing,
-    voice.speaking,
+    !!pending ||
+      !historyReady ||
+      !!screenRequest ||
+      (!preferences.bargeIn && (busy || voice.preparing)),
+    voice.speaking || voice.preparing || busy,
     setLiveTranscript,
     (text) => {
       void send(text);
@@ -140,7 +143,7 @@ export function App() {
       )
         setOpenMicActive(false);
     },
-    () => void voice.stop(),
+    () => void interrupt(),
     setInput,
   );
   useEffect(() => {
@@ -271,6 +274,15 @@ export function App() {
     setMood(result.ok ? "celebrating" : "idle");
   }
   async function send(text = input) {
+    if (
+      /^(?:please\s+)?(?:stop (?:talking|speaking)|be quiet|quiet please|pause (?:your )?(?:voice|speech))\s*[.!?]*$/i.test(
+        text.trim(),
+      )
+    ) {
+      setInput("");
+      await interrupt();
+      return;
+    }
     if (
       !text.trim() ||
       busy ||
@@ -546,6 +558,18 @@ export function App() {
     } finally {
       setBusy(false);
     }
+  }
+  async function interrupt() {
+    controller.current?.abort();
+    if (chainActive.current) {
+      cancelCompanionTask();
+      updatePreferences({ petMode: "stand" });
+    }
+    turnActive.current = false;
+    setBusy(false);
+    setStreaming("");
+    await voice.stop();
+    setMood("idle");
   }
   async function stop() {
     controller.current?.abort();
@@ -839,22 +863,25 @@ export function App() {
         <header>
           <div>
             <h1>{tab}</h1>
-            <p>
-              {tab === "Conversations"
-                ? "A little company, on your terms."
-                : tab === "Settings" || tab === "Characters"
+            {tab !== "Conversations" && (
+              <p>
+                {tab === "Settings" || tab === "Characters"
                   ? "A space that feels like you."
                   : "Your companion, with you in control."}
-            </p>
+              </p>
+            )}
           </div>
           <span className="status">
             <span className="dot" />{" "}
             {preferences.backend === "auto"
               ? "Gemini + Groq"
-              : preferences.backend === "hermes"
-                ? "Hermes local"
-                : "Offline utilities"}{" "}
-            · {isNative ? "Desktop" : "Browser preview"}
+              : preferences.backend === "gemini"
+                ? "Gemini"
+                : preferences.backend === "groq"
+                  ? "Groq"
+                  : preferences.backend === "hermes"
+                    ? "Hermes local"
+                    : "Offline utilities"}{" "}
           </span>
         </header>
         {tab === "Conversations" ? (
@@ -868,22 +895,47 @@ export function App() {
                     </span>
                     {name} <span className="dot" />
                   </h3>
-                  <small>
-                    {preferences.rememberHistory
-                      ? "Local conversation history enabled"
-                      : "Private session · history is not saved"}
-                  </small>
                 </div>
-                <select
-                  aria-label="Companion mode"
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value as Mode)}
-                  disabled={!!pending || busy || voice.recording}
-                >
-                  {["Chat", "Assist", "Creative", "Autonomous"].map((m) => (
-                    <option key={m}>{m}</option>
-                  ))}
-                </select>
+                <div className="chat-head-tools">
+                  <span
+                    className="chat-privacy"
+                    role="img"
+                    aria-label={
+                      preferences.rememberHistory
+                        ? "History saved locally"
+                        : "Private conversation"
+                    }
+                    title={
+                      preferences.rememberHistory
+                        ? "History saved on this device"
+                        : "Conversation history is not saved"
+                    }
+                  >
+                    <Icon name="shield" />
+                  </span>
+                  <button
+                    type="button"
+                    className="chat-icon-button"
+                    aria-label="Allow voice interruption"
+                    aria-pressed={preferences.bargeIn}
+                    title="Speak to interrupt responses"
+                    onClick={() =>
+                      updatePreferences({ bargeIn: !preferences.bargeIn })
+                    }
+                  >
+                    <Icon name="activity" />
+                  </button>
+                  <select
+                    aria-label="Companion mode"
+                    value={mode}
+                    onChange={(e) => setMode(e.target.value as Mode)}
+                    disabled={!!pending || busy || voice.recording}
+                  >
+                    {["Chat", "Assist", "Creative", "Autonomous"].map((m) => (
+                      <option key={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div
                 ref={messageList}
@@ -950,8 +1002,7 @@ export function App() {
                   }}
                 />
                 <div className="composer-actions">
-                  <small>
-                    {mode} mode ·{" "}
+                  <small className="composer-status" role="status">
                     {openMicActive && openMic.working
                       ? "transcribing locally"
                       : openMicActive && !busy && !voice.speaking
@@ -962,14 +1013,11 @@ export function App() {
                             ? "preparing voice…"
                             : voice.speaking
                               ? "speaking"
-                              : preferences.voice === "off"
-                                ? "text only"
-                                : preferences.voiceProvider === "gemini"
-                                  ? "Gemini voice"
-                                  : "local voice"}
+                              : ""}
                   </small>
                   {preferences.voice === "open-mic" && (
                     <MicButton
+                      compact
                       active={openMicActive}
                       phase={openMic.phase}
                       waiting={busy || !!pending}
@@ -984,17 +1032,22 @@ export function App() {
                   {preferences.voice === "open-mic" && openMicActive && (
                     <button
                       type="button"
+                      aria-label="Done speaking"
+                      title="Finish speaking"
                       disabled={
                         openMic.phase !== "hearing" || busy || !!pending
                       }
                       onClick={() => openMic.finish()}
                     >
-                      Done speaking
+                      <Icon name="send" />
                     </button>
                   )}
                   {preferences.voice !== "open-mic" && (
                     <button
                       type="button"
+                      aria-label={
+                        voice.recording ? "Finish recording" : "Record"
+                      }
                       title={
                         !isNative
                           ? "Recording requires the native app"
@@ -1017,25 +1070,36 @@ export function App() {
                       }
                     >
                       <Icon name="mic" />
-                      <span>
-                        {voice.recording ? "Finish recording" : "Record"}
-                      </span>
                     </button>
                   )}
                   <button
                     type="button"
+                    aria-label="Apps"
+                    title="Open an app"
                     disabled={busy || !!pending || voice.recording}
                     onClick={() => setShowApps(true)}
                   >
                     <Icon name="grid" />
-                    <span>Apps</span>
                   </button>
-                  <button type="button" onClick={() => void stop()}>
+                  <button
+                    type="button"
+                    aria-label="Stop"
+                    title="Interrupt response"
+                    disabled={
+                      !busy &&
+                      !voice.speaking &&
+                      !voice.preparing &&
+                      !voice.recording &&
+                      !pending
+                    }
+                    onClick={() => void (pending ? stop() : interrupt())}
+                  >
                     <Icon name="stop" />
-                    <span>Stop</span>
                   </button>
                   <button
                     className="primary"
+                    aria-label="Send"
+                    title="Send message"
                     disabled={
                       busy ||
                       !!pending ||
@@ -1044,24 +1108,10 @@ export function App() {
                       voice.recording
                     }
                   >
-                    <span>Send</span>
                     <Icon name="send" />
                   </button>
                 </div>
               </form>
-              <p className="chat-note">
-                {openMicActive && (
-                  <span>
-                    Open mic is on. Speech is transcribed locally; completed
-                    phrases are sent to the selected conversation provider.{" "}
-                  </span>
-                )}
-                {preferences.approvalMode === "auto"
-                  ? "Recognized app launches are automatically approved."
-                  : preferences.approvalMode === "deny"
-                    ? "App launches are denied."
-                    : "App launch approval follows your Permissions setting."}
-              </p>
             </section>
           </div>
         ) : tab === "Characters" ? (

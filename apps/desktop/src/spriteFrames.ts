@@ -26,7 +26,7 @@ export function spriteFrame(
     rows = model.grids?.[atlas]?.[1] ?? model.rows ?? 2,
     c = column,
     r = row;
-  if (automatic && model.motionAtlas && (mode === "walk" || mode === "run")) {
+  if (model.motionAtlas && (mode === "walk" || mode === "run")) {
     const side = facing === "side" ? 0 : facing === "front" ? 1 : 2;
     const phase = [0, 1, 2, 1][tick % 4];
     let cell: number;
@@ -72,7 +72,6 @@ export function spriteFrame(
     columns,
     rows,
     mirror:
-      automatic &&
       (mode === "walk" || mode === "run") &&
       (id === "neru" && mode === "walk" && facing === "side"
         ? !mirror

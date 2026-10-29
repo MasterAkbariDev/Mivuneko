@@ -123,7 +123,7 @@ export function ModelSettings({ only3D = false }: { only3D?: boolean }) {
           }
           aria-pressed={p.renderer === "sample-vrm"}
         >
-          <b>Haru · 3D</b>
+          <b>Haru</b>
           <small>Expressions, gestures & character voice</small>
         </button>
         {models.map((m) => (
