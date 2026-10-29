@@ -6,7 +6,7 @@ import {
   validateVrmFile,
   type VrmInfo,
 } from "../../../packages/character/packs.ts";
-export function ModelSettings() {
+export function ModelSettings({ only3D = false }: { only3D?: boolean }) {
   const p = usePreferences();
   const input = useRef<HTMLInputElement>(null);
   const [info, setInfo] = useState<VrmInfo | null>(null);
@@ -51,14 +51,16 @@ export function ModelSettings() {
         role="group"
         aria-label="Character renderer"
       >
-        <button
-          type="button"
-          aria-pressed={p.renderer === "2d"}
-          onClick={() => updatePreferences({ renderer: "2d" })}
-        >
-          <b>2D illustration</b>
-          <small>Original poses & mood effects</small>
-        </button>
+        {!only3D && (
+          <button
+            type="button"
+            aria-pressed={p.renderer === "2d"}
+            onClick={() => updatePreferences({ renderer: "2d" })}
+          >
+            <b>2D illustration</b>
+            <small>Original poses & mood effects</small>
+          </button>
+        )}
         <button
           type="button"
           aria-pressed={p.renderer === "sample-vrm"}
@@ -67,18 +69,20 @@ export function ModelSettings() {
           <b>Haru · 3D</b>
           <small>Expressive VRoid companion</small>
         </button>
-        <button
-          type="button"
-          aria-pressed={p.renderer === "custom-vrm"}
-          onClick={() =>
-            info
-              ? updatePreferences({ renderer: "custom-vrm" })
-              : input.current?.click()
-          }
-        >
-          <b>Your VRM model</b>
-          <small>{info?.name || "Import a .vrm file"}</small>
-        </button>
+        {info && (
+          <button
+            type="button"
+            aria-pressed={p.renderer === "custom-vrm"}
+            onClick={() =>
+              info
+                ? updatePreferences({ renderer: "custom-vrm" })
+                : input.current?.click()
+            }
+          >
+            <b>Your VRM model</b>
+            <small>{info.name}</small>
+          </button>
+        )}
       </div>
       <input
         ref={input}
@@ -97,7 +101,11 @@ export function ModelSettings() {
           disabled={busy}
           onClick={() => input.current?.click()}
         >
-          {busy ? "Importing model…" : "Import VRM character"}
+          {busy
+            ? "Importing model…"
+            : info
+              ? "Replace imported character"
+              : "Import VRM character"}
         </button>
         {info && (
           <button

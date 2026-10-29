@@ -203,6 +203,7 @@ test("bundled and imported VRM models render and selection reaches the desktop p
   });
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/?view=chat&tab=Characters");
+  await page.getByRole("tab", { name: "3D Animated VRM", exact: true }).click();
   await page.getByRole("button", { name: /Haru · 3D/ }).click();
   await expect(
     page.locator('.character-scene[data-model-ready="true"]'),
@@ -456,6 +457,7 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
 }) => {
   test.setTimeout(60000);
   await page.goto("/?view=chat&tab=Characters");
+  await page.getByRole("tab", { name: "3D Animated VRM", exact: true }).click();
   await page.getByRole("button", { name: /Haru · 3D/ }).click();
   await expect(
     page.locator('.character-scene[data-model-ready="true"]'),
@@ -538,15 +540,15 @@ test("companion commands choose actions without a manual mode selector", async (
     page
       .getByLabel("Pet display")
       .getByRole("option", { name: /All monitors/ }),
-  ).toHaveCount(1);
-  await page.getByLabel("Pet display").selectOption("all");
+  ).toHaveCount(0);
+  await page.getByLabel("Pet display").selectOption("current");
   expect(
     await page.evaluate(
       () =>
         JSON.parse(localStorage.getItem("mivuneko.preferences.v1") ?? "{}")
           .monitor,
     ),
-  ).toBe("all");
+  ).toBe("current");
   await page
     .getByRole("button", { name: "Conversations", exact: true })
     .click();
@@ -694,6 +696,9 @@ test("pet hover dock opens a compact composer and edit mode starts locked", asyn
       ),
     )
     .toBe(true);
+  await expect(input).toBeVisible();
+  await expect(input).toHaveValue("");
+  await page.getByRole("button", { name: "Close quick chat" }).click();
   await page
     .locator(".pet-dock")
     .evaluate((el) => el.classList.add("is-visible"));
@@ -704,4 +709,305 @@ test("pet hover dock opens a compact composer and edit mode starts locked", asyn
         JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!).petEdit,
     ),
   ).toBe(true);
+});
+
+test("microphone dot is quiet, active-only, stable across animation and optional", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any;
+    w.__TAURI_INTERNALS__.metadata = {
+      currentWindow: { label: "pet" },
+      currentWebview: { label: "pet" },
+    };
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({
+        renderer: "sample-vrm",
+        petScale: 1,
+        petMode: "stand",
+        micIndicator: true,
+      }),
+    );
+    localStorage.setItem("mivuneko.automatic-behavior.v1", "1");
+  });
+  await page.goto("/?view=pet");
+  await expect(
+    page.locator('.character-scene[data-model-ready="true"]'),
+  ).toBeVisible({ timeout: 30000 });
+  const dot = page.getByRole("img", { name: "Microphone active", exact: true });
+  await expect(dot).toHaveCount(0);
+  await page.evaluate(() => (window as any).__emit("voice-active", true));
+  await expect(dot).toBeVisible();
+  const before = await dot.boundingBox();
+  expect(before!.width).toBe(5);
+  expect(before!.height).toBe(5);
+  await page.evaluate(async () => {
+    const path = "/src/preferences.ts",
+      p = await import(path);
+    p.updatePreferences({ petMode: "walk", petExpression: "angry" });
+  });
+  await expect(page.locator(".character-scene")).toHaveAttribute(
+    "data-emotion",
+    "angry",
+  );
+  const after = await dot.boundingBox();
+  expect(after!.x).toBe(before!.x);
+  expect(after!.y).toBe(before!.y);
+  expect(await dot.evaluate((e) => getComputedStyle(e).boxShadow)).toBe("none");
+  await page.evaluate(() => (window as any).__emit("voice-active", false));
+  await expect(dot).toHaveCount(0);
+  await page.evaluate(() => (window as any).__emit("voice-active", true));
+  await expect(dot).toBeVisible();
+  await page.evaluate(async () => {
+    const path = "/src/preferences.ts",
+      p = await import(path);
+    p.updatePreferences({ micIndicator: false });
+  });
+  await expect(dot).toHaveCount(0);
+});
+test("speech-engine selectors stay compact instead of inheriting text-field dimensions", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat&tab=Settings");
+  await page
+    .getByRole("button", { name: "Voice & input", exact: true })
+    .click();
+  const radios = page.locator(".engine input[type=radio]");
+  await expect(radios).toHaveCount(3);
+  for (const radio of await radios.all()) {
+    const r = await radio.boundingBox();
+    expect(r!.width).toBe(18);
+    expect(r!.height).toBe(18);
+  }
+});
+test("custom companion names persist and use companion-neutral speech settings", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat&tab=Characters");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByLabel("Companion name", { exact: true }).fill("Yuki Chan");
+  await page.reload();
+  await expect(page.getByLabel("Companion name", { exact: true })).toHaveValue(
+    "Yuki Chan",
+  );
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Voice & input", exact: true })
+    .click();
+  await expect(
+    page.getByText("Interrupt your companion by speaking", { exact: true }),
+  ).toBeVisible();
+});
+
+test("zoom grows beyond the display while the dock and its actions stay visible", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    delete (window as any).__TAURI_INTERNALS__;
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({
+        renderer: "sample-vrm",
+        petScale: 1,
+        petMode: "stand",
+        petEdit: true,
+      }),
+    );
+    localStorage.setItem("mivuneko.automatic-behavior.v1", "1");
+  });
+  await page.setViewportSize({ width: 1000, height: 720 });
+  await page.goto("/?view=pet");
+  await expect(
+    page.locator('.character-scene[data-model-ready="true"]'),
+  ).toBeVisible({ timeout: 30000 });
+  const read = () =>
+    page.evaluate(() => {
+      const c = document.querySelector("canvas") as any,
+        r = c.getBoundingClientRect();
+      let pixels = 0;
+      for (let y = r.top + 2; y < r.bottom; y += 8)
+        for (let x = r.left + 2; x < r.right; x += 8)
+          if (c.petHit(x, y)) pixels++;
+      return pixels;
+    });
+  const small = await read();
+  await page.evaluate(async () => {
+    const path = "/src/preferences.ts",
+      p = await import(path);
+    p.updatePreferences({ petScale: 10 });
+  });
+  await expect
+    .poll(() =>
+      page
+        .locator(".pet-character")
+        .evaluate((e) => e.getBoundingClientRect().height),
+    )
+    .toBeGreaterThan(720);
+  await expect.poll(read).toBeGreaterThan(small * 2);
+  await page
+    .getByRole("group", { name: /Mivuneko character/ })
+    .dispatchEvent("dblclick");
+  const input = page.getByLabel("Message your companion");
+  await expect(input).toBeVisible();
+  const rect = await input.boundingBox();
+  expect(rect!.y).toBeGreaterThanOrEqual(0);
+  expect(rect!.y + rect!.height).toBeLessThanOrEqual(720);
+  await page.getByRole("button", { name: "Close quick chat" }).click();
+  await page
+    .getByRole("group", { name: /Mivuneko character/ })
+    .dispatchEvent("contextmenu", { button: 2 });
+  await page.getByRole("menuitem", { name: "Reset size & find pet" }).click();
+  await expect(page.locator(".character-scene")).toHaveAttribute(
+    "data-zoom",
+    "1",
+  );
+});
+
+test("canvas follows its frame through repeated grow and shrink operations", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    delete (window as any).__TAURI_INTERNALS__;
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ renderer: "sample-vrm", petScale: 1, petMode: "stand" }),
+    );
+    localStorage.setItem("mivuneko.automatic-behavior.v1", "1");
+  });
+  await page.setViewportSize({ width: 900, height: 720 });
+  await page.goto("/?view=pet");
+  await expect(
+    page.locator('.character-scene[data-model-ready="true"]'),
+  ).toBeVisible({ timeout: 30000 });
+  for (const scale of [1, 3, 0.5, 10, 1]) {
+    await page.evaluate(async (scale) => {
+      const path = "/src/preferences.ts",
+        p = await import(path);
+      p.updatePreferences({ petScale: scale });
+    }, scale);
+    await expect
+      .poll(() =>
+        page
+          .locator(".pet-character")
+          .evaluate((e) => e.getBoundingClientRect().height),
+      )
+      .toBeCloseTo(320 * scale, 0);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const c = document.querySelector("canvas")!.getBoundingClientRect(),
+            f = document
+              .querySelector(".pet-character")!
+              .getBoundingClientRect();
+          return Math.abs(c.height - f.height);
+        }),
+      )
+      .toBeLessThan(1);
+    await expect(page.locator(".character-scene")).toHaveAttribute(
+      "data-zoom",
+      "1",
+    );
+  }
+  const bounds = await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>(".pet-root")!;
+    return {
+      bottom: parseFloat(root.style.getPropertyValue("--model-bottom")),
+      height: innerHeight,
+    };
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        parseFloat(
+          document
+            .querySelector<HTMLElement>(".pet-root")!
+            .style.getPropertyValue("--model-bottom"),
+        ),
+      ),
+    )
+    .toBeLessThan(bounds.height - 48);
+});
+
+test("quick composer wraps vertically and remains open after sending", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any;
+    w.__TAURI_INTERNALS__.metadata = {
+      currentWindow: { label: "pet" },
+      currentWebview: { label: "pet" },
+    };
+  });
+  await page.goto("/?view=pet");
+  await page.getByRole("group", { name: /Mivuneko character/ }).dblclick();
+  const box = page.getByLabel("Message your companion");
+  await box.fill("A long message with several wrapped lines. ".repeat(20));
+  const dimensions = await box.evaluate((e) => ({
+    vertical: e.scrollHeight > e.clientHeight,
+    horizontal: e.scrollWidth > e.clientWidth,
+  }));
+  expect(dimensions.vertical).toBe(true);
+  expect(dimensions.horizontal).toBe(false);
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(box).toBeVisible();
+  await expect(box).toHaveValue("");
+});
+
+test("empty captions stay hidden and real captions receive vertical wheel scrolling", async ({
+  page,
+}) => {
+  await page.goto("/?view=pet");
+  await expect(page.locator(".pet-bubble")).toHaveCount(0);
+  await page.evaluate(() => {
+    const c = new BroadcastChannel("mivuneko.session");
+    c.postMessage({
+      mood: "speaking",
+      text: "A long caption with complete text. ".repeat(14),
+      mouth: 0,
+      at: Date.now(),
+    });
+    c.close();
+  });
+  const caption = page.locator(".pet-bubble");
+  await expect(caption).toBeVisible();
+  await caption.hover();
+  await page.mouse.wheel(0, 200);
+  await expect
+    .poll(() => caption.evaluate((e) => e.scrollTop))
+    .toBeGreaterThan(0);
+  const y = (await caption.boundingBox())!.y;
+  await page.waitForTimeout(1200);
+  expect(Math.abs((await caption.boundingBox())!.y - y)).toBeLessThan(1);
+  await page.evaluate(() => {
+    const c = new BroadcastChannel("mivuneko.session");
+    c.postMessage({ mood: "idle", text: "", mouth: 0, at: Date.now() });
+    c.close();
+  });
+  await expect(caption).toHaveCount(0);
+});
+
+test("dimensional galleries select models and expose the character manual", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat&tab=Characters");
+  await expect(
+    page.getByRole("tab", { name: "2D Illustrated poses", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await page
+    .getByRole("tab", { name: "2.5D Illustrations with depth", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Mochi", exact: true }).click();
+  await expect(page.locator(".depth-illustration")).toBeVisible();
+  await page.getByRole("tab", { name: "3D Animated VRM", exact: true }).click();
+  await expect(page.getByRole("button", { name: /Haru .*3D/ })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Luna", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: /Creating characters & voices/ })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Create and import a 3D character" }),
+  ).toBeVisible();
 });

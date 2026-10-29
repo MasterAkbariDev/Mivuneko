@@ -7,7 +7,7 @@ test("2D choices and expressions update the desktop pet", async ({
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/?view=chat");
-  await page.getByRole("button", { name: "Meet Mivuneko" }).click();
+
   await page.getByRole("button", { name: "Characters", exact: true }).click();
   const picker = page.getByRole("group", { name: "Choose a companion" });
   await expect(picker.getByRole("button")).toHaveCount(10);
@@ -47,7 +47,7 @@ test("Luna previews unique expression and movement frames", async ({
   page,
 }) => {
   await page.goto("/?view=chat");
-  await page.getByRole("button", { name: "Meet Mivuneko" }).click();
+
   await page.getByRole("button", { name: "Characters", exact: true }).click();
   await page.getByRole("button", { name: "Luna", exact: true }).click();
   const preview = page
@@ -90,4 +90,74 @@ test("Luna previews unique expression and movement frames", async ({
     moves.add((await preview.getAttribute("data-frame"))!);
   }
   expect(moves.size).toBe(3);
+});
+
+test("every illustrated character loads distinct nonempty emotions and directional motion artwork", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  await page.goto("/?view=chat&tab=Characters");
+  const results = await page.evaluate(async () => {
+    const modelsPath = "/src/lunaModel.ts",
+      framesPath = "/src/spriteFrames.ts";
+    const { characters } = await import(modelsPath),
+      { spriteFrame } = await import(framesPath);
+    const loaded = new Map<string, HTMLImageElement>();
+    async function fingerprint(f: any) {
+      if (!loaded.has(f.image)) {
+        const image = new Image();
+        image.src = f.image;
+        await image.decode();
+        loaded.set(f.image, image);
+      }
+      const image = loaded.get(f.image)!;
+      const c = document.createElement("canvas");
+      c.width = c.height = 64;
+      const ctx = c.getContext("2d")!;
+      ctx.drawImage(
+        image,
+        (f.column * image.width) / f.columns,
+        (f.row * image.height) / f.rows,
+        image.width / f.columns,
+        image.height / f.rows,
+        0,
+        0,
+        64,
+        64,
+      );
+      const pixels = ctx.getImageData(0, 0, 64, 64).data;
+      let count = 0,
+        hash = 2166136261;
+      for (let i = 0; i < pixels.length; i++) {
+        hash = Math.imul(hash ^ pixels[i], 16777619);
+        if (i % 4 === 3 && pixels[i] > 50) count++;
+      }
+      return { hash: hash >>> 0, count };
+    }
+    const result = [];
+    for (const id of Object.keys(characters)) {
+      const emotions = [];
+      for (const pose of Object.keys(characters[id].poses))
+        emotions.push(await fingerprint(spriteFrame(id, pose, "stand", 0, 0)));
+      const motion = [];
+      for (const mode of ["walk", "run"])
+        for (const direction of [0, 1, 2])
+          for (const tick of [0, 1, 2])
+            motion.push(
+              await fingerprint(spriteFrame(id, "idle", mode, direction, tick)),
+            );
+      result.push({
+        id,
+        unique: new Set(emotions.map((f) => f.hash)).size,
+        min: Math.min(...emotions.concat(motion).map((f) => f.count)),
+        motionUnique: new Set(motion.map((f) => f.hash)).size,
+      });
+    }
+    return result;
+  });
+  for (const r of results) {
+    expect(r.unique, r.id + " unique emotion images").toBe(21);
+    expect(r.min, r.id + " nonempty frames").toBeGreaterThan(120);
+    expect(r.motionUnique, r.id + " distinct motion drawings").toBe(18);
+  }
 });

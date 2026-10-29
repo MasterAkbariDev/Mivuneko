@@ -10,7 +10,7 @@ An Intel macOS app bundle has been built and its pet and Conversations windows o
 
 ## Still open
 - Continuous Gemini Live calls, streaming response/speech chunks, full-duplex voice, barge-in and wake words. Current voice is explicitly recorded, turn-based and capped at 29 seconds.
-- Authored character animation and per-character voice/personality packs. The new 2D characters use six drawn poses plus motion/effects; Live2D rendering/import is not implemented. The Miku design is unofficial fan art and requires a rights review for distribution.
+- Authored character animation and per-character voice/personality packs. The 2D characters use individual emotion cells and directional walk/run cycles; Live2D rendering/import is not implemented. The Miku design is unofficial fan art and requires a rights review for distribution.
 - Phoneme/viseme timing, detailed voice quality benchmarks, additional local TTS providers and local Windows speech output. Gemini speech works through portable native network code, pending device/live-account testing.
 - Persistent Gemini keychain/credential-manager storage, stronger native custom-command ACL separation, authoritative audit logs, approval handling across concurrent windows, trust/signature checks and provider error/latency metrics. Current secrets are native session memory or environment, not guaranteed heap zeroization.
 - Automatic per-pixel click-through, desktop icon/window perching, authored roaming for VRM, traversal across monitor gaps, monitor hotplug/mixed-DPI hardware validation and Linux app discovery.

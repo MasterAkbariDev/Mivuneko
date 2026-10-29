@@ -64,6 +64,66 @@ export function animateVrm(
     pose.rightLowerArm = [0, -1.65, -0.5];
     pose.rightHand = [0.15, 0, -0.25];
   }
+  // Individual reactions layer over the base pose; never substitute a head icon.
+  if (mood === "crying") {
+    pose.head = [0.25 + Math.sin(t * 7) * 0.025, 0, Math.sin(t * 3) * 0.035];
+    pose.chest = [0.12 + Math.sin(t * 8) * 0.018, 0, 0];
+    pose.rightUpperArm = [-0.2, 0.35, 0.55];
+    pose.rightLowerArm = [0, 1.8, -0.3];
+    pose.rightHand = [0.12, 0, Math.sin(t * 2.4) * 0.12];
+  } else if (mood === "sleeping") {
+    pose.head = [0.2 + Math.sin(t * 0.7) * 0.07, 0, 0.16];
+    pose.chest = [Math.sin(t * 1.1) * 0.025, 0, 0];
+  } else if (mood === "concerned") {
+    pose.head = [0.1, Math.sin(t * 0.9) * 0.07, -0.08];
+    pose.rightUpperArm = [-0.05, 0.2, 0.8];
+    pose.rightLowerArm = [0, 1.4, -0.25];
+  } else if (mood === "love") {
+    pose.leftUpperArm = [-0.1, -0.25, -0.65];
+    pose.rightUpperArm = [-0.1, 0.25, 0.65];
+    pose.leftLowerArm = [0, -1.5, 0.25];
+    pose.rightLowerArm = [0, 1.5, -0.25];
+    pose.head = [0.08, 0, Math.sin(t * 1.2) * 0.07];
+  } else if (mood === "shy") {
+    pose.head = [0.22, -0.16, -0.12];
+    pose.leftUpperArm = [0, -0.15, -1.1];
+    pose.rightUpperArm = [0, 0.15, 1.1];
+    pose.leftLowerArm = [0, -0.9, 0.1];
+    pose.rightLowerArm = [0, 0.9, -0.1];
+  } else if (mood === "thinking") {
+    pose.head = [0.04, 0.2, -0.1];
+    pose.rightHand = [0.15, 0, Math.sin(t * 1.5) * 0.04];
+  } else if (mood === "confused") {
+    pose.head = [0.05, Math.sin(t * 1.5) * 0.15, 0.23];
+    pose.leftUpperArm = [0, -0.15, -0.8];
+    pose.leftLowerArm = [0, -1, 0.4];
+  } else if (mood === "determined") {
+    pose.head = [-0.03, 0, 0];
+    pose.chest = [-0.06, 0, 0];
+    pose.leftUpperArm = [0, 0, -1.1];
+    pose.rightUpperArm = [0, 0, 1.1];
+  } else if (mood === "excited") {
+    pose.chest = [-0.04, 0, Math.sin(t * 5) * 0.045];
+    pose.leftHand = [0, 0, Math.sin(t * 7) * 0.15];
+    pose.rightHand = [0, 0, -Math.sin(t * 7) * 0.15];
+  } else if (mood === "celebrating") {
+    pose.leftUpperArm = [0, 0, -0.1];
+    pose.rightUpperArm = [0, 0, 0.1];
+    pose.leftLowerArm = [0, -0.6, 0.8];
+    pose.rightLowerArm = [0, 0.6, -0.8];
+    pose.chest = [0, Math.sin(t * 2) * 0.12, 0];
+  } else if (mood === "joking") {
+    pose.chest = [Math.sin(t * 5) * 0.035, 0, 0.04];
+    pose.head = [-0.08, 0, 0.08];
+  } else if (mood === "teasing") {
+    pose.head = [0, 0.17, -0.15];
+    pose.rightHand = [0, 0, Math.sin(t * 4) * 0.2];
+  } else if (mood === "proud") {
+    pose.head = [-0.12, 0.1, 0];
+    pose.chest = [-0.05, 0, 0];
+    pose.leftUpperArm = [0.15, -0.15, -0.9];
+    pose.leftLowerArm = [0, -1.3, 0.2];
+  }
   if (state.body === "walk" || state.body === "run") {
     const stride = Math.sin(t * (state.body === "run" ? 9 : 6));
     pose.leftUpperLeg = [stride * (state.body === "run" ? 0.65 : 0.42), 0, 0];

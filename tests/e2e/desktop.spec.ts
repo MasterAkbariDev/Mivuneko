@@ -15,7 +15,6 @@ const test = base.extend<{ consoleGuard: void }>({
 });
 async function chat(page: any) {
   await page.goto("/?view=chat");
-  await page.getByRole("button", { name: "Meet Mivuneko" }).click();
 }
 async function settings(page: any, category = "Voice & input") {
   await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -207,6 +206,10 @@ async function fakeNative(page: any, voice = false) {
     w.__calls = [];
     w.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} };
     w.__TAURI_INTERNALS__ = {
+      metadata: {
+        currentWindow: { label: "main" },
+        currentWebview: { label: "main" },
+      },
       invoke: async (command: string, args: any) => {
         w.__calls.push({ command, args });
         if (command === "hermes_chat")
@@ -312,21 +315,13 @@ test("native turn guard prevents duplicate asynchronous submissions", async ({
   expect(count).toBe(1);
 });
 
-test("double-clicking the pet opens conversations and shares activity", async ({
+test("double-clicking the pet opens quick chat without a utility window", async ({
   page,
-  context,
 }) => {
-  await page.goto("/");
-  const [main] = await Promise.all([
-    context.waitForEvent("page"),
-    page.getByRole("group", { name: /Mivuneko character/ }).dblclick(),
-  ]);
-  await main.getByRole("button", { name: "Meet Mivuneko" }).click();
-  await ask(main, "Open Telegram");
-  await expect(main.getByRole("dialog")).toContainText("Open Telegram?");
-  await main.getByRole("button", { name: "Deny", exact: true }).click();
-  await expect(main.getByRole("log")).toContainText("Launch denied");
-  await expect(page.locator(".pet-bubble p")).toContainText("Launch denied");
+  await page.goto("/?view=pet");
+  await page.getByRole("group", { name: /Mivuneko character/ }).dblclick();
+  await expect(page.getByLabel("Message your companion")).toBeVisible();
+  expect(page.context().pages()).toHaveLength(1);
 });
 
 test("Gemini configuration stays private while speech uses local commands", async ({
@@ -1073,4 +1068,43 @@ test("long spoken explanations retain every paragraph after code", async ({
     );
   expect(said).not.toContain("secretCode");
   expect(said).not.toContain("Only a short summary.");
+  expect(said).not.toContain("available in our conversation");
+  await expect(page.locator(".md-code.code-revealed")).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      (window as any).__calls.some(
+        (c: any) => c.command === "plugin:window|show",
+      ),
+    ),
+  ).toBe(true);
+});
+
+test("Markdown tables are readable in the widened conversation", async ({
+  page,
+}) => {
+  await fakeNative(page);
+  await page.addInitScript(() => {
+    const w = window as any,
+      previous = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) =>
+      command === "hermes_chat"
+        ? JSON.stringify({
+            text: '| Type | Stores | Example |\n|---|---|---|\n| **int** | Whole numbers | `count = 5` |\n| **str** | Text | `greeting = "Hello"` |',
+            emotion: "happy",
+          })
+        : previous(command, args);
+  });
+  await chat(page);
+  await ask(page, "Explain variable types.");
+  await expect(page.getByRole("table")).toBeVisible();
+  await expect(
+    page.getByRole("columnheader", { name: "Type", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "count = 5", exact: true }),
+  ).toBeVisible();
+  const width = await page
+    .locator(".chat")
+    .evaluate((e) => e.getBoundingClientRect().width);
+  expect(width).toBeGreaterThan(850);
 });

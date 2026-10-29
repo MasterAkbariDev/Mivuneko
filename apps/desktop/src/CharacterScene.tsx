@@ -4,7 +4,11 @@ import { loadVrm } from "./vrmModel";
 import { VRMUtils, type VRM } from "@pixiv/three-vrm";
 import type { CharacterState } from "../../../packages/character/controller.ts";
 import { animateVrm } from "./vrmMotion";
-import { vrmFace, vrmEffect } from "../../../packages/character/expressions.ts";
+import {
+  vrmFace,
+  vrmEffect,
+  blinkAmount,
+} from "../../../packages/character/expressions.ts";
 interface Props {
   state: CharacterState;
   model: ArrayBuffer | null;
@@ -12,6 +16,8 @@ interface Props {
   effects?: boolean;
   direction?: number;
   dragging?: boolean;
+  zoom?: number;
+  pan?: { x: number; y: number };
 }
 function effectTexture(kind: string) {
   const canvas = document.createElement("canvas");
@@ -97,12 +103,18 @@ export function CharacterScene({
   effects = true,
   direction = 0,
   dragging = false,
+  zoom = 1,
+  pan = { x: 0, y: 0 },
 }: Props) {
   const host = useRef<HTMLDivElement>(null),
     stateRef = useRef(state),
     reducedRef = useRef(reduced);
   const [error, setError] = useState("");
   const [modelReady, setModelReady] = useState(false);
+  const zoomRef = useRef(zoom),
+    panRef = useRef(pan);
+  zoomRef.current = zoom;
+  panRef.current = pan;
   const dragRef = useRef(dragging);
   dragRef.current = dragging;
   const facing = useRef(direction);
@@ -163,31 +175,33 @@ export function CharacterScene({
     effect.visible = false;
     scene.add(effect);
     const headPosition = new THREE.Vector3();
+    let modelWidth = 0.65;
     let modelHeight = 1.5,
       baseRotation = 0;
+    let maskAt = -1000,
+      uiKey = "",
+      uiCaptureAt = 0;
     let modelCenter = new THREE.Vector3(0, 0.8, 0);
     function resize() {
+      maskAt = -1000;
       if (!host.current) return;
       const { width, height } = host.current.getBoundingClientRect();
       const w = Math.max(1, width),
         h = Math.max(1, height);
-      const ratio = Math.min(Math.max(window.devicePixelRatio, 2), 3);
+      const ratio = Math.min(
+        Math.max(window.devicePixelRatio, 2),
+        3,
+        Math.min(renderer.capabilities.maxTextureSize, 8192) / Math.max(w, h),
+        Math.sqrt(12000000 / (w * h)),
+      );
       if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio);
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       const distance =
-        Math.max(modelHeight * 1.35, (modelHeight * 0.85) / camera.aspect) /
+        Math.max(modelHeight * 1.12, (modelWidth * 1.08) / camera.aspect) /
         (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
-      camera.position.set(
-        modelCenter.x,
-        modelCenter.y + modelHeight * 0.08,
-        distance,
-      );
-      camera.lookAt(
-        modelCenter.x,
-        modelCenter.y + modelHeight * 0.08,
-        modelCenter.z,
-      );
+      camera.position.set(modelCenter.x, modelCenter.y, distance);
+      camera.lookAt(modelCenter.x, modelCenter.y, modelCenter.z);
       camera.updateProjectionMatrix();
     }
     const observer = new ResizeObserver(resize);
@@ -248,9 +262,10 @@ export function CharacterScene({
                 }
               }
           });
-          const box = new THREE.Box3().setFromObject(vrm.scene);
+          const box = new THREE.Box3().setFromObject(vrm.scene, true);
           modelCenter = box.getCenter(new THREE.Vector3());
           modelHeight = box.getSize(new THREE.Vector3()).y;
+          modelWidth = box.getSize(new THREE.Vector3()).x;
           resize();
         })
         .catch((e) => {
@@ -262,12 +277,11 @@ export function CharacterScene({
     }
     // A small alpha mask gives exact visible-model hits, including hair cutouts,
     // without CPU skinning every vertex on every cursor poll.
-    const maskSize = 128,
+    const maskSize = 256,
       mask = new Uint8Array(maskSize * maskSize * 4);
     const hitTarget = new THREE.WebGLRenderTarget(maskSize, maskSize, {
       depthBuffer: true,
     });
-    let maskAt = -1000;
     (renderer.domElement as import("./petHit").ModelCanvas).petHit = (x, y) => {
       const r = renderer.domElement.getBoundingClientRect();
       const px = Math.floor(((x - r.left) / r.width) * maskSize),
@@ -282,12 +296,16 @@ export function CharacterScene({
     };
     let metricsAt = 0;
     function animate(now: number) {
+      if (now - last < 1000 / 60 - 0.5) {
+        frame = requestAnimationFrame(animate);
+        return;
+      }
       const delta = Math.min((now - last) / 1000, 0.05);
       last = now;
       phase = Date.now() / 1000;
       const s = stateRef.current,
         quiet = reducedRef.current;
-      const blink = quiet ? 1 : Math.sin(phase * 0.6) > 0.996 ? 0.08 : 1;
+      const blink = blinkAmount(phase, quiet);
       if (vrm) {
         const ex = vrm.expressionManager;
         const face = vrmFace(s.expression);
@@ -306,7 +324,7 @@ export function CharacterScene({
             THREE.MathUtils.damp(ex.getValue(name) ?? 0, target, 12, delta),
           );
         }
-        ex?.setValue("blink", s.body === "sleep" ? 1 : 1 - blink);
+        ex?.setValue("blink", s.body === "sleep" ? 1 : blink);
         ex?.setValue("aa", s.mouth);
         const head = vrm.humanoid.getNormalizedBoneNode("head");
         if (head) {
@@ -334,6 +352,49 @@ export function CharacterScene({
         );
         vrm.scene.rotation.y += turn * (1 - Math.exp(-8 * delta));
         vrm.update(delta);
+        // Frame expressive hands without clipping; the neutral portrait stays tight.
+        let halfWidth = modelWidth * 0.54;
+        for (const name of ["leftHand", "rightHand"] as const) {
+          const bone = vrm.humanoid.getNormalizedBoneNode(name);
+          if (bone) {
+            const p = bone.getWorldPosition(new THREE.Vector3());
+            halfWidth = Math.max(
+              halfWidth,
+              Math.abs(p.x - modelCenter.x) + modelHeight * 0.035,
+            );
+          }
+        }
+        const distance =
+          Math.max(modelHeight * 1.12, (2 * halfWidth) / camera.aspect) /
+          (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+        camera.zoom = Math.max(0.01, Math.min(1e12, zoomRef.current));
+        camera.updateProjectionMatrix();
+        const viewHeight =
+          (2 *
+            camera.position.z *
+            Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) /
+          camera.zoom;
+        const focus =
+          vrm.humanoid
+            .getNormalizedBoneNode("head")
+            ?.getWorldPosition(new THREE.Vector3())
+            .add(new THREE.Vector3(0, modelHeight * 0.045, 0)) ?? modelCenter;
+        const blend = 1 - 1 / camera.zoom;
+        const targetY =
+          THREE.MathUtils.lerp(modelCenter.y, focus.y, blend) +
+          panRef.current.y * viewHeight;
+        const targetX =
+          THREE.MathUtils.lerp(modelCenter.x, focus.x, blend) +
+          panRef.current.x * viewHeight * camera.aspect;
+        camera.position.x = targetX;
+        camera.position.y = targetY;
+        camera.lookAt(targetX, targetY, modelCenter.z);
+        camera.position.z = THREE.MathUtils.damp(
+          camera.position.z,
+          distance,
+          8,
+          delta,
+        );
       }
       const effectKind = vrmEffect(s.expression);
       effect.visible = !!vrm && effectsRef.current && !!textures[effectKind];
@@ -344,39 +405,12 @@ export function CharacterScene({
         else headPosition.set(0, 1.22, 0);
         effect.position
           .copy(headPosition)
-          .add(new THREE.Vector3(modelHeight * 0.19, modelHeight * 0.15, 0.1));
+          .add(new THREE.Vector3(modelHeight * 0.19, modelHeight * 0.06, 0.1));
         effect.scale.setScalar(
           modelHeight * 0.19 * (quiet ? 1 : 1 + Math.sin(phase * 5) * 0.06),
         );
         effectMaterial.rotation =
           s.expression === "angry" && !quiet ? Math.sin(phase * 8) * 0.08 : 0;
-      }
-      if (vrm && now - metricsAt > 100) {
-        metricsAt = now;
-        const root = host.current?.closest<HTMLElement>(".pet-root"),
-          r = renderer.domElement.getBoundingClientRect();
-        if (root) {
-          const h = vrm.humanoid.getNormalizedBoneNode("head"),
-            foot = vrm.humanoid.getNormalizedBoneNode("leftFoot");
-          if (h && foot) {
-            const top = h
-              .getWorldPosition(new THREE.Vector3())
-              .add(new THREE.Vector3(0, modelHeight * 0.12, 0))
-              .project(camera);
-            const bottom = foot
-              .getWorldPosition(new THREE.Vector3())
-              .add(new THREE.Vector3(0, -modelHeight * 0.08, 0))
-              .project(camera);
-            root.style.setProperty(
-              "--model-top",
-              `${r.top + ((1 - top.y) * r.height) / 2}px`,
-            );
-            root.style.setProperty(
-              "--model-bottom",
-              `${r.top + ((1 - bottom.y) * r.height) / 2}px`,
-            );
-          }
-        }
       }
       if (vrm && now - maskAt > 100) {
         maskAt = now;
@@ -392,6 +426,54 @@ export function CharacterScene({
           maskSize,
           mask,
         );
+        const root = host.current?.closest<HTMLElement>(".pet-root");
+        if (root) {
+          let left = maskSize,
+            right = 0,
+            top = maskSize,
+            bottom = 0;
+          for (let y = 0; y < maskSize; y++)
+            for (let x = 0; x < maskSize; x++)
+              if (mask[(y * maskSize + x) * 4 + 3] > 30) {
+                left = Math.min(left, x);
+                right = Math.max(right, x);
+                top = Math.min(top, maskSize - 1 - y);
+                bottom = Math.max(bottom, maskSize - y);
+              }
+          if (right > left) {
+            const r = renderer.domElement.getBoundingClientRect();
+            const values = {
+              left: r.left + (left / maskSize) * r.width,
+              right: r.left + ((right + 1) / maskSize) * r.width,
+              top: r.top + (top / maskSize) * r.height,
+              bottom: r.top + (bottom / maskSize) * r.height,
+            };
+            for (const [k, v] of Object.entries(values))
+              root.style.setProperty(`--model-${k}`, `${v}px`);
+            root.style.setProperty(
+              "--model-width",
+              `${values.right - values.left}px`,
+            );
+            root.style.setProperty(
+              "--model-height",
+              `${values.bottom - values.top}px`,
+            );
+            window.dispatchEvent(
+              new CustomEvent("pet-render-bounds", { detail: values }),
+            );
+            const key = `${r.width}:${r.height}:${s.body}`;
+            if (key !== uiKey) {
+              uiKey = key;
+              uiCaptureAt = now + 350;
+            }
+            if (uiCaptureAt && now >= uiCaptureAt) {
+              for (const [k, v] of Object.entries(values))
+                root.style.setProperty(`--ui-${k}`, `${v}px`);
+              uiCaptureAt = 0;
+            }
+          }
+        }
+
         renderer.setRenderTarget(null);
         effect.visible = shown;
       }
@@ -418,6 +500,7 @@ export function CharacterScene({
       data-model-ready={modelReady}
       data-emotion={state.expression}
       data-activity={state.activity}
+      data-zoom={zoom}
     >
       <div ref={host} />
       {!modelReady && !error && (

@@ -56,11 +56,42 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
 }
 function BlockView({ block }: { block: Block }) {
   switch (block.type) {
+    case "table":
+      return (
+        <div className="md-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                {block.headers.map((h, i) => (
+                  <th key={i} scope="col">
+                    <Inlines items={h} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row, i) => (
+                <tr key={i}>
+                  {row.map((cell, j) => (
+                    <td key={j}>
+                      <Inlines items={cell} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
     case "code":
       return <CodeBlock lang={block.lang} code={block.code} />;
     case "heading":
       return (
-        <p className={`md-h md-h${Math.min(3, block.level)}`}>
+        <p
+          role="heading"
+          aria-level={block.level}
+          className={`md-h md-h${Math.min(3, block.level)}`}
+        >
           <Inlines items={block.inline} />
         </p>
       );

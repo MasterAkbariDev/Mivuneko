@@ -14,6 +14,15 @@ export const moods: Mood[] = [
   "celebrating",
   "sleeping",
   "error",
+  "crying",
+  "shy",
+  "love",
+  "excited",
+  "teasing",
+  "joking",
+  "wink",
+  "proud",
+  "determined",
 ];
 export function nextMood(current: Mood): Mood {
   return moods[(moods.indexOf(current) + 1) % moods.length];

@@ -15,12 +15,13 @@
         "label": "main",
         "title": "Mivuneko \u00b7 Conversations",
         "url": "index.html?view=chat",
-        "width": 1100,
-        "height": 800,
+        "width": 1280,
+        "height": 920,
         "minWidth": 800,
         "minHeight": 650,
         "visible": false,
-        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows"
+        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows",
+        "center": true
       },
       {
         "label": "pet",

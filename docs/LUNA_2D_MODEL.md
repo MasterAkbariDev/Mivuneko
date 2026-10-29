@@ -15,13 +15,8 @@ contain twelve equal 512 × 512 cells in a 3-column, 2-row layout.
 - CSS handles breathing, tilting, celebration and dance motion. Reduced-motion
   preferences stop these animations.
 
-The floating desktop pet contains no menu buttons, status capsule, settings
-panel or inline chat. It only renders the character and optional captions.
-Drag it to move it, double-click to open Conversations, and right-click to open
-Settings. Keyboard Enter opens Conversations; Space opens Settings.
+The floating pet has a compact hover dock for voice, quick chat and the pencil edit lock. Double-click opens quick chat; right-click opens pet controls. Quick chat stays open after sending. Main Conversations opens from the tray or configured app shortcut.
 
-All controls live in app Settings: mode, expression preview, effects, captions,
-size, always-on-top, display, character, voice and movement.
+The 2D gallery has ten illustrated characters. Each has 21 unique emotion cell assignments and separate front/back/side walking and running frames; leftward motion mirrors the side artwork. The dedicated 2.5D gallery contains Mochi, an original bunny companion with perspective motion. These are sprite animations, not Live2D rigs.
 
-The character picker also offers Miku fan art, Kiko and Stella. Their six drawn
-poses are combined with motion and effects for the additional expression choices.
+Creation, VRM import and local voice recipes are explained in `docs/CHARACTERS.md` and inside Characters > Creating characters & voices. The artwork prompt set is recorded in `docs/character-art-generation.json`.

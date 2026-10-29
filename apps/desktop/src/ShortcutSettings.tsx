@@ -9,6 +9,10 @@ const actions = {
   stop: ["Stop everything", "Stop speech, recording and the current request."],
   chat: ["Open conversation", "Return to your conversation."],
   characters: ["Character studio", "Open your 2D and 3D companions."],
+  reset: [
+    "Find & reset pet",
+    "Restore a safe size and bring your companion back on-screen.",
+  ],
   edit: [
     "Edit pet",
     "Unlock dragging and scroll to resize. Locked by default.",

@@ -1,8 +1,18 @@
 import {
+  companionSequence,
+  describeAction,
+  runCompanionSequence,
+} from "../../../packages/shared-schemas/companion-actions";
+import { companionName } from "./companionName";
+import {
   desktopIntent,
   matchApps,
 } from "../../../packages/shared-schemas/desktop-intent";
-import { cancelCompanionTask, directCompanion } from "./companionTask";
+import {
+  cancelCompanionTask,
+  directCompanion,
+  moveCompanion,
+} from "./companionTask";
 import { ScreenAssistant } from "./ScreenAssistant";
 import { CompanionCard } from "./CompanionCard";
 import { Icon } from "./Icon";
@@ -48,6 +58,10 @@ const tabs = [
 export function App() {
   const [screenRequest, setScreenRequest] = useState<string | null>(null);
   const preferences = usePreferences();
+  const name = companionName(preferences);
+  const chainActive = useRef(false);
+  const movementReply = useRef<{ at: number; text: string } | null>(null);
+  const [codeReveal, setCodeReveal] = useState(0);
   const [showApps, setShowApps] = useState(false);
   const [tab, setTab] = useState<string>(
       ["Settings", "Characters"].includes(
@@ -89,9 +103,7 @@ export function App() {
     [streaming, setStreaming] = useState(""),
     [openMicActive, setOpenMicActive] = useState(false),
     [liveTranscript, setLiveTranscript] = useState("");
-  const [onboard, setOnboard] = useState(
-    !sessionStorage.getItem("mivuneko-welcome"),
-  );
+  const [onboard, setOnboard] = useState(false);
   const enabled = preferences.appLaunching;
   const setEnabled = (value: boolean) =>
     updatePreferences({ appLaunching: value });
@@ -286,7 +298,75 @@ export function App() {
         if (preferences.voice !== "off") voice.prepare();
         setMood("thinking");
       }
+      const sequence = companionSequence(text);
+      if (sequence) {
+        if (sequence.error) throw Error(sequence.error);
+        if (!isNative)
+          throw Error("Ordered desktop actions run in the desktop app.");
+        add(`I'll ${sequence.actions.map(describeAction).join(", then ")}.`);
+        setMood("happy");
+        chainActive.current = true;
+        try {
+          await runCompanionSequence(
+            sequence.actions,
+            async (action, index) => {
+              publishPet(
+                "happy",
+                `Step ${index + 1} of ${sequence.actions.length}: ${describeAction(action)}.`,
+              );
+              if (action.kind === "move") {
+                const { invoke } = await import("@tauri-apps/api/core");
+                await invoke("recover_pet", { center: false });
+                c.signal.throwIfAborted();
+                await moveCompanion(action.destination, c.signal, () =>
+                  updatePreferences({
+                    petMode: action.gait,
+                    petEdit: false,
+                    focus: false,
+                    monitor: "current",
+                    petAvoiding: action.destination === "unobtrusive",
+                  }),
+                );
+              } else {
+                cancelCompanionTask();
+                updatePreferences({
+                  petMode:
+                    action.kind === "sit"
+                      ? "sit"
+                      : action.kind === "stand"
+                        ? "stand"
+                        : "auto",
+                });
+                await new Promise<void>((resolve) => setTimeout(resolve, 600));
+              }
+            },
+            c.signal,
+          );
+        } finally {
+          chainActive.current = false;
+        }
+        const final = sequence.actions[sequence.actions.length - 1];
+        const message =
+          final.kind === "sit"
+            ? "Done. I'm sitting here."
+            : "Done. I finished those actions in order.";
+        add(message);
+        setMood("happy");
+        return;
+      }
       const intent = desktopIntent(text);
+      if (intent?.kind === "locate") {
+        if (!isNative) throw Error("Find pet is available in the desktop app.");
+        const { invoke } = await import("@tauri-apps/api/core");
+        const p = await invoke<{ monitor?: string }>("recover_pet", {
+          center: false,
+        });
+        add(
+          `I'm here on ${p.monitor || "your current monitor"}. I've made sure I'm visible.`,
+        );
+        setMood("happy");
+        return;
+      }
       if (intent?.kind === "screen") {
         setScreenRequest(text);
         setMood("idle");
@@ -298,9 +378,24 @@ export function App() {
         intent?.kind === "automatic" ||
         intent?.kind === "move"
       ) {
-        if (intent.kind === "move") directCompanion(intent.destination);
-        else cancelCompanionTask();
+        if (intent.kind === "move") {
+          if (isNative) {
+            const { invoke } = await import("@tauri-apps/api/core");
+            await invoke("recover_pet", { center: false });
+          }
+          const at = directCompanion(intent.destination);
+          movementReply.current = {
+            at,
+            text:
+              intent.destination === "unobtrusive"
+                ? "I'll move to a quiet edge and stay out of your way."
+                : `Moving ${intent.destination.startsWith("monitor-") ? "to your requested monitor" : intent.destination === "elsewhere" ? "to another spot" : `toward the ${intent.destination}`}.`,
+          };
+        } else cancelCompanionTask();
         updatePreferences({
+          ...(intent.kind === "move"
+            ? { petEdit: false, focus: false, monitor: "current" }
+            : {}),
           petAvoiding:
             intent.kind === "move" && intent.destination === "unobtrusive",
           petMode:
@@ -321,12 +416,12 @@ export function App() {
                 ? "I'll choose when to move and rest again."
                 : intent.destination === "unobtrusive"
                   ? "I'll move to a quiet edge and stay out of your way."
-                  : `On my way ${intent.destination === "elsewhere" ? "to another spot" : `to the ${intent.destination}`}!`,
+                  : `Moving ${intent.destination.startsWith("monitor-") ? "to your requested monitor" : intent.destination === "elsewhere" ? "to another spot" : `toward the ${intent.destination}`}.`,
         );
         setMood("happy");
         return;
       }
-      const reply = await agentFor(preferences.backend).reply(
+      const reply = await agentFor(preferences.backend, name).reply(
         text,
         mode,
         c.signal,
@@ -337,6 +432,24 @@ export function App() {
       );
       c.signal.throwIfAborted();
       add(reply.text);
+      const hasCode = /```|~~~/.test(reply.text);
+      let codeShown = hasCode;
+      if (hasCode) {
+        setTab("Conversations");
+        setCodeReveal((v) => v + 1);
+        if (isNative) {
+          try {
+            const { getCurrentWindow } = await import("@tauri-apps/api/window");
+            await getCurrentWindow().show();
+            await getCurrentWindow().setFocus();
+          } catch {
+            codeShown = false;
+            setError(
+              "The code is saved, but the conversation window could not be shown.",
+            );
+          }
+        }
+      }
       if (reply.appQuery) {
         if (!enabled) throw Error("App launching is disabled in Permissions.");
         const apps = await broker.listApps();
@@ -360,10 +473,17 @@ export function App() {
       } else {
         setMood(reply.mood ?? "happy");
         if (preferences.voice !== "off" && isNative)
-          void voice.speak(speakable(reply), preferences.volume, reply.mood);
+          void voice.speak(
+            speakable(reply, codeShown),
+            preferences.volume,
+            reply.mood,
+          );
       }
     } catch (e) {
-      if (!c.signal.aborted) {
+      if (
+        !c.signal.aborted &&
+        !(e instanceof DOMException && e.name === "AbortError")
+      ) {
         setError(String(e));
         setMood("error");
         log(String(e));
@@ -423,6 +543,9 @@ export function App() {
   }
   async function stop() {
     controller.current?.abort();
+    cancelCompanionTask();
+    if (["walk", "run", "auto"].includes(preferences.petMode))
+      updatePreferences({ petMode: "stand" });
     setOpenMicActive(false);
     setLiveTranscript("");
     turnActive.current = false;
@@ -440,6 +563,27 @@ export function App() {
   const shortcutActions = useRef<Record<string, () => void>>({});
   shortcutActions.current = {
     stop: () => void stop(),
+    reset: () => {
+      if (chainActive.current) controller.current?.abort();
+      cancelCompanionTask();
+      updatePreferences({
+        petScale: 1,
+        petMode: "stand",
+        petEdit: false,
+        petAvoiding: false,
+        clickThrough: false,
+      });
+      if (isNative)
+        void import("@tauri-apps/api/core").then(({ invoke }) =>
+          invoke("recover_pet", { center: true }),
+        );
+    },
+    "voice-status": () => {
+      if (isNative)
+        void import("@tauri-apps/api/event").then(({ emit }) =>
+          emit("voice-active", openMicActive || voice.recording),
+        );
+    },
     "voice-toggle": () => {
       setOnboard(false);
       if (openMicActive || voice.recording) {
@@ -450,8 +594,10 @@ export function App() {
         setOpenMicActive(true);
       }
     },
-    edit: () =>
-      updatePreferences({ petEdit: !preferences.petEdit, clickThrough: false }),
+    edit: () => {
+      if (!preferences.petEdit) cancelCompanionTask();
+      updatePreferences({ petEdit: !preferences.petEdit, clickThrough: false });
+    },
     clickThrough: () =>
       updatePreferences({ clickThrough: !preferences.clickThrough }),
     focus: () => updatePreferences({ focus: !preferences.focus }),
@@ -515,6 +661,44 @@ export function App() {
           },
         ],
         [
+          "pet-move-result",
+          (value: unknown) => {
+            const r = value as { at: number; state: string; message: string };
+            const pending = movementReply.current;
+            if (
+              pending?.at === r.at &&
+              ["failed", "arrived", "cancelled"].includes(r.state)
+            ) {
+              setMessages((list) => {
+                let index = -1;
+                list.forEach((m, i) => {
+                  if (m.role === "assistant" && m.text === pending.text)
+                    index = i;
+                });
+                if (index < 0) return list;
+                return list.map((m, i) =>
+                  i === index
+                    ? {
+                        role: "assistant",
+                        text:
+                          r.state === "arrived"
+                            ? "I'm here."
+                            : r.state === "cancelled"
+                              ? "Stopped."
+                              : `I couldn't move there: ${r.message}`,
+                      }
+                    : m,
+                );
+              });
+              movementReply.current = null;
+            }
+            if (r.state === "failed") {
+              setError(r.message);
+              publishPet("concerned", r.message);
+            } else if (r.state === "arrived") publishPet("happy", r.message);
+          },
+        ],
+        [
           "pet-message",
           (value: unknown) => {
             if (typeof value === "string") void sendRef.current(value);
@@ -557,6 +741,40 @@ export function App() {
     );
   }, [openMicActive, voice.recording]);
   useEffect(() => {
+    if (!codeReveal || busy || tab !== "Conversations") return;
+    const timer = setTimeout(() => {
+      const list = messageList.current,
+        code = list?.querySelector<HTMLElement>(
+          ".message.assistant:last-of-type .md-code",
+        );
+      const panels = list?.querySelectorAll<HTMLElement>(".md-code");
+      const panel =
+        code ?? (panels?.length ? panels[panels.length - 1] : undefined);
+      if (list && panel) {
+        list.scrollTo({
+          top:
+            list.scrollTop +
+            panel.getBoundingClientRect().top -
+            list.getBoundingClientRect().top -
+            18,
+          behavior: preferences.reduced ? "instant" : "smooth",
+        });
+        panel.classList.remove("code-revealed");
+        requestAnimationFrame(() => panel.classList.add("code-revealed"));
+      }
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [codeReveal, busy, tab]);
+  useEffect(() => {
+    if (!isNative) return;
+    void import("@tauri-apps/api/event").then(({ emit }) =>
+      emit(
+        "pet-chat-busy",
+        busy || !!pending || !!screenRequest || !historyReady,
+      ),
+    );
+  }, [busy, pending, screenRequest, historyReady]);
+  useEffect(() => {
     document.documentElement.style.setProperty(
       "--text-scale",
       String(preferences.textScale),
@@ -595,7 +813,7 @@ export function App() {
               <Icon name="cat" />
             </span>
             <div>
-              <strong>Mivuneko</strong>
+              <strong>{name}</strong>
               <small>
                 <span className="dot" />
                 Here with you
@@ -635,7 +853,6 @@ export function App() {
         </header>
         {tab === "Conversations" ? (
           <div className="workspace">
-            <CompanionCard onSettings={() => setTab("Characters")} />
             <section className="chat">
               <div className="chat-head">
                 <div>
@@ -643,7 +860,7 @@ export function App() {
                     <span className="chat-avatar">
                       <Icon name="cat" />
                     </span>
-                    Mivuneko <span className="dot" />
+                    {name} <span className="dot" />
                   </h3>
                   <small>
                     {preferences.rememberHistory
@@ -670,7 +887,7 @@ export function App() {
               >
                 {messages.map((m, i) => (
                   <div key={i} className={`message ${m.role}`}>
-                    <small>{m.role === "user" ? "YOU" : "Mivuneko"}</small>
+                    <small>{m.role === "user" ? "YOU" : name}</small>
                     {m.role === "assistant" ? (
                       <Markdown text={m.text} />
                     ) : (
@@ -686,7 +903,7 @@ export function App() {
                 ) : null}
                 {busy && streaming ? (
                   <div className="message assistant">
-                    <small>Mivuneko</small>
+                    <small>{name}</small>
                     <p>{streaming}</p>
                   </div>
                 ) : null}
@@ -1043,53 +1260,6 @@ export function App() {
               </p>
             )}
             <button onClick={() => void stop()}>Cancel request</button>
-          </section>
-        </div>
-      ) : null}
-      {onboard ? (
-        <div className="scrim">
-          <section
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="welcome"
-          >
-            <span className="modal-icon">
-              <Icon name="cat" />
-            </span>
-            <h2 id="welcome">
-              A little company.
-              <br />
-              On your terms.
-            </h2>
-            <p>Meet Mivuneko, your little desktop companion.</p>
-            <ul>
-              <li>
-                Expressive 2D and 3D companions with expressions and effects
-              </li>
-              <li>
-                App launches ask first by default; change this in Permissions
-              </li>
-              <li>
-                Microphone starts only when you choose Record or Start open mic;
-                history is opt-in
-              </li>
-            </ul>
-            <p>
-              Choose a companion in Characters, then connect your conversation
-              provider and microphone in Settings. Voice starts only when you
-              turn it on.
-            </p>
-            <button
-              autoFocus
-              className="primary"
-              onClick={() => {
-                sessionStorage.setItem("mivuneko-welcome", "1");
-                setOnboard(false);
-              }}
-            >
-              Meet Mivuneko →
-            </button>
           </section>
         </div>
       ) : null}

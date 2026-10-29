@@ -20,6 +20,8 @@ export function CompanionVisual({
   body,
   direction = 0,
   dragging = false,
+  zoom = 1,
+  pan = { x: 0, y: 0 },
 }: {
   mood?: Mood;
   mouth?: number;
@@ -27,9 +29,12 @@ export function CompanionVisual({
   body?: import("../../../packages/character/controller").BodyAction;
   direction?: number;
   dragging?: boolean;
+  zoom?: number;
+  pan?: { x: number; y: number };
 }) {
   const p = usePreferences();
   const [model, setModel] = useState<ArrayBuffer | null>(null);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [error, setError] = useState("");
   useEffect(() => {
     let disposed = false;
@@ -67,16 +72,57 @@ export function CompanionVisual({
       channel.close();
     };
   }, [p.renderer]);
+  useEffect(() => {
+    if (!p.illustrationDepth || p.renderer !== "2d" || p.reduced || p.petEdit) {
+      setTilt({ x: 0, y: 0 });
+      return;
+    }
+    const track = (e: PointerEvent) =>
+      setTilt({
+        x: Math.max(-1, Math.min(1, (e.clientX / innerWidth) * 2 - 1)),
+        y: Math.max(-1, Math.min(1, (e.clientY / innerHeight) * 2 - 1)),
+      });
+    const reset = () => setTilt({ x: 0, y: 0 });
+    window.addEventListener("pointermove", track);
+    window.addEventListener("blur", reset);
+    return () => {
+      window.removeEventListener("pointermove", track);
+      window.removeEventListener("blur", reset);
+    };
+  }, [p.illustrationDepth, p.renderer, p.reduced, p.petEdit]);
   if (p.renderer === "2d")
     return (
-      <Luna
-        character={p.character}
-        mood={mood}
-        mouth={mouth}
-        mode={p.petMode}
-        expression={p.petExpression}
-        effects={p.petEffects}
-      />
+      <div
+        className={`illustration-viewport ${p.illustrationDepth ? "depth-illustration" : ""}`}
+        style={{ width: "100%", height: "100%", overflow: "hidden" }}
+      >
+        <div
+          data-zoom={zoom}
+          style={{
+            width: "100%",
+            height: "100%",
+            transform: `perspective(700px) translate(${-pan.x * 100}%,${pan.y * 100}%) scale(${zoom}) rotateX(${-tilt.y * 3}deg) rotateY(${tilt.x * 5}deg)`,
+            transition: "transform 180ms ease-out",
+            transformOrigin: "50% 35%",
+          }}
+        >
+          <Luna
+            direction={direction}
+            character={p.character}
+            mood={p.petEdit && !dragging ? "idle" : mood}
+            mouth={mouth}
+            mode={
+              p.petEdit
+                ? "stand"
+                : body === "walk" || body === "run" || body === "sit"
+                  ? body
+                  : p.petMode
+            }
+            expression={p.petEdit ? "idle" : p.petExpression}
+            effects={p.petEffects}
+          />
+        </div>
+      </div>
     );
   const emotion =
     p.petMode === "sleep"
@@ -102,7 +148,8 @@ export function CompanionVisual({
     ),
     mouth,
   );
-  state.expression = emotion;
+  state.expression = p.petEdit && !dragging ? "idle" : emotion;
+  if (p.petEdit && !dragging) state.mouth = 0;
   return (
     <div className="vrm-visual">
       {model ? (
@@ -116,10 +163,12 @@ export function CompanionVisual({
           <CharacterScene
             model={model}
             state={state}
-            reduced={p.reduced}
-            effects={p.petEffects}
+            reduced={p.reduced || (p.petEdit && !dragging)}
+            effects={p.petEffects && !p.petEdit}
             direction={direction}
             dragging={dragging}
+            zoom={zoom}
+            pan={pan}
           />
         </Suspense>
       ) : (

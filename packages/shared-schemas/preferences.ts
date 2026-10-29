@@ -42,7 +42,8 @@ export type CharacterId =
   | "snow"
   | "silver"
   | "azure"
-  | "goth";
+  | "goth"
+  | "mochi";
 export type LocalVoiceStyle = "natural" | "bright" | "multilingual";
 export type LocalVoiceLanguage = "en" | "ja" | "fr" | "es" | "de";
 export interface Preferences {
@@ -61,15 +62,19 @@ export interface Preferences {
     | "edit"
     | "clickThrough"
     | "focus"
-    | "screen",
+    | "screen"
+    | "reset",
     string
   >;
   version: 1;
   petMode: PetMode;
   petExpression: PetExpression;
   petEffects: boolean;
+  illustrationDepth: boolean;
   petCaptions: boolean;
   petScale: number;
+  companionName: string;
+  micIndicator: boolean;
   petAlwaysOnTop: boolean;
   backend: "offline" | "hermes" | "auto" | "gemini" | "groq";
   voiceProvider: "local" | "gemini" | "system";
@@ -120,13 +125,17 @@ export const defaults: Preferences = {
     clickThrough: "Ctrl+Alt+X",
     focus: "Ctrl+Alt+F",
     screen: "Ctrl+Alt+S",
+    reset: "Ctrl+Alt+0",
   },
   version: 1,
   petMode: "auto",
   petExpression: "auto",
   petEffects: true,
+  illustrationDepth: false,
   petCaptions: true,
   petScale: 1,
+  companionName: "",
+  micIndicator: true,
   petAlwaysOnTop: true,
   backend: "offline",
   voiceProvider: "local",
@@ -235,10 +244,16 @@ export function parsePreferences(raw: unknown): Preferences {
       ? p.petExpression!
       : "auto",
     petEffects: p.petEffects !== false,
+    illustrationDepth: p.illustrationDepth === true,
     petCaptions: p.petCaptions !== false,
+    companionName:
+      typeof p.companionName === "string"
+        ? p.companionName.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 40)
+        : "",
+    micIndicator: p.micIndicator !== false,
     petScale:
       typeof p.petScale === "number" && Number.isFinite(p.petScale)
-        ? Math.max(0.5, Math.min(4, p.petScale))
+        ? Math.max(0.25, p.petScale)
         : 1,
     petAlwaysOnTop: p.petAlwaysOnTop !== false,
     backend:
@@ -275,7 +290,8 @@ export function parsePreferences(raw: unknown): Preferences {
       p.character === "snow" ||
       p.character === "silver" ||
       p.character === "azure" ||
-      p.character === "goth"
+      p.character === "goth" ||
+      p.character === "mochi"
         ? p.character
         : "luna",
     movement: p.movement === "roaming" ? "roaming" : "stationary",
@@ -324,7 +340,9 @@ export function parsePreferences(raw: unknown): Preferences {
     sttContext: p.sttContext !== false,
     reduced: p.reduced === true,
     monitor:
-      typeof p.monitor === "string" && p.monitor.length < 200
+      p.monitor !== "all" &&
+      typeof p.monitor === "string" &&
+      p.monitor.length < 200
         ? p.monitor
         : "current",
     volume:

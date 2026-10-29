@@ -25,7 +25,7 @@ impl Default for PetEvent {
     fn default() -> Self {
         Self {
             mood: "idle".into(),
-            text: "A little company, right here.".into(),
+            text: String::new(),
             at: 0,
             mouth: 0.0,
             emotion: None,
@@ -60,6 +60,15 @@ fn publish_pet_state(
         "sad",
         "surprised",
         "sleeping",
+        "crying",
+        "shy",
+        "love",
+        "excited",
+        "teasing",
+        "joking",
+        "wink",
+        "proud",
+        "determined",
         "error",
     ]
     .contains(&event.mood.as_str())
@@ -78,6 +87,15 @@ fn publish_pet_state(
                 "sad",
                 "surprised",
                 "sleeping",
+                "crying",
+                "shy",
+                "love",
+                "excited",
+                "teasing",
+                "joking",
+                "wink",
+                "proud",
+                "determined",
                 "error",
             ]
             .contains(&emotion.as_str())
@@ -190,6 +208,9 @@ fn embedded_pack(character: &str) -> Option<&'static str> {
     match character {
         "luna" => Some(include_str!(
             "../../../../assets/characters/luna/voice/voice.json"
+        )),
+        "mochi" => Some(include_str!(
+            "../../../../assets/characters/mochi/voice/voice.json"
         )),
         "haru" => Some(include_str!(
             "../../../../assets/characters/haru/voice/voice.json"
@@ -700,21 +721,27 @@ fn install_tray(app: &tauri::App) -> tauri::Result<()> {
         Manager,
     };
     let pet = MenuItem::with_id(app, "show-pet", "Show pet", true, None::<&str>)?;
-    let chat = MenuItem::with_id(app, "show-chat", "Conversations", true, None::<&str>)?;
+    let chat = MenuItem::with_id(app, "show-chat", "Show app", true, None::<&str>)?;
     let hide = MenuItem::with_id(app, "hide-pet", "Hide pet", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Mivuneko", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&pet, &chat, &hide, &quit])?;
+    let reset = MenuItem::with_id(
+        app,
+        "reset-pet",
+        "Reset size & find pet",
+        true,
+        None::<&str>,
+    )?;
+    let menu = Menu::with_items(app, &[&pet, &chat, &reset, &hide, &quit])?;
     let mut tray = TrayIconBuilder::new()
         .tooltip("Mivuneko")
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show-pet" => {
-                if let Some(w) = app.get_webview_window("pet") {
-                    let _ = w.set_ignore_cursor_events(false);
-                    let _ = app.emit_to("pet", "pet-interactive", ());
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
+                let _ = pet_displays::recover(app, true);
+            }
+            "reset-pet" => {
+                let _ = app.emit_to("main", "global-action", "reset");
+                let _ = pet_displays::recover(app, true);
             }
             "show-chat" => {
                 if let Some(w) = app.get_webview_window("main") {
@@ -781,6 +808,7 @@ fn main() {
             screen::capture_screen,
             screen::analyze_screen,
             pet_displays::sync_pet_displays,
+            pet_displays::recover_pet,
             global_keys::configure_global_shortcuts,
             global_keys::quiet_pet_position,
             global_keys::pet_cursor,

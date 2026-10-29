@@ -1,0 +1,82 @@
+{
+  "generator": "Built-in image_gen",
+  "emotionAndMotionPrompt": "Generate a transparent production game sprite sheet of the exact {name} character in the reference, preserve hairstyle, costume, colors, face and full-body chibi proportions. Reference is identity/style only. Exactly 6 columns x 7 rows = 42 equal square cells in a perfectly regular grid, no gutters, no text, no labels, no borders, no background. All complete figures centered at identical scale and foot baseline, safe padding, nothing crosses cells. Highest available resolution, ideally 3072x3584. Distinct facial expressions AND full-body poses, no duplicate artwork. Cell order left-to-right top-to-bottom: 1 idle neutral; 2 happy smile; 3 startled surprised; 4 angry fists; 5 sleeping seated eyes closed; 6 speaking open-mouth explanatory gesture; 7 thinking hand chin; 8 listening hand at ear; 9 shy blush downcast; 10 sad slumped; 11 celebrating arms overhead; 12 dancing twirl; 13 excited bounce; 14 confused tilted head palms up; 15 love heart hands; 16 joking laughing hand on stomach; 17 teasing playful smirk; 18 wink and wave; 19 proud hands hips chin up; 20 crying wiping tears; 21 determined ready stance; 22 sitting awake; 23 walking RIGHT side profile contact left leg forward; 24 walking RIGHT opposite step; 25 walking FRONT left foot forward; 26 walking FRONT opposite; 27 walking BACK left step; 28 walking BACK opposite; 29 running RIGHT long airborne stride left leg forward; 30 running RIGHT opposite; 31 running FRONT airborne left step; 32 running FRONT opposite; 33 running BACK airborne left step; 34 running BACK opposite; 35 gently being lifted/dangling arms and legs; 36 pleased thumbs-up; 37 right walk passing legs together; 38 front walk passing legs together; 39 back walk passing legs together; 40 right run tucked legs flight; 41 front run tucked legs flight; 42 back run tucked legs flight. Motion must show clearly different leg/arm positions on successive cells, with hair and clothes following movement. Leftward uses mirrored right-profile so don't include left. True transparent alpha background. No symbols replacing expressions. No repeated cells.",
+  "additionalPrompt": "Production transparent game sprite sheet of the exact character in the reference, preserve identity, hairstyle, costume, colors, face and proportions. Exactly 6 columns x 7 rows = 42 equal square cells regular grid without gutters. All full-body figures centered, same scale, feet on same baseline, safe padding. No text, labels, borders, background. Highest available resolution, ideally 3072x3584. 42 distinct cells read left-to-right top-to-bottom: idle neutral; happy; surprised; angry fists; sleeping seated; speaking gesture; thinking chin-touch; listening hand-at-ear; shy blush; sad slumped; celebrating arms-overhead; dancing twirl; excited bounce; confused palms-up; love heart-hands; joking laugh hand-tummy; teasing smirk; wink wave; proud hands hips; crying wiping tears; determined ready; sitting awake; walk RIGHT profile contact left leg forward; walk RIGHT opposite step; walk FRONT left foot; walk FRONT opposite; walk BACK left foot; walk BACK opposite; run RIGHT airborne long stride left foot; run RIGHT opposite; run FRONT airborne left; run FRONT opposite; run BACK airborne left; run BACK opposite; gently lifted dangling arms/legs; thumbs-up; walk RIGHT passing feet together; walk FRONT passing feet together; walk BACK passing feet together; run RIGHT tucked-leg flight; run FRONT tucked-leg flight; run BACK tucked-leg flight. Every emotion has distinct face AND posture, never reuse a cell. Sequential walk/run poses must show clearly alternating legs/arms. Leftward will mirror RIGHT. Genuine transparent alpha, no icons replacing expressions.",
+  "assets": {
+    "miku": {
+      "path": "apps/desktop/public/characters/miku-complete-v3.png",
+      "columns": 6,
+      "rows": 7,
+      "emotionCells": 21,
+      "source": "Generated from the existing project character atlas; character identities and fan-art notices retained."
+    },
+    "stella": {
+      "path": "apps/desktop/public/characters/stella-complete-v3.png",
+      "columns": 6,
+      "rows": 7,
+      "emotionCells": 21,
+      "source": "Generated from the existing project character atlas; character identities and fan-art notices retained."
+    },
+    "teto": {
+      "path": "apps/desktop/public/characters/teto-complete-v3.png",
+      "columns": 6,
+      "rows": 7,
+      "emotionCells": 21,
+      "source": "Generated from the existing project character atlas; character identities and fan-art notices retained."
+    },
+    "neru": {
+      "path": "apps/desktop/public/characters/neru-complete-v3.png",
+      "columns": 6,
+      "rows": 7,
+      "emotionCells": 21,
+      "source": "Generated from the existing project character atlas; character identities and fan-art notices retained."
+    },
+    "snow": {
+      "path": "apps/desktop/public/characters/snow-complete-v3.png",
+      "columns": 6,
+      "rows": 7,
+      "emotionCells": 21,
+      "source": "Generated from the existing project character atlas; character identities and fan-art notices retained."
+    },
+    "silver": {
+      "path": "apps/desktop/public/characters/silver-complete-v3.png",
+      "columns": 6,
+      "rows": 7,
+      "emotionCells": 21,
+      "source": "Generated from the existing project character atlas; character identities and fan-art notices retained."
+    },
+    "azure": {
+      "path": "apps/desktop/public/characters/azure-complete-v3.png",
+      "columns": 6,
+      "rows": 7,
+      "emotionCells": 21,
+      "source": "Generated from the existing project character atlas; character identities and fan-art notices retained."
+    },
+    "goth": {
+      "path": "apps/desktop/public/characters/goth-complete-v3.png",
+      "columns": 6,
+      "rows": 7,
+      "emotionCells": 21,
+      "source": "Generated from the existing project character atlas; character identities and fan-art notices retained."
+    },
+    "kitsune": {
+      "path": "apps/desktop/public/characters/kitsune-complete-v3.png",
+      "columns": 6,
+      "rows": 7,
+      "emotionCells": 21,
+      "source": "Generated from the existing project character atlas; character identities and fan-art notices retained."
+    },
+    "mochi": {
+      "path": "apps/desktop/public/characters/mochi-complete-v3.png",
+      "columns": 6,
+      "rows": 7,
+      "source": "Original generated pastel pink/cream bunny companion; ivory and strawberry hair, cardigan, strawberry dress, moon hairclip."
+    },
+    "luna-motion": {
+      "path": "apps/desktop/public/characters/luna-locomotion-v3.png",
+      "columns": 6,
+      "rows": 3,
+      "prompt": "Preserve Luna identity from luna-atlas.png. Generate a transparent 6x3 locomotion sheet: 3-frame walk side/front/back, then 3-frame run side/front/back; consistent full body, baseline, alternating limbs, hair and tail movement. No text or background."
+    }
+  }
+}

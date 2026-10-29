@@ -1,5 +1,5 @@
-export const PET_SCALE_MIN = 0.5,
-  PET_SCALE_MAX = 4,
+export const PET_SCALE_MIN = 0.25,
+  PET_SCALE_MAX = Number.POSITIVE_INFINITY,
   WHEEL_STEP = 0.05,
   WHEEL_PIXELS = 40;
 // Turns wheel/trackpad deltas into pet-scale changes: mouse notches and trackpad
@@ -20,7 +20,7 @@ export function createWheelScaler(now: () => number = () => Date.now()) {
       if (!steps) return null;
       sum -= steps * WHEEL_PIXELS;
       // Scrolling up grows the pet, down shrinks it.
-      const next = scale - steps * WHEEL_STEP;
+      const next = scale - steps * WHEEL_STEP * Math.max(1, scale);
       return (
         Math.round(
           Math.max(PET_SCALE_MIN, Math.min(PET_SCALE_MAX, next)) * 100,

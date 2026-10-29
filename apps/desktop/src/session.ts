@@ -11,7 +11,7 @@ export interface PetEvent {
 }
 let current: PetEvent = {
   mood: "idle",
-  text: "A little company, right here.",
+  text: "",
   at: 0,
 };
 const listeners = new Set<() => void>();

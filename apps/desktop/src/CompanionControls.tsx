@@ -1,4 +1,4 @@
-import { RangeSlider } from "./RangeSlider";
+import { companionName } from "./companionName";
 import { useEffect, useState } from "react";
 import { isNative } from "./broker";
 import { updatePreferences, usePreferences } from "./preferences";
@@ -27,17 +27,48 @@ export function CompanionControls() {
       <span className="eyebrow">DESKTOP PRESENCE</span>
       <h3>Your companion, your way</h3>
       <p className="hint">
-        The desktop shows only your companion and optional captions.
-        Double-click the character for Conversations, or right-click for
-        Characters.
+        The desktop shows only your companion and optional captions. Use the
+        tray menu → Show app, or your conversation shortcut. Right-click the
+        character for quick controls.
       </p>
+      <label className="setting">
+        Companion name
+        <input
+          aria-label="Companion name"
+          maxLength={40}
+          value={p.companionName}
+          placeholder={companionName({ ...p, companionName: "" })}
+          onChange={(e) => updatePreferences({ companionName: e.target.value })}
+        />
+      </label>
+      <label className="setting">
+        Microphone status on the pet
+        <input
+          type="checkbox"
+          checked={p.micIndicator}
+          onChange={(e) =>
+            updatePreferences({ micIndicator: e.target.checked })
+          }
+        />
+      </label>
       <div className="setting">
         <span>Companion behavior</span>
         <strong>Automatic · conversation, movement and rest</strong>
       </div>
+      <button
+        type="button"
+        aria-pressed={p.petMode === "auto"}
+        onClick={() =>
+          updatePreferences({ petMode: "auto", petAvoiding: false })
+        }
+      >
+        {p.petMode === "auto"
+          ? "Free roaming is active"
+          : "Resume free roaming"}
+      </button>
       <p className="hint">
-        Ask your companion to walk somewhere, run, sit down or resume automatic
-        behavior.
+        Say "be free" or "do your own thing" to resume. Ask your companion to
+        walk somewhere, run, sit down or resume automatic behavior.
       </p>
       <label className="setting">
         Expression preview
@@ -76,18 +107,40 @@ export function CompanionControls() {
       </label>
       <label className="setting">
         Companion size · {Math.round(p.petScale * 100)}%
-        <RangeSlider
+        <input
+          type="number"
+          min="25"
+          step="5"
           aria-label="Companion size"
-
-          min="0.5"
-          max="4"
-          step="0.05"
-          value={p.petScale}
-          onChange={(e) =>
-            updatePreferences({ petScale: Number(e.target.value) })
-          }
+          value={Math.round(p.petScale * 100)}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            if (n >= 25 && Number.isFinite(n))
+              updatePreferences({ petScale: n / 100 });
+          }}
         />
       </label>
+      <p className="hint">
+        Drag an edge or scroll to resize. The character's frame can extend
+        beyond a monitor. The dock stays on the visible screen. Ctrl+Alt+0
+        restores the normal size and brings her back.
+      </p>
+      <button
+        onClick={() => {
+          updatePreferences({
+            petScale: 1,
+            petMode: "stand",
+            petAvoiding: false,
+            clickThrough: false,
+          });
+          if (isNative)
+            void import("@tauri-apps/api/core").then(({ invoke }) =>
+              invoke("recover_pet", { center: true }),
+            );
+        }}
+      >
+        Reset size & find pet
+      </button>
       <label className="setting">
         Always on top
         <input
@@ -108,7 +161,7 @@ export function CompanionControls() {
             onChange={(e) => updatePreferences({ monitor: e.target.value })}
           >
             <option value="current">Follow me · current monitor</option>
-            <option value="all">All monitors · one companion on each</option>
+
             {monitors.map((m) => (
               <option key={m} value={m}>
                 {m.split(":")[0]}

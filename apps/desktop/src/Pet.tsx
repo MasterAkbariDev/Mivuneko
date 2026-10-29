@@ -1,3 +1,4 @@
+import { usePetPlacement } from "./usePetPlacement";
 import { PetDock } from "./PetDock";
 import { hitsModel } from "./petHit";
 import { cancelCompanionTask, useCompanionTask } from "./companionTask";
@@ -22,30 +23,41 @@ export function Pet() {
   const root = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState(false),
     [dragging, setDragging] = useState(false),
-    [closeDock, setCloseDock] = useState(0);
+    [closeDock, setCloseDock] = useState(0),
+    [menuSignal, setMenuSignal] = useState(0),
+    [chatSignal, setChatSignal] = useState(0);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const panDrag = useRef<{
+    x: number;
+    y: number;
+    pan: { x: number; y: number };
+  } | null>(null);
+  const resize = useRef<{
+    x: number;
+    y: number;
+    scale: number;
+    edge: string;
+    width: number;
+    height: number;
+    anchor?: { x: number; y: number };
+    factor?: number;
+  } | null>(null);
   const task = useCompanionTask();
-  const replica = new URLSearchParams(location.search).has("replica");
+
   useEffect(() => {
     if (!localStorage.getItem("mivuneko.automatic-behavior.v1")) {
       localStorage.setItem("mivuneko.automatic-behavior.v1", "1");
       updatePreferences({ petMode: "auto" });
     }
   }, []);
-  const remoteUntil = useRef(0);
-  const [remoteDragging, setRemoteDragging] = useState(false);
+
   const manualUntil = useRef(0),
     placing = useRef(false);
-  const displayPreference = useRef("current");
-  const [positionReady, setPositionReady] = useState(!isNative);
+
   const [automaticBody, setAutomaticBody] = useState<BodyAction>("idle");
   const [facing, setFacing] = useState(1);
-  const facingRef = useRef(facing);
-  facingRef.current = facing;
+
   const [completed, setCompleted] = useState(0);
-  const mirror = useRef<{ x: number; y: number } | null>(null);
-  const goal = useRef<{ at: number; point: { x: number; y: number } } | null>(
-    null,
-  );
   const [dragPause, setDragPause] = useState(false);
   useEffect(() => {
     const timer = setInterval(
@@ -60,27 +72,45 @@ export function Pet() {
       setDragPause(false);
     }
   }, [task?.at]);
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const t = (Date.now() / 1000) % 120;
-      setAutomaticBody(
-        t < 15
-          ? "idle"
-          : t < 35
-            ? "walk"
-            : t < 65
-              ? "sit"
-              : t < 85
-                ? "walk"
-                : t < 95
-                  ? "run"
-                  : "sit",
-      );
-    }, 100);
-    return () => clearInterval(timer);
-  }, []);
   const prefs = usePreferences(),
     session = usePetSession();
+  useEffect(() => {
+    let next = Date.now() + 18000;
+    let resting = true;
+    const timer = setInterval(() => {
+      const engaged =
+        hover ||
+        dragging ||
+        prefs.petEdit ||
+        prefs.focus ||
+        ["listening", "thinking", "speaking", "concerned"].includes(
+          session.mood,
+        );
+      if (engaged || prefs.petMode !== "auto") {
+        setAutomaticBody("idle");
+        next = Date.now() + 18000;
+        resting = true;
+        return;
+      }
+      if (Date.now() < next) return;
+      if (resting) {
+        setAutomaticBody("walk");
+        next = Date.now() + 5000 + Math.random() * 5000;
+      } else {
+        setAutomaticBody("sit");
+        next = Date.now() + 35000 + Math.random() * 30000;
+      }
+      resting = !resting;
+    }, 500);
+    return () => clearInterval(timer);
+  }, [
+    prefs.petMode,
+    prefs.petEdit,
+    prefs.focus,
+    session.mood,
+    hover,
+    dragging,
+  ]);
   const [override, setOverride] = useState<Mood | null>(null),
     [error, setError] = useState(""),
     [bubble, setBubble] = useState(""),
@@ -167,8 +197,12 @@ export function Pet() {
           y >= r.top &&
           y <= r.bottom &&
           dock!.classList.contains("is-visible");
+        const editing = !!document
+          .elementFromPoint(x, y)
+          ?.closest("[data-pet-control]");
         const hit =
-          !prefs.clickThrough && (controls || hitsModel(root.current, x, y));
+          !prefs.clickThrough &&
+          (controls || editing || hitsModel(root.current, x, y));
         if (hit) seen = Date.now();
         setHover(!prefs.clickThrough && Date.now() - seen < 350);
         if (cursor.down && !lastDown && !hit) setCloseDock((v) => v + 1);
@@ -178,8 +212,9 @@ export function Pet() {
           await w.setIgnoreCursorEvents(ignore);
           lastIgnore = ignore;
         }
-      } catch (e) {
-        if (!disposed) setError(String(e));
+      } catch {
+        // Cursor queries can fail on a locked/secure desktop. Retry quietly.
+        lastIgnore = undefined;
       } finally {
         busy = false;
       }
@@ -211,72 +246,6 @@ export function Pet() {
       off?.();
     };
   }, []);
-  useEffect(() => {
-    if (!isNative) return;
-    let disposed = false;
-    const offs: Array<() => void> = [];
-    void (async () => {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window"),
-        { listen } = await import("@tauri-apps/api/event"),
-        { PhysicalPosition } = await import("@tauri-apps/api/dpi");
-      const w = getCurrentWindow();
-      for (const off of [
-        await w.onFocusChanged((e) => {
-          if (!e.payload) setCloseDock((v) => v + 1);
-        }),
-        await listen<{ source: string; active: boolean }>(
-          "pet-dragging",
-          (e) => {
-            if (e.payload.source !== w.label)
-              setRemoteDragging(e.payload.active);
-          },
-        ),
-        await listen<{ source: string; x: number; y: number }>(
-          "pet-reposition",
-          (e) => {
-            if (e.payload.source === w.label) return;
-            void (async () => {
-              const { currentMonitor } = await import("@tauri-apps/api/window");
-              const m = await currentMonitor();
-              if (!m) return;
-              const size = await w.outerSize(),
-                a = m.workArea;
-              const x =
-                  a.position.x +
-                  e.payload.x * Math.max(0, a.size.width - size.width),
-                y =
-                  a.position.y +
-                  e.payload.y * Math.max(0, a.size.height - size.height);
-              remoteUntil.current = Date.now() + 1000;
-              manualUntil.current = Date.now() + 15000;
-              setDragPause(true);
-              await w.setPosition(
-                new PhysicalPosition(Math.round(x), Math.round(y)),
-              );
-            })().catch((e) => setError(String(e)));
-          },
-        ),
-      ]) {
-        if (disposed) off();
-        else offs.push(off);
-      }
-    })().catch((e) => setError(String(e)));
-    return () => {
-      disposed = true;
-      offs.forEach((f) => f());
-    };
-  }, []);
-  useEffect(() => {
-    if (!isNative) return;
-    void (async () => {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window"),
-        { emit } = await import("@tauri-apps/api/event");
-      await emit("pet-dragging", {
-        source: getCurrentWindow().label,
-        active: dragging,
-      });
-    })().catch(() => {});
-  }, [dragging]);
   const lastInteraction = useRef(Date.now()),
     lastPrompt = useRef(0),
     unanswered = useRef(budget.current.unanswered),
@@ -305,23 +274,17 @@ export function Pet() {
   const reduced =
     prefs.reduced || matchMedia("(prefers-reduced-motion: reduce)").matches;
   const drag = useRef<{ x: number; y: number } | null>(null);
-  displayPreference.current = prefs.monitor;
+
   const moving =
-    (body === "walk" ||
-      body === "run" ||
-      prefs.petMode === "walk" ||
-      prefs.petMode === "run") &&
-    completed !== task?.at &&
+    !dragging &&
+    !prefs.petEdit &&
     !dragPause &&
-    !remoteDragging &&
-    !prefs.focus &&
-    prefs.petMode !== "focus" &&
-    prefs.petMode !== "sleep" &&
-    prefs.petMode !== "sit" &&
-    !reduced &&
-    ["idle", "happy", "curious"].includes(mood) &&
-    body !== "sleep" &&
-    body !== "sit";
+    (task
+      ? completed !== task.at
+      : !prefs.focus &&
+        !reduced &&
+        (body === "walk" || body === "run") &&
+        ["idle", "happy", "curious"].includes(mood));
   const character = {
     ...characterFor(
       mood,
@@ -380,7 +343,6 @@ export function Pet() {
   }, []);
   useEffect(() => {
     const timer = setInterval(() => {
-      if (replica) return;
       const now = Date.now(),
         today = new Date().toDateString();
       if (today !== day.current) {
@@ -435,391 +397,20 @@ export function Pet() {
     prefs.volume,
     prefs.voiceProvider,
   ]);
-  useEffect(() => {
-    if (!isNative) return;
-    let disposed = false,
-      off: (() => void) | undefined,
-      timer: ReturnType<typeof setTimeout> | undefined;
-    void (async () => {
-      const { getCurrentWindow, currentMonitor } =
-        await import("@tauri-apps/api/window");
-      const { PhysicalPosition } = await import("@tauri-apps/api/dpi");
-      const w = getCurrentWindow();
-      const key = replica
-        ? `mivuneko.pet-position.${w.label}.v1`
-        : "mivuneko.pet-position.v1";
-      try {
-        const p = JSON.parse(localStorage.getItem(key) ?? "null");
-        if (p && Number.isFinite(p.x) && Number.isFinite(p.y))
-          await w.setPosition(new PhysicalPosition(p.x, p.y));
-      } catch {}
-      off = await w.onMoved((event) => {
-        clearTimeout(timer);
-        timer = setTimeout(
-          () =>
-            void (async () => {
-              if (disposed || placing.current) return;
-              try {
-                localStorage.setItem(key, JSON.stringify(event.payload));
-              } catch {}
-              const m = await currentMonitor();
-              if (!m) return;
-              if (
-                Date.now() < manualUntil.current &&
-                Date.now() > remoteUntil.current
-              ) {
-                const size = await w.outerSize(),
-                  a = m.workArea,
-                  { emit } = await import("@tauri-apps/api/event");
-                await emit("pet-reposition", {
-                  source: w.label,
-                  x:
-                    (event.payload.x - a.position.x) /
-                    Math.max(1, a.size.width - size.width),
-                  y:
-                    (event.payload.y - a.position.y) /
-                    Math.max(1, a.size.height - size.height),
-                });
-              }
-              const selection = displayPreference.current,
-                id = `${m.name ?? "Display"}:${m.position.x}:${m.position.y}`;
-              if (!replica && selection === "all") {
-                const { invoke } = await import("@tauri-apps/api/core");
-                await invoke("sync_pet_displays", {
-                  selection: "all",
-                  relocate: false,
-                });
-              } else if (
-                !replica &&
-                selection !== "current" &&
-                selection !== id
-              )
-                updatePreferences({ monitor: "current" });
-            })().catch((e) => setError(String(e))),
-          250,
-        );
-      });
-      if (disposed) off();
-      else setPositionReady(true);
-    })().catch((e) => setError(String(e)));
-    return () => {
-      disposed = true;
-      off?.();
-      clearTimeout(timer);
-    };
-  }, []);
-  useEffect(() => {
-    if (!isNative || replica || !positionReady) return;
-    void import("@tauri-apps/api/core")
-      .then(({ invoke }) =>
-        invoke("sync_pet_displays", {
-          selection: prefs.monitor,
-          relocate: true,
-        }),
-      )
-      .catch((e) => setError(String(e)));
-  }, [prefs.monitor, positionReady]);
-  useEffect(() => {
-    if (!isNative || !replica) return;
-    let disposed = false,
-      off: (() => void) | undefined;
-    void import("@tauri-apps/api/event")
-      .then(({ listen }) =>
-        listen<{ x: number; y: number; direction: number; completed: number }>(
-          "pet-motion",
-          (e) => {
-            mirror.current = { x: e.payload.x, y: e.payload.y };
-            setFacing(e.payload.direction);
-            setCompleted(e.payload.completed);
-          },
-        ),
-      )
-      .then((f) => {
-        if (disposed) f();
-        else off = f;
-      });
-    return () => {
-      disposed = true;
-      off?.();
-    };
-  }, []);
-  useEffect(() => {
-    if (isNative || !moving) return;
-    let direction: 1 | -1 = 1;
-    const timer = setInterval(
-      () =>
-        setOffset((x) => {
-          const next = walkStep(x, direction, 0.05, 30, -25, 25);
-          direction = next.direction;
-          setFacing(direction);
-          return next.x;
-        }),
-      50,
-    );
-    return () => clearInterval(timer);
-  }, [moving]);
-  useEffect(() => {
-    if (!isNative || !positionReady) return;
-    let disposed = false,
-      busy = false,
-      direction: 1 | -1 = 1;
-
-    let lastFrame = performance.now(),
-      lastBroadcast = 0;
-    let snapshot: {
-      w: any;
-      selected: any;
-      position: { x: number; y: number };
-      size: { width: number; height: number };
-      all: any[];
-      at: number;
-    } | null = null;
-    async function tick() {
-      if (
-        busy ||
-        disposed ||
-        placing.current ||
-        Date.now() < manualUntil.current ||
-        drag.current
-      )
-        return;
-      busy = true;
-      const now = performance.now(),
-        dt = Math.min(0.05, (now - lastFrame) / 1000);
-      lastFrame = now;
-      try {
-        const { availableMonitors, currentMonitor, getCurrentWindow } =
-          await import("@tauri-apps/api/window");
-        const { PhysicalPosition } = await import("@tauri-apps/api/dpi");
-        if (!snapshot || now - snapshot.at > 1200) {
-          const all = await availableMonitors(),
-            w = getCurrentWindow(),
-            selected = (await currentMonitor()) ?? all[0];
-          if (!selected) return;
-          snapshot = {
-            all,
-            w,
-            selected,
-            position: await w.outerPosition(),
-            size: await w.outerSize(),
-            at: now,
-          };
-        }
-        if (disposed) return;
-        const { w, selected, position, size } = snapshot;
-        const area = {
-          x: selected.workArea.position.x,
-          y: selected.workArea.position.y,
-          width: selected.workArea.size.width,
-          height: selected.workArea.size.height,
-        };
-        let point = { x: position.x, y: position.y };
-        if (
-          position.x + size.width < area.x + 16 ||
-          position.x > area.x + area.width - 16 ||
-          position.y + size.height < area.y + 16 ||
-          position.y > area.y + area.height - 16
-        )
-          point = clampPosition(position, size, area);
-        if (replica && mirror.current) {
-          const target = {
-            x: area.x + mirror.current.x * Math.max(0, area.width - size.width),
-            y:
-              area.y +
-              mirror.current.y * Math.max(0, area.height - size.height),
-          };
-          const a = 1 - Math.exp(-18 * dt);
-          point = {
-            x: point.x + (target.x - point.x) * a,
-            y: point.y + (target.y - point.y) * a,
-          };
-        }
-        if (moving && !replica) {
-          let heading: number = direction;
-          if (
-            task?.destination === "unobtrusive" &&
-            goal.current?.at !== task.at
-          ) {
-            const { invoke } = await import("@tauri-apps/api/core");
-            const point = await invoke<{ x: number; y: number }>(
-              "quiet_pet_position",
-            );
-            goal.current = { at: task.at, point };
-          }
-          const target =
-            task && Date.now() - task.at < 120000
-              ? goal.current?.at === task.at
-                ? goal.current.point
-                : {
-                    x:
-                      area.x +
-                      Math.max(0, area.width - size.width) *
-                        (task.destination.includes("left")
-                          ? 0.05
-                          : task.destination.includes("right")
-                            ? 0.95
-                            : task.destination === "elsewhere"
-                              ? position.x < area.x + area.width / 2
-                                ? 0.8
-                                : 0.2
-                              : 0.5),
-                    y:
-                      area.y +
-                      Math.max(0, area.height - size.height) *
-                        (task.destination.startsWith("top")
-                          ? 0.05
-                          : task.destination === "center"
-                            ? 0.5
-                            : 0.95),
-                  }
-              : null;
-          if (target && task && goal.current?.at !== task.at)
-            goal.current = { at: task.at, point: target };
-          const speed = (body === "run" ? 130 : 48) * selected.scaleFactor;
-          if (target) {
-            const dx = target.x - point.x,
-              dy = target.y - point.y,
-              distance = Math.hypot(dx, dy),
-              step = speed * dt;
-            if (distance <= step) {
-              point = target;
-              setCompleted(task?.at ?? 0);
-              setFacing(0);
-            } else {
-              point = {
-                x: point.x + (dx / distance) * step,
-                y: point.y + (dy / distance) * step,
-              };
-              direction = dx < 0 ? -1 : 1;
-              heading = Math.atan2(dx, dy) / (Math.PI / 2);
-            }
-          } else {
-            const step = walkStep(
-              point.x,
-              direction,
-              dt,
-              speed,
-              area.x,
-              area.x + Math.max(0, area.width - size.width),
-            );
-            direction = step.direction;
-            heading = direction;
-            point = {
-              x: step.x,
-              y: point.y,
-            };
-          }
-          setFacing(heading);
-        }
-        if (!replica && now - lastBroadcast > 35) {
-          lastBroadcast = now;
-          const { emit } = await import("@tauri-apps/api/event");
-          await emit("pet-motion", {
-            x: (point.x - area.x) / Math.max(1, area.width - size.width),
-            y: (point.y - area.y) / Math.max(1, area.height - size.height),
-            direction: facingRef.current,
-            completed,
-          });
-        }
-        if (
-          !disposed &&
-          Date.now() >= manualUntil.current &&
-          !drag.current &&
-          (point.x !== position.x || point.y !== position.y)
-        ) {
-          await w.setPosition(
-            new PhysicalPosition(Math.round(point.x), Math.round(point.y)),
-          );
-          snapshot.position = point;
-        }
-      } catch (e) {
-        if (!disposed) {
-          setError(`Desktop placement: ${String(e)}`);
-        }
-      } finally {
-        busy = false;
-      }
-    }
-    void tick();
-    const timer = setInterval(() => void tick(), moving || replica ? 16 : 200);
-    return () => {
-      disposed = true;
-      clearInterval(timer);
-    };
-  }, [
-    moving,
-    prefs.monitor,
-    prefs.petMode,
-    body,
-    task?.at,
-    positionReady,
-    completed,
-  ]);
-  useEffect(() => {
-    if (!isNative || !positionReady) return;
-    void (async () => {
-      const { getCurrentWindow, currentMonitor } =
-        await import("@tauri-apps/api/window");
-      const { LogicalSize, PhysicalPosition } =
-        await import("@tauri-apps/api/dpi");
-      const m = await currentMonitor();
-      const window = getCurrentWindow();
-      placing.current = true;
-      const previousPosition = await window.outerPosition(),
-        previousSize = await window.outerSize();
-      await window.setSize(
-        new LogicalSize(
-          Math.min(
-            Math.round(
-              330 *
-                (prefs.petAvoiding
-                  ? Math.min(prefs.petScale, 0.7)
-                  : prefs.petScale) +
-                30,
-            ),
-            m ? m.workArea.size.width / m.scaleFactor : 1600,
-          ),
-          Math.min(
-            Math.round(
-              290 *
-                (prefs.petAvoiding
-                  ? Math.min(prefs.petScale, 0.7)
-                  : prefs.petScale) +
-                180,
-            ),
-            m ? m.workArea.size.height / m.scaleFactor : 720,
-          ),
-        ),
-      );
-      if (m) {
-        const position = {
-          x:
-            previousPosition.x +
-            (previousSize.width - (await window.outerSize()).width) / 2,
-          y:
-            previousPosition.y +
-            previousSize.height -
-            (await window.outerSize()).height,
-        };
-        const size = await window.outerSize();
-        const point = clampPosition(position, size, {
-          x: m.workArea.position.x,
-          y: m.workArea.position.y,
-          width: m.workArea.size.width,
-          height: m.workArea.size.height,
-        });
-        await window.setPosition(
-          new PhysicalPosition(Math.round(point.x), Math.round(point.y)),
-        );
-      }
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("show_pet");
-    })()
-      .catch((e) => setError(String(e)))
-      .finally(() => {
-        placing.current = false;
-      });
-  }, [prefs.petScale, prefs.petCaptions, prefs.petAvoiding, positionReady]);
+  const layout = usePetPlacement({
+    prefs,
+    task,
+    moving: moving && !prefs.petEdit,
+    running: body === "run",
+    dragging,
+    manualUntil,
+    placing,
+    resizeAnchor: resize,
+    onDirection: setFacing,
+    onComplete: setCompleted,
+    onRest: () => setAutomaticBody("sit"),
+    onError: setError,
+  });
   // Scroll over the pet to resize: instant local scale, preference (and window) debounced.
   const [viewport, setViewport] = useState({
     width: innerWidth,
@@ -847,8 +438,11 @@ export function Pet() {
     },
     [],
   );
+  useEffect(() => {
+    root.current?.querySelector(".pet-bubble")?.scrollTo({ top: 0 });
+  }, [session.text]);
   function onWheel(e: import("react").WheelEvent) {
-    if ((e.target as Element).closest(".pet-bubble")) return;
+    if ((e.target as Element).closest(".pet-bubble,[data-pet-control]")) return;
     if (!prefs.petEdit || !hitsModel(root.current, e.clientX, e.clientY))
       return;
     const next = wheel.current.push(e.deltaY, e.deltaMode, scale);
@@ -864,23 +458,6 @@ export function Pet() {
       150,
     );
   }
-  async function openApp(
-    tab: "Conversations" | "Characters" = "Conversations",
-  ) {
-    try {
-      if (isNative) {
-        const { Window } = await import("@tauri-apps/api/window");
-        const { emitTo } = await import("@tauri-apps/api/event");
-        const main = await Window.getByLabel("main");
-        if (!main) throw Error("App window unavailable");
-        await emitTo("main", "mivuneko-navigate", { tab });
-        await main.show();
-        await main.setFocus();
-      } else window.open("/?view=chat&tab=" + tab, "mivuneko-chat");
-    } catch (e) {
-      setError(String(e));
-    }
-  }
   useEffect(() => {
     if (!isNative) return;
     void import("@tauri-apps/api/window")
@@ -889,6 +466,30 @@ export function Pet() {
       )
       .catch((e) => setError(String(e)));
   }, [prefs.petAlwaysOnTop]);
+  useEffect(() => {
+    if (prefs.petScale / layout.scale <= 1.01) setPan({ x: 0, y: 0 });
+  }, [prefs.petScale, layout.scale]);
+  const oversized = layout.fitted;
+  function resizeMove(e: import("react").PointerEvent) {
+    const start = resize.current;
+    if (!start) return;
+    const dx = (e.screenX - start.x) * (start.edge.includes("w") ? -1 : 1),
+      dy = (e.screenY - start.y) * (start.edge.includes("n") ? -1 : 1);
+    const sx = 1 + dx / Math.max(1, start.width),
+      sy = 1 + dy / Math.max(1, start.height);
+    const ratio =
+      start.edge === "e" || start.edge === "w"
+        ? sx
+        : start.edge === "n" || start.edge === "s"
+          ? sy
+          : Math.abs(dx / start.width) > Math.abs(dy / start.height)
+            ? sx
+            : sy;
+    updatePreferences({
+      petScale: Math.max(0.25, Math.round(start.scale * ratio * 100) / 100),
+    });
+  }
+
   return (
     <div
       ref={root}
@@ -907,28 +508,29 @@ export function Pet() {
       }
       style={
         {
-          "--pet-scale": Math.min(
-            prefs.petAvoiding ? Math.min(scale, 0.7) : scale,
-            Math.max(0.5, (viewport.height - 180) / 290),
-            Math.max(0.5, (viewport.width - 30) / 330),
-          ),
+          "--pet-scale": layout.scale,
+          "--pet-base-width": prefs.renderer === "2d" ? 280 : 180,
+          "--pet-base-height": prefs.renderer === "2d" ? 280 : 320,
         } as import("react").CSSProperties
       }
       onWheel={onWheel}
     >
-      {pill && (
+      {(pill || prefs.petEdit) && (
         <div className="pet-scale-pill" role="status">
-          {Math.round(scale * 100)}%
+          {Math.round(prefs.petScale * 100)}%
+          {layout.fitted ? " · beyond screen" : ""}
         </div>
       )}
-      <div className="pet-caption-slot" style={{ height: 64 }}>
+      <div className="pet-caption-slot" style={{ height: 128 }}>
         {prefs.petCaptions &&
-          (bubble ||
-            captionVisible ||
-            ["thinking", "listening", "speaking"].includes(mood)) && (
+          (bubble.trim() ||
+            (session.text.trim() &&
+              (captionVisible ||
+                ["thinking", "listening", "speaking"].includes(mood)))) && (
             <div
               className={`pet-bubble ${session.at || bubble ? "has-message" : ""}`}
               aria-live="polite"
+              data-pet-control
             >
               <p>
                 {bubble || (mood === "listening" ? "Listening…" : session.text)}
@@ -937,21 +539,21 @@ export function Pet() {
           )}
       </div>
       <div
-        className={`pet-character body-${character.body}`}
+        className={`pet-character body-${layout.fitted && !task && ["walk", "run"].includes(character.body) ? "idle" : character.body}`}
         style={{ transform: `translateX(${offset}px)` }}
         tabIndex={0}
         role="group"
-        aria-label="Mivuneko character. Double-click to open the app. Right-click for characters."
-        onDoubleClick={() => void openApp()}
+        aria-label="Mivuneko character. Double-click for quick chat. Right-click for pet controls."
+        onDoubleClick={() => setChatSignal((v) => v + 1)}
         onContextMenu={(e) => {
           e.preventDefault();
-          void openApp("Characters");
+          setMenuSignal((v) => v + 1);
         }}
         onKeyDown={(e) => {
-          if (e.key === "Enter") void openApp();
+          if (e.key === "Enter") setChatSignal((v) => v + 1);
           if (e.key === " ") {
             e.preventDefault();
-            void openApp("Characters");
+            setMenuSignal((v) => v + 1);
           }
         }}
         onPointerDown={(e) => {
@@ -965,16 +567,33 @@ export function Pet() {
             drag.current = { x: e.clientX, y: e.clientY };
           }
         }}
-        onPointerUp={() => {
+        onPointerUp={(e) => {
+          if (panDrag.current) {
+            panDrag.current = null;
+            drag.current = null;
+            if (e.currentTarget.hasPointerCapture(e.pointerId))
+              e.currentTarget.releasePointerCapture(e.pointerId);
+            return;
+          }
           if (!drag.current) return;
           drag.current = null;
           manualUntil.current = Date.now() + 15000;
           setDragPause(true);
         }}
         onPointerLeave={() => {
+          if (panDrag.current) return;
           drag.current = null;
         }}
         onPointerMove={(e) => {
+          if (panDrag.current) {
+            const start = panDrag.current,
+              r = e.currentTarget.getBoundingClientRect();
+            setPan({
+              x: start.pan.x - (e.screenX - start.x) / r.width,
+              y: start.pan.y + (e.screenY - start.y) / r.height,
+            });
+            return;
+          }
           const point = drag.current;
           if (
             !isNative ||
@@ -1002,12 +621,95 @@ export function Pet() {
           mood={mood}
           mouth={session.mouth}
           emotion={session.emotion}
-          body={character.body}
-          direction={moving ? facing : 0}
-          dragging={dragging || remoteDragging}
+          body={
+            layout.fitted && !task && ["walk", "run"].includes(character.body)
+              ? "idle"
+              : character.body
+          }
+          direction={moving && (!layout.fitted || !!task) ? facing : 0}
+          dragging={dragging}
+          zoom={1}
+          pan={pan}
         />
       </div>
-      <PetDock visible={hover} closeSignal={closeDock} onError={setError} />
+      {prefs.petEdit && (
+        <div
+          className="pet-edit-frame"
+          data-pet-control
+          aria-label="Pet resize frame"
+        >
+          {["n", "s", "e", "w", "nw", "ne", "sw", "se"].map((edge) => (
+            <button
+              key={edge}
+              className={`resize-handle handle-${edge}`}
+              aria-label={`Resize pet ${edge}`}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                cancelCompanionTask();
+                manualUntil.current = Date.now() + 30000;
+                const frame =
+                  e.currentTarget.parentElement!.getBoundingClientRect();
+                const start = {
+                  x: e.screenX,
+                  y: e.screenY,
+                  scale: prefs.petScale,
+                  edge,
+                  width: Math.max(1, frame.width - 12),
+                  height: Math.max(1, frame.height - 12),
+                  anchor: undefined as { x: number; y: number } | undefined,
+                  factor: 1,
+                };
+                resize.current = start;
+                if (isNative)
+                  void (async () => {
+                    const { getCurrentWindow } =
+                      await import("@tauri-apps/api/window");
+                    const win = getCurrentWindow(),
+                      [position, factor] = await Promise.all([
+                        win.outerPosition(),
+                        win.scaleFactor(),
+                      ]);
+                    if (resize.current !== start) return;
+                    start.factor = factor;
+                    start.anchor = {
+                      x:
+                        position.x +
+                        (edge.includes("w")
+                          ? frame.right - 6
+                          : edge.includes("e")
+                            ? frame.left + 6
+                            : frame.left + frame.width / 2) *
+                          factor,
+                      y:
+                        position.y +
+                        (edge.includes("n")
+                          ? frame.bottom - 6
+                          : edge.includes("s")
+                            ? frame.top + 6
+                            : frame.top + frame.height / 2) *
+                          factor,
+                    };
+                  })();
+                e.currentTarget.setPointerCapture(e.pointerId);
+              }}
+              onPointerMove={resizeMove}
+              onPointerUp={(e) => {
+                resize.current = null;
+                manualUntil.current = Date.now() + 1000;
+                e.currentTarget.releasePointerCapture(e.pointerId);
+              }}
+            />
+          ))}
+        </div>
+      )}
+      <PetDock
+        visible={hover || prefs.petEdit || oversized}
+        closeSignal={closeDock}
+        menuSignal={menuSignal}
+        chatSignal={chatSignal}
+        onError={setError}
+      />
       {error && (
         <p className="error" role="alert">
           {error}

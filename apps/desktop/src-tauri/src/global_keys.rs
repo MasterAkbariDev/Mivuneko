@@ -26,6 +26,7 @@ pub fn configure_global_shortcuts(
             "clickThrough",
             "focus",
             "screen",
+            "reset",
         ]
         .contains(&action.as_str())
         {
@@ -96,7 +97,6 @@ struct Rect {
 #[link(name = "user32")]
 unsafe extern "system" {
     fn GetAsyncKeyState(key: i32) -> i16;
-    fn ShowWindow(hwnd: isize, command: i32) -> i32;
     fn EnumWindows(callback: unsafe extern "system" fn(isize, isize) -> i32, param: isize) -> i32;
     fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
     fn GetWindowRect(hwnd: isize, rect: *mut Rect) -> i32;
@@ -176,21 +176,18 @@ pub fn quiet_pet_position(window: tauri::Window) -> Result<serde_json::Value, St
     Ok(serde_json::json!({"x":x,"y":y}))
 }
 
+// Update the framework's visibility state as well as the HWND. Calling ShowWindow
+// alone leaves winit's cached visibility false, so later window updates hide it.
+pub fn reveal_pet(window: &tauri::Window) -> Result<(), String> {
+    window.set_focusable(false).map_err(|e| e.to_string())?;
+    let result = window.show().map_err(|e| e.to_string());
+    let restore = window.set_focusable(true).map_err(|e| e.to_string());
+    result.and(restore)
+}
 #[tauri::command]
 pub fn show_pet(window: tauri::Window) -> Result<(), String> {
-    if !window.label().starts_with("pet") {
+    if window.label() != "pet" {
         return Err("Pet only".into());
     }
-    #[cfg(target_os = "windows")]
-    {
-        let h = window.hwnd().map_err(|e| e.to_string())?;
-        unsafe {
-            ShowWindow(h.0 as isize, 4);
-        }
-        Ok(())
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        window.show().map_err(|e| e.to_string())
-    }
+    reveal_pet(&window)
 }

@@ -13,6 +13,15 @@ export type Mood =
   | "concerned"
   | "celebrating"
   | "sleeping"
+  | "crying"
+  | "shy"
+  | "love"
+  | "excited"
+  | "teasing"
+  | "joking"
+  | "wink"
+  | "proud"
+  | "determined"
   | "error";
 export interface AppInfo {
   location?: string;

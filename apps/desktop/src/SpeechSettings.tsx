@@ -139,6 +139,10 @@ export function SpeechSettings() {
             <div
               key={e.id}
               className={`engine ${selected === e.id ? "on" : ""} ${e.installed ? "" : "missing"}`}
+              onClick={(event) => {
+                if (e.installed && !(event.target as Element).closest("button"))
+                  updatePreferences({ sttEngine: e.id });
+              }}
             >
               <input
                 aria-label={e.label}
@@ -292,7 +296,7 @@ export function SpeechSettings() {
           limited to two minutes; at that limit, text is kept as a draft.
         </p>
         <label className="setting">
-          Interrupt Luna by speaking
+          Interrupt your companion by speaking
           <input
             type="checkbox"
             checked={p.bargeIn}

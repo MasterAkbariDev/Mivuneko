@@ -43,106 +43,128 @@ export const lunaModel = {
     determined: [3, 2, 0],
   } satisfies Record<LunaPose, number[]>,
 } as const;
-const alternatePoses: Record<LunaPose, [number, number, number]> = {
-  idle: [0, 0, 0],
-  happy: [0, 1, 0],
-  surprised: [0, 2, 0],
-  angry: [0, 2, 0],
-  sleeping: [0, 0, 1],
-  speaking: [0, 1, 1],
-  thinking: [0, 0, 0],
-  listening: [0, 0, 0],
-  shy: [0, 2, 1],
-  sad: [0, 2, 1],
-  celebrating: [0, 1, 0],
-  dancing: [0, 1, 0],
-  excited: [0, 1, 0],
-  confused: [0, 2, 0],
-  love: [0, 2, 1],
-  joking: [0, 1, 0],
-  teasing: [0, 2, 1],
-  wink: [0, 2, 1],
-  proud: [0, 1, 0],
-  crying: [0, 2, 1],
-  determined: [0, 0, 0],
-};
-const newPoses: Record<LunaPose, [number, number, number]> = {
-  ...alternatePoses,
-  idle: [0, 0, 0],
-  happy: [0, 1, 0],
-  surprised: [0, 2, 0],
-  angry: [0, 0, 1],
-  sleeping: [0, 2, 1],
-  speaking: [0, 1, 0],
-  thinking: [0, 2, 0],
-  listening: [0, 2, 0],
-  shy: [0, 2, 0],
-  sad: [0, 0, 1],
-  celebrating: [0, 1, 1],
-  dancing: [0, 1, 1],
-  excited: [0, 1, 1],
-  confused: [0, 2, 0],
-  love: [0, 2, 0],
-  joking: [0, 1, 1],
-  teasing: [0, 2, 0],
-  wink: [0, 1, 1],
-  proud: [0, 1, 1],
-  crying: [0, 0, 1],
-  determined: [0, 0, 0],
-};
+export const illustratedPoses: LunaPose[] = [
+  "idle",
+  "happy",
+  "surprised",
+  "angry",
+  "sleeping",
+  "speaking",
+  "thinking",
+  "listening",
+  "shy",
+  "sad",
+  "celebrating",
+  "dancing",
+  "excited",
+  "confused",
+  "love",
+  "joking",
+  "teasing",
+  "wink",
+  "proud",
+  "crying",
+  "determined",
+];
+const completePoses = Object.fromEntries(
+  illustratedPoses.map((pose, i) => [pose, [0, i % 6, Math.floor(i / 6)]]),
+) as Record<LunaPose, [number, number, number]>;
 export const characters: Record<
   CharacterId,
   {
     name: string;
+    columns?: number;
+    rows?: number;
+    motionAtlas?: string;
     atlases: readonly string[];
     poses: Record<LunaPose, readonly number[]>;
   }
 > = {
-  luna: { name: "Luna", atlases: lunaModel.atlases, poses: lunaModel.poses },
+  mochi: {
+    name: "Mochi",
+    atlases: ["/characters/mochi-complete-v3.png"],
+    columns: 6,
+    rows: 7,
+    motionAtlas: "/characters/mochi-complete-v3.png",
+    poses: completePoses,
+  },
+  luna: {
+    name: "Luna",
+    atlases: lunaModel.atlases,
+    poses: lunaModel.poses,
+    motionAtlas: "/characters/luna-locomotion-v3.png",
+  },
   miku: {
     name: "Miku · unofficial fan art",
-    atlases: ["/characters/miku-fan-atlas.png"],
-    poses: alternatePoses,
+    atlases: ["/characters/miku-complete-v3.png"],
+    columns: 6,
+    rows: 7,
+    motionAtlas: "/characters/miku-complete-v3.png",
+    poses: completePoses,
   },
   kitsune: {
     name: "Kiko · fox companion",
-    atlases: ["/characters/kitsune-atlas.png"],
-    poses: alternatePoses,
+    atlases: ["/characters/kitsune-complete-v3.png"],
+    columns: 6,
+    rows: 7,
+    motionAtlas: "/characters/kitsune-complete-v3.png",
+    poses: completePoses,
   },
   stella: {
     name: "Stella · star companion",
-    atlases: ["/characters/stella-atlas.png"],
-    poses: alternatePoses,
+    atlases: ["/characters/stella-complete-v3.png"],
+    columns: 6,
+    rows: 7,
+    motionAtlas: "/characters/stella-complete-v3.png",
+    poses: completePoses,
   },
   teto: {
     name: "Teto · unofficial fan art",
-    atlases: ["/characters/teto-fan-atlas.png"],
-    poses: newPoses,
+    atlases: ["/characters/teto-complete-v3.png"],
+    columns: 6,
+    rows: 7,
+    motionAtlas: "/characters/teto-complete-v3.png",
+    poses: completePoses,
   },
   neru: {
     name: "Neru · unofficial fan art",
-    atlases: ["/characters/neru-fan-atlas.png"],
-    poses: newPoses,
+    atlases: ["/characters/neru-complete-v3.png"],
+    columns: 6,
+    rows: 7,
+    motionAtlas: "/characters/neru-complete-v3.png",
+    poses: completePoses,
   },
   snow: {
     name: "Yuki · white hair",
-    atlases: ["/characters/snow-atlas.png"],
-    poses: newPoses,
+    atlases: ["/characters/snow-complete-v3.png"],
+    columns: 6,
+    rows: 7,
+    motionAtlas: "/characters/snow-complete-v3.png",
+    poses: completePoses,
   },
   silver: {
     name: "Sora · silver hair",
-    atlases: ["/characters/silver-atlas.png"],
-    poses: newPoses,
+    atlases: ["/characters/silver-complete-v3.png"],
+    columns: 6,
+    rows: 7,
+    motionAtlas: "/characters/silver-complete-v3.png",
+    poses: completePoses,
   },
   azure: {
     name: "Aoi · blue eyes",
-    atlases: ["/characters/azure-atlas.png"],
-    poses: newPoses,
+    atlases: ["/characters/azure-complete-v3.png"],
+    columns: 6,
+    rows: 7,
+    motionAtlas: "/characters/azure-complete-v3.png",
+    poses: completePoses,
   },
   goth: {
     name: "Raven · gothic",
-    atlases: ["/characters/goth-atlas.png"],
-    poses: newPoses,
+    atlases: ["/characters/goth-complete-v3.png"],
+    columns: 6,
+    rows: 7,
+    motionAtlas: "/characters/goth-complete-v3.png",
+    poses: completePoses,
   },
 };
 export function lunaPose(
@@ -158,7 +180,7 @@ export function lunaPose(
   if (mode === "cozy" && mood === "idle") return "shy";
   if (mode === "playful" && mood === "idle") return "happy";
   if (mood === "curious") return "thinking";
-  if (mood === "confused") return "surprised";
+
   if (mood === "concerned") return "sad";
   if (mood === "error") return "angry";
   return mood;

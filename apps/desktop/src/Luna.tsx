@@ -5,6 +5,7 @@ import type {
   PetExpression,
   PetMode,
 } from "../../../packages/shared-schemas/preferences.ts";
+import { spriteFrame } from "./spriteFrames";
 import { characters, lunaPose } from "./lunaModel";
 /** Two-layer crossfade keeps the character visible during expression changes. */
 export function Luna({
@@ -14,6 +15,7 @@ export function Luna({
   expression = "auto",
   effects = true,
   character = "luna",
+  direction = 0,
 }: {
   mood: Mood;
   mouth?: number;
@@ -21,32 +23,41 @@ export function Luna({
   expression?: PetExpression;
   effects?: boolean;
   character?: CharacterId;
+  direction?: number;
 }) {
   const pose = lunaPose(mood, mode, expression);
   const model = characters[character];
-  const movePose =
-    character === "luna" &&
-    expression === "auto" &&
-    ["idle", "happy"].includes(mood)
-      ? mode === "walk"
-        ? [3, 0, 1]
-        : mode === "run"
-          ? [3, 1, 1]
-          : mode === "sit"
-            ? [3, 2, 1]
-            : null
-      : null;
-  const [atlas, column, row] = movePose ?? model.poses[pose];
+  const [tick, setTick] = useState(0);
+  const moving = expression === "auto" && (mode === "walk" || mode === "run");
+  useEffect(() => {
+    setTick(0);
+    if (!moving) return;
+    const timer = setInterval(
+      () => setTick((t) => t + 1),
+      mode === "run" ? 85 : 140,
+    );
+    return () => clearInterval(timer);
+  }, [moving, mode, character]);
+  const selected = spriteFrame(
+    character,
+    pose,
+    mode,
+    direction,
+    tick,
+    expression === "auto",
+  );
   const frame = {
-    image: model.atlases[atlas],
-    column,
-    row,
-    key: `${character}-${atlas}-${column}-${row}`,
+    ...selected,
+    key: `${character}-${selected.image}-${selected.column}-${selected.row}-${selected.mirror}`,
   };
   const [frames, setFrames] = useState([frame]);
   useEffect(() => {
     setFrames((old) =>
-      old.at(-1)?.key === frame.key ? old : [old.at(-1)!, frame],
+      moving
+        ? [frame]
+        : old.at(-1)?.key === frame.key
+          ? old
+          : [old.at(-1)!, frame],
     );
     const timer = setTimeout(
       () => setFrames((old) => (old.length > 1 ? [old[old.length - 1]] : old)),
@@ -82,6 +93,7 @@ export function Luna({
       data-emotion={mood}
       data-pose={pose}
       data-frame={frame.key}
+      data-direction={selected.facing}
       role="img"
       aria-label={`${model.name} 2D companion, ${pose}`}
     >
@@ -92,7 +104,9 @@ export function Luna({
           style={
             {
               backgroundImage: `url('${item.image}')`,
-              backgroundPosition: `${item.column * 50}% ${item.row * 100}%`,
+              transform: item.mirror ? "scaleX(-1)" : undefined,
+              backgroundSize: `${item.columns * 100}% ${item.rows * 100}%`,
+              backgroundPosition: `${(item.column / (item.columns - 1)) * 100}% ${(item.row / (item.rows - 1)) * 100}%`,
               "--mouth": Math.min(1, Math.max(0, mouth)),
             } as CSSProperties
           }

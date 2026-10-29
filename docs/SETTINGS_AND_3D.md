@@ -64,9 +64,9 @@ The bundled VRM has facial morphs but contains no animation clips. The website�
 
 Companion behavior runs automatically with rest, walking, running and seated periods. Talking and listening interrupt roaming. Explicit chat requests such as “walk to the left”, “run to the top right”, “sit down” and “resume automatic behavior” override the schedule. Walking and running turn the VRM toward its travel direction. Elbows use mirrored forward hinges, verified against actual hand positions in the bundled skeleton.
 
-Character size supports 50–400%; rendering fits the display when the requested size exceeds its work area. Captions occupy reserved space and window resizing preserves the lower anchor. Roaming retains the existing vertical position, and dragging takes priority and pauses movement. Display selection relocates the pet once; dragging to a different display switches back to following the current monitor. **All monitors** creates one pet on each connected display. Replicas share preferences and conversation state and do not speak check-ins independently.
+Character size can exceed the monitor dimensions. The native frame grows with the character, while controls remain inside the visible monitor area. Dragging pauses movement and preserves the previous behavior. Display selection moves the single companion; it never creates replicas. Reset size & find pet recovers an oversized or misplaced character.
 
-Native Windows validation covered two connected monitors: creation of a second companion, explicit display selection, manual cross-monitor positioning, and stable caption/foot placement. App discovery now uses Windows registered desktop and Store applications (262 apps on the validation device), retaining approved launch requests and stable catalog identifiers. Portable apps without a registered shortcut may still need registration in the Start menu.
+App discovery uses Windows registered desktop and Store applications, retaining approved launch requests and stable catalog identifiers. Portable apps without a registered shortcut may still need registration in the Start menu.
 
 ## Screen assistance
 
@@ -76,6 +76,26 @@ Ask “help me understand my screen” in Conversations. Mivuneko hides its main
 
 The hover dock sits just under the character's feet. It provides voice chat, an animated quick-message input, and a position lock. Edit mode starts locked; Ctrl+Alt+E toggles dragging and scroll resizing. Ctrl+Alt+X toggles click-through, Ctrl+Alt+F toggles focus, and Ctrl+Alt+S opens screen help. All shortcuts can be changed in Settings. Screen help still previews the image before sharing it.
 
-Transparent pixels outside the rendered 3D silhouette pass clicks to the application beneath. Dragging uses a dangling pose and spring-bone hair movement, then restores the prior behavior. Captions follow the head and opening quick chat does not resize the pet window. Monitor replicas share normalized placement, facing, animation time and completion state.
+Transparent pixels outside the rendered 3D silhouette pass clicks to the application beneath. Dragging uses a dangling pose and spring-bone hair movement, then restores the prior behavior. Captions follow the head and opening quick chat does not resize the pet window. One companion moves between the selected displays.
 
 “Stand up” ends a sitting command. Directed walking/running stops standing at its destination. “Get out of my way” or “I cannot code, go out of the code screen” chooses a quiet display corner using the top application's window rectangle and temporarily reduces the companion's footprint. It does not inspect screen contents. Say “resume” to restore automatic behavior and your preferred size.
+
+## Single-pet desktop controls
+
+Startup shows only the pet. The conversation window stays hidden until **Show app** in the tray, a configured app shortcut, or a requested code explanation reveals it. The welcome overlay is removed. Double-click the pet for quick chat; right-click for pet controls.
+
+There is one pet across the desktop. Display selection moves it rather than creating replicas. Say “go to my other monitor,” “go to monitor 1,” or “go to the monitor on my left.” Horizontal commands preserve height; repeated commands continue toward that edge. Gaps between monitors use an edge handoff rather than leaving the pet invisible in empty desktop space. Failed moves report a failure, and arrival is confirmed by the movement controller.
+
+Chains such as “go to the first monitor then go up and sit down” execute in order, awaiting every movement arrival. Stop cancels the current movement and all remaining steps. Unrecognized chain steps are rejected before execution.
+
+The pencil unlocks an edit frame. Its edges and corners resize the visible model, preserving the opposite edge. Edit poses stay still while sizing. The native pet frame can extend beyond a monitor, without reframing the character into a smaller box. Canvas backing resolution is bounded independently of the window. The dock is pinned to the visible monitor intersection, and Reset remains reachable. The dock remains on-screen and stays available while oversized or editing. **Ctrl+Alt+0**, **Reset size & find pet**, and the tray recovery action restore a usable size and bring the pet to the active display.
+
+The optional microphone indicator is a static 5-pixel muted-green dot, visible only while voice chat is active. It has no icon, box, glow or animation, and uses a fixed viewport anchor independent of expression and gait.
+
+Custom names are available in companion controls. Interrupt settings refer to “your companion,” not a particular character. Generated code opens the conversation and highlights the code panel; full prose before and after it remains spoken.
+
+## Conversation and narration
+
+Conversations use the full available content width. Markdown tables render with column headers and rows, including provider replies that collapse the table onto one line. Spoken narration reads each row with its column names, including examples and text after the table.
+
+Pet captions and controls use stable anchors rather than following idle breathing. Captions have vertical scrolling and a custom scrollbar. Quick chat wraps long messages, scrolls vertically, and stays open after sending; Enter sends and Shift+Enter adds a line.

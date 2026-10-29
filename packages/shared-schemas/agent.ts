@@ -14,6 +14,15 @@ export function parseAgentReply(raw: string): AgentReply {
       "confused",
       "concerned",
       "celebrating",
+      "crying",
+      "shy",
+      "love",
+      "excited",
+      "teasing",
+      "joking",
+      "wink",
+      "proud",
+      "determined",
     ];
     if (
       typeof json.text === "string" &&

@@ -19,7 +19,7 @@ Tauri defines a transparent frameless pet and a hidden conversation utility. Mai
 React owns ephemeral UI state. Pet/chat text, mood and mouth events pass through a Rust in-memory session and Tauri events; browser preview uses BroadcastChannel. Native publish validates text length, moods and mouth amplitude and accepts agent updates from the trusted pet/main windows. Nonsecret preferences are versioned localStorage with cross-window storage events. Pet position and check-in budget persist. Previously imported VRM data is left intact but no longer selected by the UI.
 
 ## Character / behavior
-Character state separates activity, expression, body action and mouth amplitude. Luna, unofficial Miku fan art, Kiko and Stella use local transparent sprite sheets. New characters have six drawn poses; other moods combine those poses with effects and motion. Mouth changes follow playback amplitude rather than phonemes.
+Character state separates activity, expression, body action and mouth amplitude. Luna, unofficial Miku fan art, Kiko and Stella use local transparent sprite sheets. Illustrated characters have 21 individually mapped emotion cells and separate front, back and side locomotion frames. Mouth changes follow playback amplitude rather than phonemes.
 
 Scheduler checks validated opt-in interval/daily cap, local-device quiet hours, do-not-disturb and unanswered status. It does not inspect other apps or screen contents. Native monitor driver uses physical work-area coordinates and scale factors, clamps/restores position and confines roaming to selected/current monitor. Browser movement is a bounded preview. Automatic icon/window perching and traversal across display gaps remain future work; manual drag + Sit is available.
 

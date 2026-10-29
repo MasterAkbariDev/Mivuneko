@@ -66,5 +66,5 @@ test("every bundled character has a distinct local voice recipe", () => {
     assert.ok(!recipes.has(recipe), root + " must have its own voice");
     recipes.add(recipe);
   }
-  assert.equal(recipes.size, 11);
+  assert.equal(recipes.size, roots.length);
 });

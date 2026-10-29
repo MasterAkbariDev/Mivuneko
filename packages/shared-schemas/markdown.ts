@@ -1,3 +1,8 @@
+import {
+  normalizeTables,
+  tableCells,
+  tableSeparator,
+} from "./markdown-tables.ts";
 // A small, safe Markdown subset for chat replies. It only produces data (no HTML),
 // so the renderer can never inject markup; links stay plain text.
 export type Inline =
@@ -9,7 +14,8 @@ export type Block =
   | { type: "list"; ordered: boolean; items: Inline[][] }
   | { type: "quote"; inline: Inline[] }
   | { type: "para"; inline: Inline[] }
-  | { type: "rule" };
+  | { type: "rule" }
+  | { type: "table"; headers: Inline[][]; rows: Inline[][][] };
 const TOKEN =
   /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\s][^*\n]*\*|_[^_\s][^_\n]*_|\[[^\]\n]+\]\([^)\s]+\))/g;
 export function parseInline(text: string): Inline[] {
@@ -35,7 +41,9 @@ export function parseInline(text: string): Inline[] {
   return out;
 }
 export function parseMarkdown(source: string): Block[] {
-  const lines = source.replace(/\r\n?/g, "\n").split("\n");
+  const lines = normalizeTables(source.replace(/&#(?:x20|32);|&nbsp;/gi, " "))
+    .replace(/\r\n?/g, "\n")
+    .split("\n");
   const blocks: Block[] = [];
   let para: string[] = [];
   const flush = () => {
@@ -56,6 +64,28 @@ export function parseMarkdown(source: string): Block[] {
       )
         code.push(lines[i]);
       blocks.push({ type: "code", lang: fence[2], code: code.join("\n") });
+      continue;
+    }
+    if (
+      line.includes("|") &&
+      i + 1 < lines.length &&
+      tableSeparator(lines[i + 1])
+    ) {
+      flush();
+      const headers = tableCells(line).map(parseInline),
+        rows: Inline[][][] = [];
+      i += 2;
+      while (
+        i < lines.length &&
+        lines[i].trim() &&
+        tableCells(lines[i]).length > 1
+      ) {
+        const cells = tableCells(lines[i]);
+        rows.push(headers.map((_, c) => parseInline(cells[c] ?? "")));
+        i++;
+      }
+      i--;
+      blocks.push({ type: "table", headers, rows });
       continue;
     }
     if (!line.trim()) {

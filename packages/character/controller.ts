@@ -10,7 +10,9 @@ export type Activity =
 export type BodyAction = "idle" | "walk" | "run" | "sit" | "sleep" | "dance";
 export interface CharacterState {
   activity: Activity;
-  expression: Mood;
+  expression:
+    | Mood
+    | Exclude<import("../shared-schemas/preferences.ts").PetExpression, "auto">;
   intensity: number;
   body: BodyAction;
   mouth: number;

@@ -31,6 +31,7 @@ export function abortable<T>(
 let nextCloud = 0;
 export function agentFor(
   backend: "offline" | "hermes" | "auto" | "gemini" | "groq",
+  identity?: string,
 ): Agent {
   return {
     async reply(text, mode, signal, history = [], onProgress) {
@@ -65,7 +66,7 @@ export function agentFor(
           signal.throwIfAborted();
           const provider = choices[(start + i) % choices.length];
           try {
-            return await agentFor(provider).reply(
+            return await agentFor(provider, identity).reply(
               text,
               mode,
               signal,
@@ -81,6 +82,20 @@ export function agentFor(
         throw Error(`All configured providers failed. ${errors.join("; ")}`);
       }
       const messages = boundedMessages(history, text);
+      if (identity) {
+        messages.splice(0, Math.max(0, messages.length - 30));
+        messages.unshift(
+          {
+            role: "user",
+            content: `Companion preference: your chosen name is ${JSON.stringify(identity)}. Use this name when introducing yourself. Physical movement and location are controlled by the application; never claim an unconfirmed desktop action.`,
+          },
+          {
+            role: "assistant",
+            content:
+              "I'll use that companion name and describe only confirmed actions.",
+          },
+        );
+      }
       signal.throwIfAborted();
       const requestId = crypto.randomUUID();
       const cancel = () => {

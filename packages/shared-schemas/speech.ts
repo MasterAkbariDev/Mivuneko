@@ -1,11 +1,19 @@
+import { narrateTables } from "./markdown-tables.ts";
 import type { AgentReply } from "./index.ts";
 // Narrate all prose in order. A provider's optional short summary must not replace it.
-export function speakable(reply: Pick<AgentReply, "text" | "speech">): string {
-  let text = reply.text || reply.speech || "";
+export function speakable(
+  reply: Pick<AgentReply, "text" | "speech">,
+  codeShown = false,
+): string {
+  let text = (reply.text || reply.speech || "").replace(
+    /&#(?:x20|32);|&nbsp;/gi,
+    " ",
+  );
   text = text.replace(
     /(?:here(?:'s| is)|see|the)\s+(?:(?:the|an?)\s+)?(?:code|example)(?:\s+(?:is\s+)?(?:below|above))?\s*[:.]/gi,
     "The code example is saved in our conversation.",
   );
+  text = narrateTables(text);
   text = text
     .replace(
       /```[^\n]*\n[\s\S]*?(?:```|$)|~~~[^\n]*\n[\s\S]*?(?:~~~|$)/g,
@@ -21,7 +29,7 @@ export function speakable(reply: Pick<AgentReply, "text" | "speech">): string {
     .replace(/^\s*\|?[\s:|-]+\|[\s:|-]*$/gm, " ")
     .replace(/\|/g, ", ")
     .replace(/[*~#>]+/g, "");
-  return text
+  const result = text
     .split(/\n+/)
     .map((s) => s.trim())
     .filter(Boolean)
@@ -33,6 +41,12 @@ export function speakable(reply: Pick<AgentReply, "text" | "speech">): string {
     )
     .replace(/\s+/g, " ")
     .trim();
+  return codeShown
+    ? result.replace(
+        /(?:A code example is available|The code example is saved) in our conversation\./g,
+        "Here’s the code example.",
+      )
+    : result;
 }
 export function speechChunks(text: string, max = 700): string[] {
   const chunks: string[] = [];
