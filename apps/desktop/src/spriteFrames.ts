@@ -22,14 +22,23 @@ export function spriteFrame(
         : "side";
   const mirror = facing === "side" && direction < 0;
   let image = model.atlases[atlas],
-    columns = model.columns ?? 3,
-    rows = model.rows ?? 2,
+    columns = model.grids?.[atlas]?.[0] ?? model.columns ?? 3,
+    rows = model.grids?.[atlas]?.[1] ?? model.rows ?? 2,
     c = column,
     r = row;
   if (automatic && model.motionAtlas && (mode === "walk" || mode === "run")) {
     const side = facing === "side" ? 0 : facing === "front" ? 1 : 2;
     const phase = [0, 1, 2, 1][tick % 4];
     let cell: number;
+    if (model.motionAtlases?.length === 3) {
+      const cell = (mode === "run" ? 9 : 0) + side * 3 + phase;
+      image = model.motionAtlases[Math.floor(cell / 6)];
+      columns = 3;
+      rows = 2;
+      c = (cell % 6) % 3;
+      r = Math.floor((cell % 6) / 3);
+      return { image, column: c, row: r, columns, rows, mirror, facing };
+    }
     if (id === "luna") {
       cell = (mode === "run" ? 9 : 0) + side * 3 + phase;
       columns = 6;
@@ -44,9 +53,17 @@ export function spriteFrame(
     image = model.motionAtlas;
     c = cell % 6;
     r = Math.floor(cell / 6);
-  } else if (automatic && mode === "sit" && id !== "luna") {
-    c = 3;
-    r = 3;
+  } else if (automatic && mode === "sit" && (id !== "luna" || model.sitPose)) {
+    const sit = model.sitPose ?? [
+      model.atlases.findIndex((p) => p.includes("complete-v3")),
+      3,
+      3,
+    ];
+    image = model.atlases[sit[0]];
+    c = sit[1];
+    r = sit[2];
+    columns = model.grids?.[sit[0]]?.[0] ?? model.columns ?? 3;
+    rows = model.grids?.[sit[0]]?.[1] ?? model.rows ?? 2;
   }
   return {
     image,

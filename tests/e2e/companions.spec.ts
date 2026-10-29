@@ -102,29 +102,16 @@ test("every illustrated character loads distinct nonempty emotions and direction
       framesPath = "/src/spriteFrames.ts";
     const { characters } = await import(modelsPath),
       { spriteFrame } = await import(framesPath);
+    const preparedPath = "/src/prepareSprites.ts";
+    const { prepareAtlas } = await import(preparedPath);
     const loaded = new Map<string, HTMLImageElement>();
     async function fingerprint(f: any) {
-      if (!loaded.has(f.image)) {
-        const image = new Image();
-        image.src = f.image;
-        await image.decode();
-        loaded.set(f.image, image);
-      }
-      const image = loaded.get(f.image)!;
+      const prepared = await prepareAtlas(f.image, f.columns, f.rows);
+      const image = prepared.frame(f.row * f.columns + f.column).canvas;
       const c = document.createElement("canvas");
       c.width = c.height = 64;
       const ctx = c.getContext("2d")!;
-      ctx.drawImage(
-        image,
-        (f.column * image.width) / f.columns,
-        (f.row * image.height) / f.rows,
-        image.width / f.columns,
-        image.height / f.rows,
-        0,
-        0,
-        64,
-        64,
-      );
+      ctx.drawImage(image, 0, 0, 64, 64);
       const pixels = ctx.getImageData(0, 0, 64, 64).data;
       let count = 0,
         hash = 2166136261;
@@ -132,7 +119,15 @@ test("every illustrated character loads distinct nonempty emotions and direction
         hash = Math.imul(hash ^ pixels[i], 16777619);
         if (i % 4 === 3 && pixels[i] > 50) count++;
       }
-      return { hash: hash >>> 0, count };
+      let border = 0;
+      for (let y = 0; y < 64; y++)
+        for (let x = 0; x < 64; x++)
+          if (
+            (x < 2 || x > 61 || y < 2 || y > 61) &&
+            pixels[(y * 64 + x) * 4 + 3] > 30
+          )
+            border++;
+      return { hash: hash >>> 0, count, border };
     }
     const result = [];
     for (const id of Object.keys(characters)) {
@@ -151,6 +146,7 @@ test("every illustrated character loads distinct nonempty emotions and direction
         unique: new Set(emotions.map((f) => f.hash)).size,
         min: Math.min(...emotions.concat(motion).map((f) => f.count)),
         motionUnique: new Set(motion.map((f) => f.hash)).size,
+        borders: Math.max(...emotions.concat(motion).map((f) => f.border)),
       });
     }
     return result;
@@ -159,5 +155,6 @@ test("every illustrated character loads distinct nonempty emotions and direction
     expect(r.unique, r.id + " unique emotion images").toBe(21);
     expect(r.min, r.id + " nonempty frames").toBeGreaterThan(120);
     expect(r.motionUnique, r.id + " distinct motion drawings").toBe(18);
+    expect(r.borders, r.id + " figure stays inside its canvas").toBe(0);
   }
 });

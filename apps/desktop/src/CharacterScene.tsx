@@ -10,6 +10,7 @@ import {
   blinkAmount,
 } from "../../../packages/character/expressions.ts";
 interface Props {
+  expressionMap?: Record<string, Record<string, number>>;
   state: CharacterState;
   model: ArrayBuffer | null;
   reduced: boolean;
@@ -99,6 +100,7 @@ function effectTexture(kind: string) {
 export function CharacterScene({
   state,
   model,
+  expressionMap,
   reduced,
   effects = true,
   direction = 0,
@@ -109,6 +111,8 @@ export function CharacterScene({
   const host = useRef<HTMLDivElement>(null),
     stateRef = useRef(state),
     reducedRef = useRef(reduced);
+  const expressionMapRef = useRef(expressionMap);
+  expressionMapRef.current = expressionMap;
   const [error, setError] = useState("");
   const [modelReady, setModelReady] = useState(false);
   const zoomRef = useRef(zoom),
@@ -251,6 +255,8 @@ export function CharacterScene({
           vrm.update(0);
           scene.add(vrm.scene);
           vrm.scene.traverse((object) => {
+            if (object instanceof THREE.SkinnedMesh)
+              object.frustumCulled = false;
             if (object instanceof THREE.Mesh)
               for (const material of Array.isArray(object.material)
                 ? object.material
@@ -308,7 +314,8 @@ export function CharacterScene({
       const blink = blinkAmount(phase, quiet);
       if (vrm) {
         const ex = vrm.expressionManager;
-        const face = vrmFace(s.expression);
+        const face =
+          expressionMapRef.current?.[s.expression] ?? vrmFace(s.expression);
         for (const name of [
           "happy",
           "sad",
@@ -364,8 +371,29 @@ export function CharacterScene({
             );
           }
         }
+        let floor = modelCenter.y - modelHeight / 2;
+        let ceiling = modelCenter.y + modelHeight / 2;
+        for (const name of [
+          "leftFoot",
+          "rightFoot",
+          "leftToes",
+          "rightToes",
+          "head",
+        ] as const) {
+          const bone = vrm.humanoid.getNormalizedBoneNode(name);
+          if (bone) {
+            const p = bone.getWorldPosition(new THREE.Vector3());
+            floor = Math.min(floor, p.y - modelHeight * 0.07);
+            ceiling = Math.max(ceiling, p.y + modelHeight * 0.07);
+          }
+        }
+        const framedHeight = Math.max(
+          modelHeight * 1.12,
+          (ceiling - floor) * 1.1,
+        );
+        const postureCenter = (floor + ceiling) / 2;
         const distance =
-          Math.max(modelHeight * 1.12, (2 * halfWidth) / camera.aspect) /
+          Math.max(framedHeight, (2 * halfWidth) / camera.aspect) /
           (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
         camera.zoom = Math.max(0.01, Math.min(1e12, zoomRef.current));
         camera.updateProjectionMatrix();
@@ -381,7 +409,7 @@ export function CharacterScene({
             .add(new THREE.Vector3(0, modelHeight * 0.045, 0)) ?? modelCenter;
         const blend = 1 - 1 / camera.zoom;
         const targetY =
-          THREE.MathUtils.lerp(modelCenter.y, focus.y, blend) +
+          THREE.MathUtils.lerp(postureCenter, focus.y, blend) +
           panRef.current.y * viewHeight;
         const targetX =
           THREE.MathUtils.lerp(modelCenter.x, focus.x, blend) +
@@ -478,6 +506,26 @@ export function CharacterScene({
         effect.visible = shown;
       }
       renderer.render(scene, camera);
+      if (vrm && now - metricsAt > 250) {
+        metricsAt = now;
+        const feet = ["leftFoot", "rightFoot", "leftToes", "rightToes"]
+          .map((name) =>
+            vrm!.humanoid.getNormalizedBoneNode(
+              name as import("@pixiv/three-vrm").VRMHumanBoneName,
+            ),
+          )
+          .filter(Boolean);
+        const visible = feet.every((bone) => {
+          const p = bone!.getWorldPosition(new THREE.Vector3()).project(camera);
+          return (
+            Math.abs(p.x) < 0.98 &&
+            Math.abs(p.y) < 0.98 &&
+            p.z >= -1 &&
+            p.z <= 1
+          );
+        });
+        renderer.domElement.dataset.feetInFrame = String(visible);
+      }
       frame = requestAnimationFrame(animate);
     }
     frame = requestAnimationFrame(animate);
@@ -500,6 +548,7 @@ export function CharacterScene({
       data-model-ready={modelReady}
       data-emotion={state.expression}
       data-activity={state.activity}
+      data-body={state.body}
       data-zoom={zoom}
     >
       <div ref={host} />

@@ -1,3 +1,4 @@
+import { packInfo, type PackSummary } from "./characterPackStore";
 import { useEffect, useState } from "react";
 import { isNative } from "./broker";
 import { characters } from "./lunaModel";
@@ -55,6 +56,18 @@ export function CharacterVoice({
   volume: number;
 }) {
   const preferences = usePreferences();
+  const [importedVoice, setImportedVoice] = useState<PackSummary | null>(null);
+  useEffect(() => {
+    let disposed = false;
+    setImportedVoice(null);
+    if (preferences.activePackId)
+      void packInfo(preferences.activePackId).then((pack) => {
+        if (!disposed) setImportedVoice(pack);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [preferences.activePackId]);
   const voiceCharacter =
     preferences.renderer === "sample-vrm" ? "haru" : character;
   const [own, setOwn] = useState<boolean | null>(null);
@@ -96,6 +109,41 @@ export function CharacterVoice({
     preferences.renderer === "sample-vrm"
       ? "Haru"
       : (characters[character as keyof typeof characters]?.name ?? character);
+  if (preferences.activePackId || preferences.renderer === "custom-vrm")
+    return (
+      <section className="settings-group" aria-label="Character voice">
+        <h3>Imported character voice</h3>
+        <p className="hint">
+          {importedVoice?.manifest.voice.kind === "prompt"
+            ? "This character uses its own server voice prompt. Select Gemini to hear it."
+            : importedVoice?.manifest.voice.kind === "reference"
+              ? "Voice reference and transcript are saved. Local voice cloning is planned; this character stays silent until a compatible engine is available."
+              : "This character has no voice definition and stays silent. Import a character pack with a voice prompt or reference to give it a voice."}
+        </p>
+        {importedVoice?.manifest.voice.kind === "prompt" && (
+          <>
+            <button
+              onClick={() => updatePreferences({ voiceProvider: "gemini" })}
+            >
+              Use Gemini for this voice
+            </button>
+            <button
+              disabled={preview.speaking || preview.preparing}
+              onClick={() => {
+                preview.prepare();
+                void preview.speak(
+                  "Hello, this is my character voice.",
+                  volume,
+                  "happy",
+                );
+              }}
+            >
+              Preview character voice
+            </button>
+          </>
+        )}
+      </section>
+    );
   return (
     <section className="settings-group" aria-label="Character voice">
       <label className="setting">

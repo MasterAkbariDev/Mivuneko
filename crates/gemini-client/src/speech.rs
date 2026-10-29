@@ -10,14 +10,34 @@ impl Service {
         character: String,
         audio: AudioCallback,
     ) -> Result<(), String> {
+        self.speak_stream_with_prompt(id, text, emotion, character, None, audio)
+            .await
+    }
+    pub async fn speak_stream_with_prompt(
+        &self,
+        id: String,
+        text: String,
+        emotion: String,
+        character: String,
+        voice_prompt: Option<String>,
+        audio: AudioCallback,
+    ) -> Result<(), String> {
         let transport = self.transport()?;
         if transport.config.speech_model.starts_with("gemini-2.") {
-            let wav = self.speak_character(id, text, emotion, character).await?;
+            let wav = self
+                .speak_character_with_prompt(id, text, emotion, character, voice_prompt)
+                .await?;
             let (pcm, rate) = wav_data(&wav)?;
             audio(pcm, rate);
             return Ok(());
         }
-        let body = character_speech_body(&transport.config, &text, &emotion, &character)?;
+        let body = character_speech_body_with_prompt(
+            &transport.config,
+            &text,
+            &emotion,
+            &character,
+            voice_prompt.as_deref(),
+        )?;
         if id.is_empty() || id.len() > 100 {
             return Err("Invalid speech request".into());
         }

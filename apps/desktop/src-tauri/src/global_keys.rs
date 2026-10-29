@@ -191,3 +191,15 @@ pub fn show_pet(window: tauri::Window) -> Result<(), String> {
     }
     reveal_pet(&window)
 }
+
+#[tauri::command]
+pub fn hide_pet(window: tauri::Window, app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if !["main", "pet"].contains(&window.label()) {
+        return Err("Unknown window".into());
+    }
+    app.get_webview_window("pet")
+        .ok_or("Pet unavailable")?
+        .hide()
+        .map_err(|e| e.to_string())
+}

@@ -1,3 +1,4 @@
+import { packInfo } from "./characterPackStore";
 import { speechChunks } from "../../../packages/shared-schemas/speech";
 import { useEffect, useRef, useState } from "react";
 import { usePreferences } from "./preferences";
@@ -25,6 +26,7 @@ export function useVoice(
 ) {
   const preferences = usePreferences();
   const cloud = preferences.voiceProvider === "gemini";
+  const packVoicePrompt = useRef<string | undefined>(undefined);
   const requests = useRef(new Set<string>());
   const [recording, setRecording] = useState(false),
     [speaking, setSpeaking] = useState(false);
@@ -372,8 +374,10 @@ export function useVoice(
           requestId,
           text: part,
           emotion,
-          character:
-            preferences.renderer === "sample-vrm"
+          voicePrompt: packVoicePrompt.current,
+          character: preferences.activePackId
+            ? "custom-pack"
+            : preferences.renderer === "sample-vrm"
               ? "haru"
               : preferences.character,
         });
@@ -399,6 +403,29 @@ export function useVoice(
   async function speak(text: string, volume: number, emotion: Mood = "happy") {
     if (!isNative) return;
     await stop();
+    // Standalone VRM imports carry no voice identity; never borrow another character's voice.
+    const voiceTicket = generation.current;
+    packVoicePrompt.current = undefined;
+    if (preferences.activePackId) {
+      const pack = await packInfo(preferences.activePackId);
+      if (voiceTicket !== generation.current) return;
+      if (pack?.manifest.voice.kind !== "prompt") {
+        onMood(emotion);
+        publishPet(emotion, text, 0);
+        return;
+      }
+      if (!cloud) {
+        onError(
+          "This character uses a server voice prompt. Choose Gemini in Voice & input.",
+        );
+        return;
+      }
+      packVoicePrompt.current = pack.manifest.voice.prompt;
+    } else if (preferences.renderer === "custom-vrm") {
+      onMood(emotion);
+      publishPet(emotion, text, 0);
+      return;
+    }
     const ticket = generation.current;
     setPreparing(true);
     try {
@@ -422,6 +449,10 @@ export function useVoice(
           return;
         } catch (e) {
           if (ticket !== generation.current) return;
+          if (packVoicePrompt.current)
+            throw Error(
+              `This character's server voice is unavailable (${String(e)}). The reply is still available as text.`,
+            );
           if (played.value)
             throw Error(
               "Speech was interrupted. You can still read the full reply.",

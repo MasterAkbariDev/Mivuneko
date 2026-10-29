@@ -2320,3 +2320,130 @@ input.range-control::-moz-range-thumb {
 .luna-model.mode-run {
   animation: none;
 }
+.illustration-viewport .luna-model {
+  width: 100%;
+  height: 100%;
+}
+.luna-model > canvas.luna-sprite {
+  display: block;
+  object-fit: contain;
+  background: none;
+  filter: drop-shadow(0 6px 8px #0002);
+}
+canvas.character-choice-art {
+  width: 100%;
+  aspect-ratio: 1;
+  height: auto;
+  object-fit: contain;
+}
+.pack-illustration {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+.pack-library-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.imported-pack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.imported-pack-card {
+  border: 1px solid #ffffff18;
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.imported-pack-card > button:first-child {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 7px;
+  width: 100%;
+  padding: 14px;
+}
+.imported-pack-card small {
+  color: #aeb4c3;
+  line-height: 1.5;
+}
+.pack-import-progress progress {
+  width: 100%;
+  height: 8px;
+  accent-color: #c2a1e6;
+}
+.imported-character {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.imported-character > button:first-child {
+  flex: 1;
+}
+@media (max-width: 650px) {
+  .pack-library-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+.character-pack-guide {
+  max-width: 1120px;
+  margin: auto;
+  line-height: 1.8;
+}
+.guide-hero {
+  padding: 28px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #312b46, #192a35);
+  margin-bottom: 24px;
+}
+.guide-hero h2 {
+  font-size: 32px;
+  line-height: 1.25;
+  margin: 12px 0;
+}
+.character-pack-guide figure {
+  margin: 24px 0;
+  padding: 16px;
+  border: 1px solid #ffffff14;
+  border-radius: 20px;
+  background: #141d2a;
+}
+.character-pack-guide figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+.character-pack-guide .guide-art-example img {
+  max-width: 760px;
+  margin: auto;
+}
+.character-pack-guide figcaption {
+  color: #b4b6c9;
+  font-size: 13px;
+  margin: 12px 0 0;
+}
+.character-pack-guide .md-h {
+  margin-top: 30px;
+  font-size: 22px;
+}
+.guide-downloads {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.guide-downloads a {
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #39304e;
+  color: #ece2ff;
+}

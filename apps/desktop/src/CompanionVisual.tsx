@@ -1,3 +1,5 @@
+import { savedPack, type SavedPack } from "./characterPackStore";
+import { PackIllustration } from "./PackIllustration";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Luna } from "./Luna";
 import { storedModel } from "./modelStore";
@@ -33,6 +35,7 @@ export function CompanionVisual({
   pan?: { x: number; y: number };
 }) {
   const p = usePreferences();
+  const [pack, setPack] = useState<SavedPack | null>(null);
   const [model, setModel] = useState<ArrayBuffer | null>(null);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [error, setError] = useState("");
@@ -41,9 +44,20 @@ export function CompanionVisual({
     async function load() {
       setError("");
       setModel(null);
+      setPack(null);
       try {
         let bytes: ArrayBuffer | null = null;
-        if (p.renderer === "sample-vrm") {
+        if (p.activePackId) {
+          const imported = await savedPack(p.activePackId);
+          if (!imported)
+            throw Error(
+              "This character was removed. Choose another character.",
+            );
+          if (!disposed) setPack(imported);
+          if (imported.manifest.format === "3d")
+            bytes =
+              await imported.assets[imported.manifest.model!].arrayBuffer();
+        } else if (p.renderer === "sample-vrm") {
           sample ??= fetch("/models/haru.vrm")
             .then((r) => {
               if (!r.ok) throw Error("Bundled model unavailable");
@@ -54,10 +68,11 @@ export function CompanionVisual({
               throw e;
             });
           bytes = await sample;
-        } else if (p.renderer === "custom-vrm") bytes = await storedModel();
+        } else if (p.renderer === "custom-vrm")
+          bytes = await storedModel(p.customModelId);
         if (!disposed) {
           setModel(bytes);
-          if (p.renderer === "custom-vrm" && !bytes)
+          if (!p.activePackId && p.renderer === "custom-vrm" && !bytes)
             setError("Import a VRM model in Characters to use this slot.");
         }
       } catch (e) {
@@ -71,7 +86,7 @@ export function CompanionVisual({
       disposed = true;
       channel.close();
     };
-  }, [p.renderer]);
+  }, [p.renderer, p.customModelId, p.activePackId]);
   useEffect(() => {
     if (!p.illustrationDepth || p.renderer !== "2d" || p.reduced || p.petEdit) {
       setTilt({ x: 0, y: 0 });
@@ -90,6 +105,29 @@ export function CompanionVisual({
       window.removeEventListener("blur", reset);
     };
   }, [p.illustrationDepth, p.renderer, p.reduced, p.petEdit]);
+  if (p.activePackId && !pack)
+    return (
+      <div className="model-placeholder" role="status">
+        {error || "Loading character…"}
+      </div>
+    );
+  if (pack && pack.manifest.format !== "3d")
+    return (
+      <PackIllustration
+        pack={pack}
+        pose={
+          p.customPackPose ||
+          (p.petExpression !== "auto"
+            ? p.petExpression
+            : mood === "speaking"
+              ? "speaking"
+              : (speechEmotion ?? mood))
+        }
+        body={p.petEdit ? "idle" : body}
+        direction={direction}
+        reduced={p.reduced || p.petEdit}
+      />
+    );
   if (p.renderer === "2d")
     return (
       <div
@@ -114,8 +152,10 @@ export function CompanionVisual({
             mode={
               p.petEdit
                 ? "stand"
-                : body === "walk" || body === "run" || body === "sit"
-                  ? body
+                : body
+                  ? body === "idle"
+                    ? "stand"
+                    : body
                   : p.petMode
             }
             expression={p.petEdit ? "idle" : p.petExpression}
@@ -162,6 +202,7 @@ export function CompanionVisual({
         >
           <CharacterScene
             model={model}
+            expressionMap={pack?.manifest.expressions}
             state={state}
             reduced={p.reduced || (p.petEdit && !dragging)}
             effects={p.petEffects && !p.petEdit}

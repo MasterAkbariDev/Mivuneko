@@ -1008,6 +1008,253 @@ test("dimensional galleries select models and expose the character manual", asyn
     .getByRole("button", { name: /Creating characters & voices/ })
     .click();
   await expect(
+    page.getByRole("heading", { name: "Character guide", exact: true }),
+  ).toBeVisible();
+  await expect(
     page.getByRole("heading", { name: "Create and import a 3D character" }),
   ).toBeVisible();
 });
+
+test("LLM posture actions execute instead of only producing an acknowledgement", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any,
+      previous = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) =>
+      command === "hermes_chat"
+        ? JSON.stringify({
+            text: "I'll straighten up now.",
+            emotion: "happy",
+            companionActions: [{ kind: "stand" }],
+          })
+        : previous(command, args);
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ backend: "hermes", petMode: "sit", voice: "off" }),
+    );
+    localStorage.setItem("mivuneko.automatic-behavior.v1", "1");
+  });
+  await page.goto("/?view=chat");
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("Could you straighten your posture a little?");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!).petMode,
+      ),
+    )
+    .toBe("stand");
+  await expect(
+    page.getByText("Done. I finished the requested companion actions.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+});
+
+test("Haru keeps both feet in the camera through sitting and standing", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    delete (window as any).__TAURI_INTERNALS__;
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ renderer: "sample-vrm", petMode: "sit", petScale: 1 }),
+    );
+    localStorage.setItem("mivuneko.automatic-behavior.v1", "1");
+  });
+  await page.goto("/?view=pet");
+  const scene = page.locator(".character-scene[data-model-ready=true]");
+  await expect(scene).toBeVisible({ timeout: 30000 });
+  await expect(scene).toHaveAttribute("data-body", "sit");
+  await page.waitForTimeout(1500);
+  await expect(scene.locator("canvas")).toHaveAttribute(
+    "data-feet-in-frame",
+    "true",
+  );
+  await page.evaluate(() => {
+    const p = JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!);
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ ...p, petMode: "stand" }),
+    );
+    window.dispatchEvent(
+      new StorageEvent("storage", { key: "mivuneko.preferences.v1" }),
+    );
+  });
+  await expect(scene).toHaveAttribute("data-body", "idle");
+  await expect(scene.locator("canvas")).toHaveAttribute(
+    "data-feet-in-frame",
+    "true",
+  );
+});
+
+for (const voiceKind of ["none", "prompt"] as const)
+  test(`imported ${voiceKind} voice never borrows a built-in identity`, async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const w = window as any,
+        previous = w.__TAURI_INTERNALS__.invoke;
+      w.AudioContext = class {
+        destination = {};
+        currentTime = 0;
+        resume() {
+          return Promise.resolve();
+        }
+        close() {
+          return Promise.resolve();
+        }
+        createGain() {
+          return { gain: { value: 1 }, connect() {}, disconnect() {} };
+        }
+        createAnalyser() {
+          return {
+            fftSize: 32,
+            connect() {},
+            disconnect() {},
+            getFloatTimeDomainData(a: Float32Array) {
+              a.fill(0);
+            },
+          };
+        }
+        createBuffer(_channels: number, length: number, rate: number) {
+          return {
+            duration: length / rate,
+            getChannelData: () => new Float32Array(length),
+          };
+        }
+        createBufferSource() {
+          return {
+            buffer: null,
+            onended: null as (() => void) | null,
+            connect() {},
+            disconnect() {},
+            start() {
+              setTimeout(() => this.onended?.(), 20);
+            },
+            stop() {
+              this.onended?.();
+            },
+          };
+        }
+      };
+      w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+        if (command === "hermes_chat")
+          return JSON.stringify({
+            text: "Hello, lovely to meet you.",
+            emotion: "happy",
+          });
+        if (command === "gemini_speak_stream") {
+          w.__calls.push({ command, args });
+          w.__emit("voice-audio", {
+            requestId: args.requestId,
+            pcm: Array.from({ length: 4800 }, () => 0),
+            sampleRate: 24000,
+          });
+          await new Promise((r) => setTimeout(r, 30));
+          return;
+        }
+        return previous(command, args);
+      };
+    });
+    await page.goto("/?view=chat");
+    await page.evaluate(async (voiceKind) => {
+      const path = "/src/characterPackStore.ts",
+        { importPack } = await import(path);
+      const image = await (await fetch("/characters/luna-atlas.png")).blob();
+      const manifest = {
+        schemaVersion: 1,
+        id: "test.voice",
+        name: "Voice test",
+        author: "Test",
+        license: "Original example",
+        format: "2d",
+        assets: {
+          art: {
+            type: "image",
+            path: "art.png",
+            grid: { columns: 3, rows: 2 },
+          },
+        },
+        frames: { idle: { asset: "art", cell: [0, 0], anchor: [0.5, 0.96] } },
+        poses: {
+          idle: { frames: [{ frame: "idle", durationMs: 1000 }], loop: true },
+        },
+        voice:
+          voiceKind === "none"
+            ? { kind: "none" }
+            : {
+                kind: "prompt",
+                prompt: "A clear, warm, airy character voice.",
+              },
+      };
+      const pack = await importPack([
+        new File([JSON.stringify(manifest)], "character.json", {
+          type: "application/json",
+        }),
+        new File([image], "art.png", { type: "image/png" }),
+      ]);
+      const p = JSON.parse(
+        localStorage.getItem("mivuneko.preferences.v1") || "{}",
+      );
+      localStorage.setItem(
+        "mivuneko.preferences.v1",
+        JSON.stringify({
+          ...p,
+          activePackId: pack.id,
+          activePackName: pack.manifest.name,
+          renderer: "2d",
+          voice: "push-to-talk",
+          voiceProvider: "gemini",
+          backend: "hermes",
+        }),
+      );
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: "mivuneko.preferences.v1" }),
+      );
+    }, voiceKind);
+    await page
+      .getByLabel("Message Mivuneko", { exact: true })
+      .fill("Say a short hello");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(
+      page.getByText("Hello, lovely to meet you.", { exact: true }),
+    ).toBeVisible();
+    if (voiceKind === "none") {
+      await page.waitForTimeout(300);
+      expect(
+        await page.evaluate(
+          () =>
+            (window as any).__calls.filter(
+              (c: any) =>
+                c.command === "gemini_speak_stream" ||
+                c.command === "synthesize_character",
+            ).length,
+        ),
+      ).toBe(0);
+    } else {
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () =>
+              (window as any).__calls.filter(
+                (c: any) => c.command === "gemini_speak_stream",
+              ).length,
+          ),
+        )
+        .toBeGreaterThan(0);
+      const call = await page.evaluate(() =>
+        (window as any).__calls.find(
+          (c: any) => c.command === "gemini_speak_stream",
+        ),
+      );
+      expect(call.args.voicePrompt).toBe(
+        "A clear, warm, airy character voice.",
+      );
+      expect(call.args.character).toBe("custom-pack");
+    }
+  });

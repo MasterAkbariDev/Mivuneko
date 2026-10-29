@@ -116,7 +116,11 @@ export function agentFor(
                 if (event.payload.requestId !== requestId || signal.aborted)
                   return;
                 raw += event.payload.delta;
-                onProgress?.(backend === "gemini" ? partialText(raw) : raw);
+                onProgress?.(
+                  backend === "gemini" || /^\s*[{`]/.test(raw)
+                    ? partialText(raw)
+                    : raw,
+                );
               },
             )
           : () => {};
@@ -141,8 +145,7 @@ export function agentFor(
         unlisten();
       }
       signal.throwIfAborted();
-      const reply =
-        backend === "groq" ? { text: answer } : parseAgentReply(answer);
+      const reply = parseAgentReply(answer);
       if (mode === "Chat" || mode === "Creative") delete reply.appQuery;
       return reply;
     },

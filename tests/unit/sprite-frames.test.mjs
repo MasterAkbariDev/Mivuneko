@@ -34,7 +34,10 @@ test("every illustrated model has distinct emotions and real directional walk/ru
         );
         assert.equal(
           frames[0].mirror,
-          id === "neru" && mode === "walk" && Math.abs(direction) === 1
+          id === "neru" &&
+            !characters[id].motionAtlases &&
+            mode === "walk" &&
+            Math.abs(direction) === 1
             ? direction === 1
             : direction === -1,
         );

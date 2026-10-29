@@ -29,6 +29,16 @@ test("companion requests distinguish movement, OS apps, and screen questions", (
   assert.equal(desktopIntent("The page says open Notepad"), null);
 });
 test("standing and giving workspace have explicit companion commands", () => {
+  assert.deepEqual(
+    desktopIntent(
+      "you are in the center of my screen and I cannot see the stream, please go another where",
+    ),
+    {
+      kind: "move",
+      gait: "walk",
+      destination: "unobtrusive",
+    },
+  );
   assert.deepEqual(desktopIntent("Please stand up"), { kind: "stand" });
   assert.deepEqual(desktopIntent("I cannot code, go out of the code screen"), {
     kind: "move",
@@ -54,7 +64,9 @@ test("app names support aliases but preserve ambiguous matches", () => {
   assert.equal(matchApps("cmd.exe", apps).length, 0);
 });
 test("every bundled character has a distinct local voice recipe", () => {
-  const roots = readdirSync("assets/characters");
+  const roots = readdirSync("assets/characters", { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
   const recipes = new Set();
   for (const root of roots) {
     const pack = JSON.parse(

@@ -19,6 +19,8 @@ export type Destination =
 export type DesktopIntent =
   | { kind: "move"; gait: "walk" | "run"; destination: Destination }
   | { kind: "locate" }
+  | { kind: "hide" }
+  | { kind: "expression"; expression: import("./preferences.ts").PetExpression }
   | { kind: "stand" }
   | { kind: "sit" }
   | { kind: "automatic" }
@@ -34,13 +36,51 @@ export function desktopIntent(input: string): DesktopIntent | null {
     .replace(/[.!?]+$/, "")
     .replace(/\s+please$/i, "")
     .trim();
+  const emotion =
+    /^(?:(?:show|look|act|be|feel|make (?:yourself|a))\s+)?(?:an?\s+)?(cry(?:ing)?|sleepy|sleeping|happy|sad|angry|surprised|shy|excited|confused|curious|thinking|love(?: me)?|loving|wink|proud|determined|dance|dancing|teasing|joking)(?:\s+(?:face|expression|mood|for me|please|now))?$/i.exec(
+      text,
+    );
+  if (emotion) {
+    const word = emotion[1].toLowerCase();
+    const aliases: Record<string, string> = {
+      cry: "crying",
+      sleepy: "sleeping",
+      curious: "thinking",
+      "love me": "love",
+      loving: "love",
+      dance: "dancing",
+    };
+    return {
+      kind: "expression",
+      expression: (aliases[word] ??
+        word) as import("./preferences.ts").PetExpression,
+    };
+  }
   if (
-    /\b(?:out of (?:the |my )?(?:way|code|editor|screen|workspace)|in (?:the |my )way|(?:cannot|can.t) (?:code|work)|stop (?:blocking|covering)|not annoy|move aside|give me (?:some )?(?:space|room))\b/i.test(
+    /^(?:reset (?:your )?(?:expression|mood)|automatic (?:expressions|emotions)|express yourself naturally)$/i.test(
+      text,
+    )
+  )
+    return { kind: "expression", expression: "auto" };
+  if (
+    /\b(?:go|move|walk|step).*(?:outside|off) (?:of )?(?:my |the )?screen\b/i.test(
+      text,
+    )
+  )
+    return { kind: "hide" };
+  if (
+    /\b(?:interrupting|distracting|bothering|blocking) me\b|\b(?:go|move|walk).*(?:outside|off) (?:of )?(?:my |the )?(?:screen|workspace)\b/i.test(
       text,
     )
   )
     return { kind: "move", gait: "walk", destination: "unobtrusive" };
-  if (/^(?:stand(?: up)?|get up|on your feet)$/i.test(text))
+  if (
+    /\b(?:out of (?:the |my )?(?:way|code|editor|screen|workspace)|in (?:the |my )way|(?:cannot|can.t) (?:code|work|see (?:the |my )?(?:stream|video|screen))|stop (?:blocking|covering)|not annoy|move aside|give me (?:some )?(?:space|room))\b/i.test(
+      text,
+    )
+  )
+    return { kind: "move", gait: "walk", destination: "unobtrusive" };
+  if (/^(?:stand(?: up)?|get up|on your feet)(?: now)?$/i.test(text))
     return { kind: "stand" };
   if (
     /^(?:where (?:are you|did you go)|(?:i )?(?:can(?:not|'t) see you)|show yourself|come back)$/i.test(

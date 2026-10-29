@@ -1,37 +1,85 @@
 import { useEffect, useRef, useState } from "react";
 import { updatePreferences, usePreferences } from "./preferences";
-import { saveModel, storedModel } from "./modelStore";
+import {
+  listModels,
+  removeModel,
+  saveModel,
+  type SavedModel,
+} from "./modelStore";
 import {
   inspectVrm,
   validateVrmFile,
-  type VrmInfo,
 } from "../../../packages/character/packs.ts";
 export function ModelSettings({ only3D = false }: { only3D?: boolean }) {
-  const p = usePreferences();
-  const input = useRef<HTMLInputElement>(null);
-  const [info, setInfo] = useState<VrmInfo | null>(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const p = usePreferences(),
+    input = useRef<HTMLInputElement>(null);
+  const [models, setModels] = useState<SavedModel[]>([]),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  const refresh = () =>
+    listModels()
+      .then(setModels)
+      .catch((e) => setError(String(e)));
   useEffect(() => {
-    void storedModel()
-      .then((bytes) => bytes && setInfo(inspectVrm(bytes)))
-      .catch(() => {});
+    void refresh();
+    const c = new BroadcastChannel("mivuneko.assets");
+    c.onmessage = () => void refresh();
+    return () => c.close();
   }, []);
-  async function upload(file: File) {
+  async function upload(files: FileList) {
     setBusy(true);
     setError("");
+    const errors: string[] = [];
     try {
-      validateVrmFile(file.name, file.size);
-      const bytes = await file.arrayBuffer();
-      const details = inspectVrm(bytes);
-      await saveModel(bytes);
-      setInfo(details);
-      updatePreferences({ renderer: "custom-vrm" });
-    } catch (e) {
-      setError(String(e));
+      for (const file of Array.from(files)) {
+        try {
+          validateVrmFile(file.name, file.size);
+          const bytes = await file.arrayBuffer(),
+            info = inspectVrm(bytes),
+            id = await saveModel(bytes);
+          updatePreferences({
+            activePackId: "",
+            activePackName: "",
+            renderer: "custom-vrm",
+            customModelId: id,
+            customModelName: info.name,
+          });
+        } catch (e) {
+          errors.push(`${file.name}: ${String(e)}`);
+        }
+      }
+      await refresh();
+      setError(errors.join("\n"));
     } finally {
       setBusy(false);
       if (input.current) input.current.value = "";
+    }
+  }
+  async function remove(id: string) {
+    try {
+      await removeModel(id);
+      const remaining = await listModels();
+      setModels(remaining);
+      if (
+        p.renderer === "custom-vrm" &&
+        !p.activePackId &&
+        (p.customModelId === id || (!p.customModelId && models[0]?.id === id))
+      ) {
+        const next = remaining[0];
+        updatePreferences(
+          next
+            ? { customModelId: next.id, customModelName: next.info.name }
+            : {
+                activePackId: "",
+                activePackName: "",
+                renderer: "sample-vrm",
+                customModelId: "",
+                customModelName: "",
+              },
+        );
+      }
+    } catch (e) {
+      setError(String(e));
     }
   }
   return (
@@ -39,12 +87,11 @@ export function ModelSettings({ only3D = false }: { only3D?: boolean }) {
       className="model-settings settings-group"
       aria-label="3D character manager"
     >
-      <span className="eyebrow">CHARACTER FORMAT</span>
-      <h3>Bring your companion to life</h3>
+      <span className="eyebrow">YOUR CHARACTER LIBRARY</span>
+      <h3>3D companions</h3>
       <p className="hint">
-        Choose illustrated 2D artwork or an animated VRM character. 3D
-        characters support expressions, blinking, lip sync, gaze and spring-bone
-        physics.
+        Every import gets its own slot. Your existing characters stay in the
+        library. A VRM supplies the model, not a voice.
       </p>
       <div
         className="format-options"
@@ -53,46 +100,74 @@ export function ModelSettings({ only3D = false }: { only3D?: boolean }) {
       >
         {!only3D && (
           <button
-            type="button"
+            onClick={() =>
+              updatePreferences({
+                activePackId: "",
+                activePackName: "",
+                renderer: "2d",
+              })
+            }
             aria-pressed={p.renderer === "2d"}
-            onClick={() => updatePreferences({ renderer: "2d" })}
           >
             <b>2D illustration</b>
             <small>Original poses & mood effects</small>
           </button>
         )}
         <button
-          type="button"
+          onClick={() =>
+            updatePreferences({
+              activePackId: "",
+              activePackName: "",
+              renderer: "sample-vrm",
+            })
+          }
           aria-pressed={p.renderer === "sample-vrm"}
-          onClick={() => updatePreferences({ renderer: "sample-vrm" })}
         >
           <b>Haru · 3D</b>
-          <small>Expressive VRoid companion</small>
+          <small>Expressions, gestures & character voice</small>
         </button>
-        {info && (
-          <button
-            type="button"
-            aria-pressed={p.renderer === "custom-vrm"}
-            onClick={() =>
-              info
-                ? updatePreferences({ renderer: "custom-vrm" })
-                : input.current?.click()
-            }
-          >
-            <b>Your VRM model</b>
-            <small>{info.name}</small>
-          </button>
-        )}
+        {models.map((m) => (
+          <div className="imported-character" key={m.id}>
+            <button
+              aria-pressed={
+                p.renderer === "custom-vrm" &&
+                (p.customModelId === m.id ||
+                  (!p.customModelId && m.id === models[0]?.id))
+              }
+              onClick={() =>
+                updatePreferences({
+                  activePackId: "",
+                  activePackName: "",
+                  renderer: "custom-vrm",
+                  customModelId: m.id,
+                  customModelName: m.info.name,
+                })
+              }
+            >
+              <b>Your VRM model · {m.info.name}</b>
+              <small>By {m.info.authors}</small>
+              <small>{m.info.expressions.length} expression presets</small>
+              <small>Silent · no voice definition</small>
+            </button>
+            <button
+              className="quiet-button"
+              aria-label={`Remove ${m.info.name} ${m.id}`}
+              onClick={() => void remove(m.id)}
+            >
+              Remove from library
+            </button>
+          </div>
+        ))}
       </div>
       <input
         ref={input}
         type="file"
+        multiple
         accept=".vrm"
         className="sr"
         aria-label="Import VRM file"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void upload(f);
+          if (e.target.files?.length) void upload(e.target.files);
         }}
       />
       <div className="model-actions">
@@ -101,42 +176,18 @@ export function ModelSettings({ only3D = false }: { only3D?: boolean }) {
           disabled={busy}
           onClick={() => input.current?.click()}
         >
-          {busy
-            ? "Importing model…"
-            : info
-              ? "Replace imported character"
-              : "Import VRM character"}
+          {busy ? "Importing characters…" : "Import VRM character"}
         </button>
-        {info && (
-          <button
-            type="button"
-            onClick={() => {
-              void saveModel(null)
-                .then(() => {
-                  setInfo(null);
-                  updatePreferences({ renderer: "sample-vrm" });
-                })
-                .catch((e) => setError(String(e)));
-            }}
-          >
-            Remove imported model
-          </button>
-        )}
       </div>
-      {info && (
-        <div className="model-attribution">
-          <strong>{info.name}</strong>
-          <small>By {info.authors}</small>
-          <small>{info.license}</small>
-          <small>
-            {info.expressions.length} expression presets · stored on this device
-          </small>
-        </div>
-      )}
+      <p className="hint">
+        Select one or more .vrm files. Files stay on this device. Importing the
+        same file again creates another slot. Removing one slot leaves the
+        others intact.
+      </p>
       {p.renderer === "sample-vrm" && (
         <p className="hint">
-          Haru uses AvatarSample_B by VRoid Project / pixiv. Included under the
-          creator’s usage terms, with original permissions preserved.
+          Haru uses AvatarSample_B by VRoid Project / pixiv, with original usage
+          terms preserved.
         </p>
       )}
       {error && (

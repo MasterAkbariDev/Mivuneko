@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "id": "example.atlas-companion",
+  "name": "Atlas companion",
+  "author": "Example author",
+  "license": "Replace with the actual artwork license",
+  "format": "2d",
+  "assets": {
+    "expressions": {
+      "type": "image",
+      "path": "art/expressions.png",
+      "grid": {
+        "columns": 3,
+        "rows": 2
+      }
+    }
+  },
+  "frames": {
+    "idle": {
+      "asset": "expressions",
+      "cell": [0, 0],
+      "anchor": [0.5, 0.96]
+    },
+    "happy": {
+      "asset": "expressions",
+      "cell": [1, 0],
+      "anchor": [0.5, 0.96]
+    },
+    "surprised": {
+      "asset": "expressions",
+      "cell": [2, 0],
+      "anchor": [0.5, 0.96]
+    },
+    "angry": {
+      "asset": "expressions",
+      "cell": [0, 1],
+      "anchor": [0.5, 0.96]
+    },
+    "sleeping": {
+      "asset": "expressions",
+      "cell": [1, 1],
+      "anchor": [0.5, 0.96]
+    },
+    "speaking": {
+      "asset": "expressions",
+      "cell": [2, 1],
+      "anchor": [0.5, 0.96]
+    }
+  },
+  "poses": {
+    "idle": {
+      "frames": [
+        {
+          "frame": "idle",
+          "durationMs": 1200
+        }
+      ],
+      "loop": true
+    },
+    "happy": {
+      "frames": [
+        {
+          "frame": "happy",
+          "durationMs": 1200
+        }
+      ],
+      "loop": true
+    },
+    "surprised": {
+      "frames": [
+        {
+          "frame": "surprised",
+          "durationMs": 1200
+        }
+      ],
+      "loop": true
+    },
+    "angry": {
+      "frames": [
+        {
+          "frame": "angry",
+          "durationMs": 1200
+        }
+      ],
+      "loop": true
+    },
+    "sleeping": {
+      "frames": [
+        {
+          "frame": "sleeping",
+          "durationMs": 1200
+        }
+      ],
+      "loop": true
+    },
+    "speaking": {
+      "frames": [
+        {
+          "frame": "speaking",
+          "durationMs": 1200
+        }
+      ],
+      "loop": true
+    }
+  },
+  "fallbackPose": "idle",
+  "voice": {
+    "kind": "none"
+  }
+}

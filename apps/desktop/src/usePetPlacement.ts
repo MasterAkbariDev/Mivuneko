@@ -82,7 +82,9 @@ export function usePetPlacement(options: Options) {
       targetDisplay: Display | undefined,
       roam = 1,
       roamTarget: Point | undefined,
-      lastRoaming = false;
+      lastRoaming = false,
+      wasDragging = false,
+      settleY: number | undefined;
     const offs: Array<() => void> = [];
     async function status(at: number, state: string, message: string) {
       const { emitTo } = await import("@tauri-apps/api/event");
@@ -187,7 +189,10 @@ export function usePetPlacement(options: Options) {
       try {
         const o = latest.current;
         if (!ready) return;
-        if (o.dragging) return;
+        if (o.dragging) {
+          wasDragging = true;
+          return;
+        }
         if (now - refresh > 800 || force.current) {
           const { availableMonitors } = await import("@tauri-apps/api/window");
           all = await availableMonitors();
@@ -197,6 +202,35 @@ export function usePetPlacement(options: Options) {
         }
         await fit();
         viewport();
+        if (wasDragging) {
+          wasDragging = false;
+          const a = areaOf(monitor),
+            factor = size.width / Math.max(1, innerWidth);
+          const bottom =
+            parseFloat(
+              document
+                .querySelector<HTMLElement>(".pet-root")
+                ?.style.getPropertyValue("--model-bottom") || "",
+            ) || PET_TOP + (size.height / factor - PET_EXTRA) * 0.96;
+          const feet = position.y + bottom * factor;
+          if (size.height <= a.height && feet > a.y + a.height - 8)
+            settleY = position.y - (feet - (a.y + a.height - 8));
+        }
+        if (settleY !== undefined) {
+          const { PhysicalPosition } = await import("@tauri-apps/api/dpi");
+          position.y += (settleY - position.y) * (1 - Math.exp(-16 * dt));
+          if (Math.abs(settleY - position.y) < 1) {
+            position.y = settleY;
+            settleY = undefined;
+          }
+          await w.setPosition(
+            new PhysicalPosition(
+              Math.round(position.x),
+              Math.round(position.y),
+            ),
+          );
+          return;
+        }
         if (disposed || Date.now() < o.manualUntil.current) return;
         if (o.task && taskAt !== o.task.at) {
           taskAt = o.task.at;

@@ -43,6 +43,7 @@ export interface Broker {
   revoke(): Promise<void>;
 }
 export interface AgentReply {
+  companionActions?: import("./companion-actions.ts").CompanionAction[];
   mood?: Mood;
   text: string;
   // Short, plain sentence(s) to speak aloud instead of the formatted text.

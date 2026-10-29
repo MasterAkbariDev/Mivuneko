@@ -80,3 +80,22 @@ test("Luna expression choices each use a unique sprite cell", () => {
   );
   assert.equal(new Set(frames).size, frames.length);
 });
+
+test("active illustrated poses retain high source detail", () => {
+  for (const [id, character] of Object.entries(characters)) {
+    for (const [pose, [atlas]] of Object.entries(character.poses)) {
+      const grid = character.grids?.[atlas] ?? [
+        character.columns ?? 3,
+        character.rows ?? 2,
+      ];
+      const bytes = readFileSync(
+        `apps/desktop/public${character.atlases[atlas]}`,
+      );
+      assert.ok(bytes.readUInt32BE(16) / grid[0] >= 480, `${id} ${pose} width`);
+      assert.ok(
+        bytes.readUInt32BE(20) / grid[1] >= 480,
+        `${id} ${pose} height`,
+      );
+    }
+  }
+});

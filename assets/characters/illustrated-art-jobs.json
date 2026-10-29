@@ -1,0 +1,1107 @@
+{
+  "prompt": "Generate a high-detail production sprite sheet matching the exact character identity, face, hair, costume and painterly anime style in the reference. Reference is identity only. EXACTLY SIX full-body figures in a regular THREE-column TWO-row grid, each cell square. Aspect ratio 3:2, target 1536x1024 or higher. Do NOT pack extra figures into the sheet. Every complete figure must have consistent scale, centered on its cell, feet baseline at 93% of the cell, safe padding around hair/tail/ears, no neighboring overlap. True transparent alpha background. No text, labels, borders, watermarks or emotion icons. Clean crisp linework, full detail and smooth edges. All six faces/postures genuinely different where specified. Keep character design identical across frames. For locomotion, consecutive frames must alternate the legs and arms rather than duplicate or shift a standing picture. Facing RIGHT means the nose points toward the right edge; FRONT means toward viewer; BACK means away from viewer. Keep the original artwork's quality, never pixel art. Cell order row-major: ",
+  "jobs": [
+    {
+      "id": "miku",
+      "part": "a",
+      "reference": "miku-fan-atlas.png",
+      "poses": [
+        "angry eyebrows, fists held near chest",
+        "thoughtful eyes, hand touching chin",
+        "attentive eyes, cupping one ear",
+        "sad eyes and slumped shoulders",
+        "joyful open smile, both arms overhead",
+        "dancing twirl with skirt and hair flowing"
+      ],
+      "names": [
+        "angry",
+        "thinking",
+        "listening",
+        "sad",
+        "celebrating",
+        "dancing"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "miku",
+      "part": "b",
+      "reference": "miku-fan-atlas.png",
+      "poses": [
+        "excited bright smile, small joyful bounce",
+        "puzzled eyes, tilted head, open palms",
+        "warm loving expression, hands making a heart",
+        "laughing eyes closed, hand on tummy",
+        "playful teasing smirk, finger near lips",
+        "one eye winking, waving hand"
+      ],
+      "names": [
+        "excited",
+        "confused",
+        "love",
+        "joking",
+        "teasing",
+        "wink"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "miku",
+      "part": "c",
+      "reference": "miku-fan-atlas.png",
+      "poses": [
+        "proud smile, chin up, hands on hips",
+        "real tears, wiping cheek with sleeve",
+        "determined brows, confident ready stance",
+        "awake and seated comfortably, eyes open",
+        "gently lifted by the torso, arms and legs dangling",
+        "pleased smile giving a thumbs-up"
+      ],
+      "names": [
+        "proud",
+        "crying",
+        "determined",
+        "sit",
+        "drag",
+        "thumbs"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "miku",
+      "part": "motion-0",
+      "reference": "miku-fan-atlas.png",
+      "poses": [
+        "Walk RIGHT profile left foot contact",
+        "Walk RIGHT passing feet together",
+        "Walk RIGHT opposite foot contact",
+        "Walk FRONT left foot contact",
+        "Walk FRONT passing feet together",
+        "Walk FRONT opposite foot contact"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "miku",
+      "part": "motion-1",
+      "reference": "miku-fan-atlas.png",
+      "poses": [
+        "Walk BACK left foot contact",
+        "Walk BACK passing feet together",
+        "Walk BACK opposite foot contact",
+        "Run RIGHT airborne long left stride",
+        "Run RIGHT tucked-knee flight",
+        "Run RIGHT opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "miku",
+      "part": "motion-2",
+      "reference": "miku-fan-atlas.png",
+      "poses": [
+        "Run FRONT airborne left stride",
+        "Run FRONT tucked-knee flight",
+        "Run FRONT opposite airborne stride",
+        "Run BACK airborne left stride",
+        "Run BACK tucked-knee flight",
+        "Run BACK opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "kitsune",
+      "part": "a",
+      "reference": "kitsune-atlas.png",
+      "poses": [
+        "angry eyebrows, fists held near chest",
+        "thoughtful eyes, hand touching chin",
+        "attentive eyes, cupping one ear",
+        "sad eyes and slumped shoulders",
+        "joyful open smile, both arms overhead",
+        "dancing twirl with skirt and hair flowing"
+      ],
+      "names": [
+        "angry",
+        "thinking",
+        "listening",
+        "sad",
+        "celebrating",
+        "dancing"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "kitsune",
+      "part": "b",
+      "reference": "kitsune-atlas.png",
+      "poses": [
+        "excited bright smile, small joyful bounce",
+        "puzzled eyes, tilted head, open palms",
+        "warm loving expression, hands making a heart",
+        "laughing eyes closed, hand on tummy",
+        "playful teasing smirk, finger near lips",
+        "one eye winking, waving hand"
+      ],
+      "names": [
+        "excited",
+        "confused",
+        "love",
+        "joking",
+        "teasing",
+        "wink"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "kitsune",
+      "part": "c",
+      "reference": "kitsune-atlas.png",
+      "poses": [
+        "proud smile, chin up, hands on hips",
+        "real tears, wiping cheek with sleeve",
+        "determined brows, confident ready stance",
+        "awake and seated comfortably, eyes open",
+        "gently lifted by the torso, arms and legs dangling",
+        "pleased smile giving a thumbs-up"
+      ],
+      "names": [
+        "proud",
+        "crying",
+        "determined",
+        "sit",
+        "drag",
+        "thumbs"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "kitsune",
+      "part": "motion-0",
+      "reference": "kitsune-atlas.png",
+      "poses": [
+        "Walk RIGHT profile left foot contact",
+        "Walk RIGHT passing feet together",
+        "Walk RIGHT opposite foot contact",
+        "Walk FRONT left foot contact",
+        "Walk FRONT passing feet together",
+        "Walk FRONT opposite foot contact"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "kitsune",
+      "part": "motion-1",
+      "reference": "kitsune-atlas.png",
+      "poses": [
+        "Walk BACK left foot contact",
+        "Walk BACK passing feet together",
+        "Walk BACK opposite foot contact",
+        "Run RIGHT airborne long left stride",
+        "Run RIGHT tucked-knee flight",
+        "Run RIGHT opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "kitsune",
+      "part": "motion-2",
+      "reference": "kitsune-atlas.png",
+      "poses": [
+        "Run FRONT airborne left stride",
+        "Run FRONT tucked-knee flight",
+        "Run FRONT opposite airborne stride",
+        "Run BACK airborne left stride",
+        "Run BACK tucked-knee flight",
+        "Run BACK opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "stella",
+      "part": "a",
+      "reference": "stella-atlas.png",
+      "poses": [
+        "angry eyebrows, fists held near chest",
+        "thoughtful eyes, hand touching chin",
+        "attentive eyes, cupping one ear",
+        "sad eyes and slumped shoulders",
+        "joyful open smile, both arms overhead",
+        "dancing twirl with skirt and hair flowing"
+      ],
+      "names": [
+        "angry",
+        "thinking",
+        "listening",
+        "sad",
+        "celebrating",
+        "dancing"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "stella",
+      "part": "b",
+      "reference": "stella-atlas.png",
+      "poses": [
+        "excited bright smile, small joyful bounce",
+        "puzzled eyes, tilted head, open palms",
+        "warm loving expression, hands making a heart",
+        "laughing eyes closed, hand on tummy",
+        "playful teasing smirk, finger near lips",
+        "one eye winking, waving hand"
+      ],
+      "names": [
+        "excited",
+        "confused",
+        "love",
+        "joking",
+        "teasing",
+        "wink"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "stella",
+      "part": "c",
+      "reference": "stella-atlas.png",
+      "poses": [
+        "proud smile, chin up, hands on hips",
+        "real tears, wiping cheek with sleeve",
+        "determined brows, confident ready stance",
+        "awake and seated comfortably, eyes open",
+        "gently lifted by the torso, arms and legs dangling",
+        "pleased smile giving a thumbs-up"
+      ],
+      "names": [
+        "proud",
+        "crying",
+        "determined",
+        "sit",
+        "drag",
+        "thumbs"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "stella",
+      "part": "motion-0",
+      "reference": "stella-atlas.png",
+      "poses": [
+        "Walk RIGHT profile left foot contact",
+        "Walk RIGHT passing feet together",
+        "Walk RIGHT opposite foot contact",
+        "Walk FRONT left foot contact",
+        "Walk FRONT passing feet together",
+        "Walk FRONT opposite foot contact"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "stella",
+      "part": "motion-1",
+      "reference": "stella-atlas.png",
+      "poses": [
+        "Walk BACK left foot contact",
+        "Walk BACK passing feet together",
+        "Walk BACK opposite foot contact",
+        "Run RIGHT airborne long left stride",
+        "Run RIGHT tucked-knee flight",
+        "Run RIGHT opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "stella",
+      "part": "motion-2",
+      "reference": "stella-atlas.png",
+      "poses": [
+        "Run FRONT airborne left stride",
+        "Run FRONT tucked-knee flight",
+        "Run FRONT opposite airborne stride",
+        "Run BACK airborne left stride",
+        "Run BACK tucked-knee flight",
+        "Run BACK opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "teto",
+      "part": "a",
+      "reference": "teto-fan-atlas.png",
+      "poses": [
+        "angry eyebrows, fists held near chest",
+        "thoughtful eyes, hand touching chin",
+        "attentive eyes, cupping one ear",
+        "sad eyes and slumped shoulders",
+        "joyful open smile, both arms overhead",
+        "dancing twirl with skirt and hair flowing"
+      ],
+      "names": [
+        "angry",
+        "thinking",
+        "listening",
+        "sad",
+        "celebrating",
+        "dancing"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "teto",
+      "part": "b",
+      "reference": "teto-fan-atlas.png",
+      "poses": [
+        "excited bright smile, small joyful bounce",
+        "puzzled eyes, tilted head, open palms",
+        "warm loving expression, hands making a heart",
+        "laughing eyes closed, hand on tummy",
+        "playful teasing smirk, finger near lips",
+        "one eye winking, waving hand"
+      ],
+      "names": [
+        "excited",
+        "confused",
+        "love",
+        "joking",
+        "teasing",
+        "wink"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "teto",
+      "part": "c",
+      "reference": "teto-fan-atlas.png",
+      "poses": [
+        "proud smile, chin up, hands on hips",
+        "real tears, wiping cheek with sleeve",
+        "determined brows, confident ready stance",
+        "awake and seated comfortably, eyes open",
+        "gently lifted by the torso, arms and legs dangling",
+        "pleased smile giving a thumbs-up"
+      ],
+      "names": [
+        "proud",
+        "crying",
+        "determined",
+        "sit",
+        "drag",
+        "thumbs"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "teto",
+      "part": "motion-0",
+      "reference": "teto-fan-atlas.png",
+      "poses": [
+        "Walk RIGHT profile left foot contact",
+        "Walk RIGHT passing feet together",
+        "Walk RIGHT opposite foot contact",
+        "Walk FRONT left foot contact",
+        "Walk FRONT passing feet together",
+        "Walk FRONT opposite foot contact"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "teto",
+      "part": "motion-1",
+      "reference": "teto-fan-atlas.png",
+      "poses": [
+        "Walk BACK left foot contact",
+        "Walk BACK passing feet together",
+        "Walk BACK opposite foot contact",
+        "Run RIGHT airborne long left stride",
+        "Run RIGHT tucked-knee flight",
+        "Run RIGHT opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "teto",
+      "part": "motion-2",
+      "reference": "teto-fan-atlas.png",
+      "poses": [
+        "Run FRONT airborne left stride",
+        "Run FRONT tucked-knee flight",
+        "Run FRONT opposite airborne stride",
+        "Run BACK airborne left stride",
+        "Run BACK tucked-knee flight",
+        "Run BACK opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "neru",
+      "part": "a",
+      "reference": "neru-fan-atlas.png",
+      "poses": [
+        "angry eyebrows, fists held near chest",
+        "thoughtful eyes, hand touching chin",
+        "attentive eyes, cupping one ear",
+        "sad eyes and slumped shoulders",
+        "joyful open smile, both arms overhead",
+        "dancing twirl with skirt and hair flowing"
+      ],
+      "names": [
+        "angry",
+        "thinking",
+        "listening",
+        "sad",
+        "celebrating",
+        "dancing"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "neru",
+      "part": "b",
+      "reference": "neru-fan-atlas.png",
+      "poses": [
+        "excited bright smile, small joyful bounce",
+        "puzzled eyes, tilted head, open palms",
+        "warm loving expression, hands making a heart",
+        "laughing eyes closed, hand on tummy",
+        "playful teasing smirk, finger near lips",
+        "one eye winking, waving hand"
+      ],
+      "names": [
+        "excited",
+        "confused",
+        "love",
+        "joking",
+        "teasing",
+        "wink"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "neru",
+      "part": "c",
+      "reference": "neru-fan-atlas.png",
+      "poses": [
+        "proud smile, chin up, hands on hips",
+        "real tears, wiping cheek with sleeve",
+        "determined brows, confident ready stance",
+        "awake and seated comfortably, eyes open",
+        "gently lifted by the torso, arms and legs dangling",
+        "pleased smile giving a thumbs-up"
+      ],
+      "names": [
+        "proud",
+        "crying",
+        "determined",
+        "sit",
+        "drag",
+        "thumbs"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "neru",
+      "part": "motion-0",
+      "reference": "neru-fan-atlas.png",
+      "poses": [
+        "Walk RIGHT profile left foot contact",
+        "Walk RIGHT passing feet together",
+        "Walk RIGHT opposite foot contact",
+        "Walk FRONT left foot contact",
+        "Walk FRONT passing feet together",
+        "Walk FRONT opposite foot contact"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "neru",
+      "part": "motion-1",
+      "reference": "neru-fan-atlas.png",
+      "poses": [
+        "Walk BACK left foot contact",
+        "Walk BACK passing feet together",
+        "Walk BACK opposite foot contact",
+        "Run RIGHT airborne long left stride",
+        "Run RIGHT tucked-knee flight",
+        "Run RIGHT opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "neru",
+      "part": "motion-2",
+      "reference": "neru-fan-atlas.png",
+      "poses": [
+        "Run FRONT airborne left stride",
+        "Run FRONT tucked-knee flight",
+        "Run FRONT opposite airborne stride",
+        "Run BACK airborne left stride",
+        "Run BACK tucked-knee flight",
+        "Run BACK opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "snow",
+      "part": "a",
+      "reference": "snow-atlas.png",
+      "poses": [
+        "angry eyebrows, fists held near chest",
+        "thoughtful eyes, hand touching chin",
+        "attentive eyes, cupping one ear",
+        "sad eyes and slumped shoulders",
+        "joyful open smile, both arms overhead",
+        "dancing twirl with skirt and hair flowing"
+      ],
+      "names": [
+        "angry",
+        "thinking",
+        "listening",
+        "sad",
+        "celebrating",
+        "dancing"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "snow",
+      "part": "b",
+      "reference": "snow-atlas.png",
+      "poses": [
+        "excited bright smile, small joyful bounce",
+        "puzzled eyes, tilted head, open palms",
+        "warm loving expression, hands making a heart",
+        "laughing eyes closed, hand on tummy",
+        "playful teasing smirk, finger near lips",
+        "one eye winking, waving hand"
+      ],
+      "names": [
+        "excited",
+        "confused",
+        "love",
+        "joking",
+        "teasing",
+        "wink"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "snow",
+      "part": "c",
+      "reference": "snow-atlas.png",
+      "poses": [
+        "proud smile, chin up, hands on hips",
+        "real tears, wiping cheek with sleeve",
+        "determined brows, confident ready stance",
+        "awake and seated comfortably, eyes open",
+        "gently lifted by the torso, arms and legs dangling",
+        "pleased smile giving a thumbs-up"
+      ],
+      "names": [
+        "proud",
+        "crying",
+        "determined",
+        "sit",
+        "drag",
+        "thumbs"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "snow",
+      "part": "motion-0",
+      "reference": "snow-atlas.png",
+      "poses": [
+        "Walk RIGHT profile left foot contact",
+        "Walk RIGHT passing feet together",
+        "Walk RIGHT opposite foot contact",
+        "Walk FRONT left foot contact",
+        "Walk FRONT passing feet together",
+        "Walk FRONT opposite foot contact"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "snow",
+      "part": "motion-1",
+      "reference": "snow-atlas.png",
+      "poses": [
+        "Walk BACK left foot contact",
+        "Walk BACK passing feet together",
+        "Walk BACK opposite foot contact",
+        "Run RIGHT airborne long left stride",
+        "Run RIGHT tucked-knee flight",
+        "Run RIGHT opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "snow",
+      "part": "motion-2",
+      "reference": "snow-atlas.png",
+      "poses": [
+        "Run FRONT airborne left stride",
+        "Run FRONT tucked-knee flight",
+        "Run FRONT opposite airborne stride",
+        "Run BACK airborne left stride",
+        "Run BACK tucked-knee flight",
+        "Run BACK opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "silver",
+      "part": "a",
+      "reference": "silver-atlas.png",
+      "poses": [
+        "angry eyebrows, fists held near chest",
+        "thoughtful eyes, hand touching chin",
+        "attentive eyes, cupping one ear",
+        "shy blush, downcast eyes and hands together",
+        "open mouth speaking, explanatory hand gesture",
+        "dancing twirl with skirt and hair flowing"
+      ],
+      "names": [
+        "angry",
+        "thinking",
+        "listening",
+        "shy",
+        "speaking",
+        "dancing"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "silver",
+      "part": "b",
+      "reference": "silver-atlas.png",
+      "poses": [
+        "excited bright smile, small joyful bounce",
+        "puzzled eyes, tilted head, open palms",
+        "warm loving expression, hands making a heart",
+        "laughing eyes closed, hand on tummy",
+        "playful teasing smirk, finger near lips",
+        "one eye winking, waving hand"
+      ],
+      "names": [
+        "excited",
+        "confused",
+        "love",
+        "joking",
+        "teasing",
+        "wink"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "silver",
+      "part": "c",
+      "reference": "silver-atlas.png",
+      "poses": [
+        "proud smile, chin up, hands on hips",
+        "real tears, wiping cheek with sleeve",
+        "determined brows, confident ready stance",
+        "awake and seated comfortably, eyes open",
+        "gently lifted by the torso, arms and legs dangling",
+        "pleased smile giving a thumbs-up"
+      ],
+      "names": [
+        "proud",
+        "crying",
+        "determined",
+        "sit",
+        "drag",
+        "thumbs"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "silver",
+      "part": "motion-0",
+      "reference": "silver-atlas.png",
+      "poses": [
+        "Walk RIGHT profile left foot contact",
+        "Walk RIGHT passing feet together",
+        "Walk RIGHT opposite foot contact",
+        "Walk FRONT left foot contact",
+        "Walk FRONT passing feet together",
+        "Walk FRONT opposite foot contact"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "silver",
+      "part": "motion-1",
+      "reference": "silver-atlas.png",
+      "poses": [
+        "Walk BACK left foot contact",
+        "Walk BACK passing feet together",
+        "Walk BACK opposite foot contact",
+        "Run RIGHT airborne long left stride",
+        "Run RIGHT tucked-knee flight",
+        "Run RIGHT opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "silver",
+      "part": "motion-2",
+      "reference": "silver-atlas.png",
+      "poses": [
+        "Run FRONT airborne left stride",
+        "Run FRONT tucked-knee flight",
+        "Run FRONT opposite airborne stride",
+        "Run BACK airborne left stride",
+        "Run BACK tucked-knee flight",
+        "Run BACK opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "azure",
+      "part": "a",
+      "reference": "azure-atlas.png",
+      "poses": [
+        "angry eyebrows, fists held near chest",
+        "thoughtful eyes, hand touching chin",
+        "attentive eyes, cupping one ear",
+        "shy blush, downcast eyes and hands together",
+        "open mouth speaking, explanatory hand gesture",
+        "dancing twirl with skirt and hair flowing"
+      ],
+      "names": [
+        "angry",
+        "thinking",
+        "listening",
+        "shy",
+        "speaking",
+        "dancing"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "azure",
+      "part": "b",
+      "reference": "azure-atlas.png",
+      "poses": [
+        "excited bright smile, small joyful bounce",
+        "puzzled eyes, tilted head, open palms",
+        "warm loving expression, hands making a heart",
+        "laughing eyes closed, hand on tummy",
+        "playful teasing smirk, finger near lips",
+        "one eye winking, waving hand"
+      ],
+      "names": [
+        "excited",
+        "confused",
+        "love",
+        "joking",
+        "teasing",
+        "wink"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "azure",
+      "part": "c",
+      "reference": "azure-atlas.png",
+      "poses": [
+        "proud smile, chin up, hands on hips",
+        "real tears, wiping cheek with sleeve",
+        "determined brows, confident ready stance",
+        "awake and seated comfortably, eyes open",
+        "gently lifted by the torso, arms and legs dangling",
+        "pleased smile giving a thumbs-up"
+      ],
+      "names": [
+        "proud",
+        "crying",
+        "determined",
+        "sit",
+        "drag",
+        "thumbs"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "azure",
+      "part": "motion-0",
+      "reference": "azure-atlas.png",
+      "poses": [
+        "Walk RIGHT profile left foot contact",
+        "Walk RIGHT passing feet together",
+        "Walk RIGHT opposite foot contact",
+        "Walk FRONT left foot contact",
+        "Walk FRONT passing feet together",
+        "Walk FRONT opposite foot contact"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "azure",
+      "part": "motion-1",
+      "reference": "azure-atlas.png",
+      "poses": [
+        "Walk BACK left foot contact",
+        "Walk BACK passing feet together",
+        "Walk BACK opposite foot contact",
+        "Run RIGHT airborne long left stride",
+        "Run RIGHT tucked-knee flight",
+        "Run RIGHT opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "azure",
+      "part": "motion-2",
+      "reference": "azure-atlas.png",
+      "poses": [
+        "Run FRONT airborne left stride",
+        "Run FRONT tucked-knee flight",
+        "Run FRONT opposite airborne stride",
+        "Run BACK airborne left stride",
+        "Run BACK tucked-knee flight",
+        "Run BACK opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "goth",
+      "part": "a",
+      "reference": "goth-atlas.png",
+      "poses": [
+        "angry eyebrows, fists held near chest",
+        "thoughtful eyes, hand touching chin",
+        "attentive eyes, cupping one ear",
+        "shy blush, downcast eyes and hands together",
+        "open mouth speaking, explanatory hand gesture",
+        "dancing twirl with skirt and hair flowing"
+      ],
+      "names": [
+        "angry",
+        "thinking",
+        "listening",
+        "shy",
+        "speaking",
+        "dancing"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "goth",
+      "part": "b",
+      "reference": "goth-atlas.png",
+      "poses": [
+        "excited bright smile, small joyful bounce",
+        "puzzled eyes, tilted head, open palms",
+        "warm loving expression, hands making a heart",
+        "laughing eyes closed, hand on tummy",
+        "playful teasing smirk, finger near lips",
+        "one eye winking, waving hand"
+      ],
+      "names": [
+        "excited",
+        "confused",
+        "love",
+        "joking",
+        "teasing",
+        "wink"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "goth",
+      "part": "c",
+      "reference": "goth-atlas.png",
+      "poses": [
+        "proud smile, chin up, hands on hips",
+        "real tears, wiping cheek with sleeve",
+        "determined brows, confident ready stance",
+        "awake and seated comfortably, eyes open",
+        "gently lifted by the torso, arms and legs dangling",
+        "pleased smile giving a thumbs-up"
+      ],
+      "names": [
+        "proud",
+        "crying",
+        "determined",
+        "sit",
+        "drag",
+        "thumbs"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "goth",
+      "part": "motion-0",
+      "reference": "goth-atlas.png",
+      "poses": [
+        "Walk RIGHT profile left foot contact",
+        "Walk RIGHT passing feet together",
+        "Walk RIGHT opposite foot contact",
+        "Walk FRONT left foot contact",
+        "Walk FRONT passing feet together",
+        "Walk FRONT opposite foot contact"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "goth",
+      "part": "motion-1",
+      "reference": "goth-atlas.png",
+      "poses": [
+        "Walk BACK left foot contact",
+        "Walk BACK passing feet together",
+        "Walk BACK opposite foot contact",
+        "Run RIGHT airborne long left stride",
+        "Run RIGHT tucked-knee flight",
+        "Run RIGHT opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "goth",
+      "part": "motion-2",
+      "reference": "goth-atlas.png",
+      "poses": [
+        "Run FRONT airborne left stride",
+        "Run FRONT tucked-knee flight",
+        "Run FRONT opposite airborne stride",
+        "Run BACK airborne left stride",
+        "Run BACK tucked-knee flight",
+        "Run BACK opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "mochi",
+      "part": "a",
+      "reference": "mochi-complete-v3.png",
+      "poses": [
+        "angry eyebrows, fists held near chest",
+        "thoughtful eyes, hand touching chin",
+        "attentive eyes, cupping one ear",
+        "sad eyes and slumped shoulders",
+        "joyful open smile, both arms overhead",
+        "dancing twirl with skirt and hair flowing"
+      ],
+      "names": [
+        "angry",
+        "thinking",
+        "listening",
+        "sad",
+        "celebrating",
+        "dancing"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "mochi",
+      "part": "b",
+      "reference": "mochi-complete-v3.png",
+      "poses": [
+        "excited bright smile, small joyful bounce",
+        "puzzled eyes, tilted head, open palms",
+        "warm loving expression, hands making a heart",
+        "laughing eyes closed, hand on tummy",
+        "playful teasing smirk, finger near lips",
+        "one eye winking, waving hand"
+      ],
+      "names": [
+        "excited",
+        "confused",
+        "love",
+        "joking",
+        "teasing",
+        "wink"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "mochi",
+      "part": "c",
+      "reference": "mochi-complete-v3.png",
+      "poses": [
+        "proud smile, chin up, hands on hips",
+        "real tears, wiping cheek with sleeve",
+        "determined brows, confident ready stance",
+        "awake and seated comfortably, eyes open",
+        "gently lifted by the torso, arms and legs dangling",
+        "pleased smile giving a thumbs-up"
+      ],
+      "names": [
+        "proud",
+        "crying",
+        "determined",
+        "sit",
+        "drag",
+        "thumbs"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "mochi",
+      "part": "base",
+      "reference": "mochi-complete-v3.png",
+      "poses": [
+        "neutral gentle expression, resting hands",
+        "cheerful smile",
+        "wide surprised eyes and open mouth",
+        "eyes closed asleep, seated curled up",
+        "open mouth speaking, explanatory hand gesture",
+        "shy blush, downcast eyes and hands together"
+      ],
+      "names": [
+        "idle",
+        "happy",
+        "surprised",
+        "sleeping",
+        "speaking",
+        "shy"
+      ],
+      "type": "emotion"
+    },
+    {
+      "id": "mochi",
+      "part": "motion-0",
+      "reference": "mochi-complete-v3.png",
+      "poses": [
+        "Walk RIGHT profile left foot contact",
+        "Walk RIGHT passing feet together",
+        "Walk RIGHT opposite foot contact",
+        "Walk FRONT left foot contact",
+        "Walk FRONT passing feet together",
+        "Walk FRONT opposite foot contact"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "mochi",
+      "part": "motion-1",
+      "reference": "mochi-complete-v3.png",
+      "poses": [
+        "Walk BACK left foot contact",
+        "Walk BACK passing feet together",
+        "Walk BACK opposite foot contact",
+        "Run RIGHT airborne long left stride",
+        "Run RIGHT tucked-knee flight",
+        "Run RIGHT opposite airborne stride"
+      ],
+      "type": "motion"
+    },
+    {
+      "id": "mochi",
+      "part": "motion-2",
+      "reference": "mochi-complete-v3.png",
+      "poses": [
+        "Run FRONT airborne left stride",
+        "Run FRONT tucked-knee flight",
+        "Run FRONT opposite airborne stride",
+        "Run BACK airborne left stride",
+        "Run BACK tucked-knee flight",
+        "Run BACK opposite airborne stride"
+      ],
+      "type": "motion"
+    }
+  ]
+}

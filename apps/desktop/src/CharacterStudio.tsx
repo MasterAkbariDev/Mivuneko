@@ -1,6 +1,7 @@
+import { CharacterPackLibrary } from "./CharacterPackLibrary";
+import { SpriteCanvas } from "./SpriteCanvas";
+import { spriteFrame } from "./spriteFrames";
 import { useState } from "react";
-import guide from "../../../docs/CHARACTERS.md?raw";
-import { Markdown } from "./Markdown";
 import { characters } from "./lunaModel";
 import { PetSettings } from "./PetSettings";
 import { updatePreferences, usePreferences } from "./preferences";
@@ -9,13 +10,12 @@ import { ModelSettings } from "./ModelSettings";
 import { usePetSession } from "./session";
 import { CompanionVisual } from "./CompanionVisual";
 
-export function CharacterStudio() {
+export function CharacterStudio({ onOpenGuide }: { onOpenGuide: () => void }) {
   const p = usePreferences();
   const session = usePetSession();
   const [format, setFormat] = useState<"2D" | "2.5D" | "3D">(
     p.renderer !== "2d" ? "3D" : p.illustrationDepth ? "2.5D" : "2D",
   );
-  const [manual, setManual] = useState(false);
   return (
     <section className="character-studio" aria-label="Character studio">
       <div className="character-studio-head">
@@ -91,6 +91,7 @@ export function CharacterStudio() {
                     type="button"
                     className="character-choice"
                     aria-pressed={
+                      !p.activePackId &&
                       p.renderer === "2d" &&
                       p.character === id &&
                       p.illustrationDepth === (format === "2.5D")
@@ -98,17 +99,16 @@ export function CharacterStudio() {
                     onClick={() =>
                       updatePreferences({
                         character: id,
+                        activePackId: "",
+                        activePackName: "",
                         renderer: "2d",
                         illustrationDepth: format === "2.5D",
                       })
                     }
                   >
-                    <span
+                    <SpriteCanvas
                       className="character-choice-art"
-                      style={{
-                        backgroundImage: `url('${characters[id].atlases[0]}')`,
-                        backgroundSize: `${(characters[id].columns ?? 3) * 100}% ${(characters[id].rows ?? 2) * 100}%`,
-                      }}
+                      frame={spriteFrame(id, "idle", "stand", 0, 0)}
                     />
                     <strong>{characters[id].name}</strong>
                   </button>
@@ -117,24 +117,21 @@ export function CharacterStudio() {
           </>
         )}
       </div>
-      <button
-        className="character-guide-toggle"
-        aria-expanded={manual}
-        onClick={() => setManual((v) => !v)}
-      >
-        Creating characters & voices - {manual ? "Close guide" : "Read guide"}
+      <button className="character-guide-toggle" onClick={onOpenGuide}>
+        Creating characters & voices - Open complete guide
       </button>
-      {manual && (
-        <article className="character-guide">
-          <Markdown text={guide} />
-        </article>
-      )}
       <p className="hint">
         Luna has individual expression artwork and smooth transitions. The other
         illustrated characters have individual mood drawings and directional
         motion frames. Haru and imported VRM models use live expressions, lip
         sync and gaze. Walking and running move the desktop window.
       </p>
+      <CharacterPackLibrary
+        format={format === "3D" ? "3d" : format === "2.5D" ? "2.5d" : "2d"}
+        onImported={(value) =>
+          setFormat(value === "3d" ? "3D" : value === "2.5d" ? "2.5D" : "2D")
+        }
+      />
       <PetSettings />
     </section>
   );

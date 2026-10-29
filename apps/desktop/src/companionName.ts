@@ -3,10 +3,12 @@ import { characters } from "./lunaModel";
 export function companionName(p: Preferences) {
   return (
     p.companionName.trim() ||
-    (p.renderer === "sample-vrm"
-      ? "Haru"
-      : p.renderer === "custom-vrm"
-        ? "Companion"
-        : characters[p.character].name)
+    (p.activePackId
+      ? p.activePackName || "Companion"
+      : p.renderer === "sample-vrm"
+        ? "Haru"
+        : p.renderer === "custom-vrm"
+          ? p.customModelName || "Companion"
+          : characters[p.character].name)
   );
 }

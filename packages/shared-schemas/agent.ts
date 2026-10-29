@@ -1,49 +1,63 @@
+import { parseCompanionActions } from "./pet-actions.ts";
 import type { AgentReply, Mood } from "./index.ts";
 export function parseAgentReply(raw: string): AgentReply {
+  let json: any;
   try {
-    const json = JSON.parse(
+    json = JSON.parse(
       raw.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, ""),
     );
-    const moods: Mood[] = [
-      "idle",
-      "angry",
-      "sad",
-      "surprised",
-      "happy",
-      "curious",
-      "confused",
-      "concerned",
-      "celebrating",
-      "crying",
-      "shy",
-      "love",
-      "excited",
-      "teasing",
-      "joking",
-      "wink",
-      "proud",
-      "determined",
-    ];
-    if (
-      typeof json.text === "string" &&
-      json.text.trim() &&
-      json.text.length <= 8000
-    )
-      return {
-        text: json.text,
-        ...(typeof json.appQuery === "string" &&
-        json.appQuery.trim() &&
-        json.appQuery.length <= 200
-          ? { appQuery: json.appQuery }
-          : {}),
-        ...(typeof json.speech === "string" &&
-        json.speech.trim() &&
-        json.speech.length <= 300
-          ? { speech: json.speech.trim() }
-          : {}),
-        mood: moods.includes(json.emotion) ? json.emotion : "idle",
-      };
-  } catch {}
+  } catch {
+    return { text: raw, mood: "idle" };
+  }
+  const moods: Mood[] = [
+    "idle",
+    "angry",
+    "sad",
+    "surprised",
+    "happy",
+    "curious",
+    "confused",
+    "concerned",
+    "celebrating",
+    "crying",
+    "shy",
+    "love",
+    "excited",
+    "teasing",
+    "joking",
+    "wink",
+    "proud",
+    "determined",
+    "sleeping",
+  ];
+  if (
+    json &&
+    typeof json === "object" &&
+    typeof json.text === "string" &&
+    json.text.trim() &&
+    json.text.length <= 8000
+  )
+    return {
+      text: json.text,
+      ...(json.companionActions !== undefined
+        ? {
+            companionActions: json.appQuery
+              ? []
+              : parseCompanionActions(json.companionActions),
+          }
+        : {}),
+      ...(typeof json.appQuery === "string" &&
+      json.appQuery.trim() &&
+      json.appQuery.length <= 200
+        ? { appQuery: json.appQuery }
+        : {}),
+      ...(typeof json.speech === "string" &&
+      json.speech.trim() &&
+      json.speech.length <= 300
+        ? { speech: json.speech.trim() }
+        : {}),
+      mood: moods.includes(json.emotion) ? json.emotion : "idle",
+    };
   return { text: raw, mood: "idle" };
 }
 export function boundedMessages(

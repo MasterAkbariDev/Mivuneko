@@ -5,6 +5,7 @@ import type {
   PetExpression,
   PetMode,
 } from "../../../packages/shared-schemas/preferences.ts";
+import { SpriteCanvas } from "./SpriteCanvas";
 import { spriteFrame } from "./spriteFrames";
 import { characters, lunaPose } from "./lunaModel";
 /** Two-layer crossfade keeps the character visible during expression changes. */
@@ -98,18 +99,10 @@ export function Luna({
       aria-label={`${model.name} 2D companion, ${pose}`}
     >
       {frames.map((item, index) => (
-        <div
+        <SpriteCanvas
           key={item.key}
+          frame={item}
           className={`luna-sprite ${frames.length > 1 && index === frames.length - 1 ? "luna-sprite-enter" : ""}`}
-          style={
-            {
-              backgroundImage: `url('${item.image}')`,
-              transform: item.mirror ? "scaleX(-1)" : undefined,
-              backgroundSize: `${item.columns * 100}% ${item.rows * 100}%`,
-              backgroundPosition: `${(item.column / (item.columns - 1)) * 100}% ${(item.row / (item.rows - 1)) * 100}%`,
-              "--mouth": Math.min(1, Math.max(0, mouth)),
-            } as CSSProperties
-          }
         />
       ))}
       {effects && effect !== "none" && (

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "example.original-avatar",
+  "name": "My original avatar",
+  "author": "Your name",
+  "license": "Replace with the actual model license",
+  "format": "3d",
+  "assets": {
+    "avatar": {
+      "type": "vrm",
+      "path": "model/companion.vrm"
+    },
+    "reference": {
+      "type": "audio",
+      "path": "voice/reference.wav"
+    }
+  },
+  "model": "avatar",
+  "voice": {
+    "kind": "reference",
+    "asset": "reference",
+    "transcript": "Replace this with the exact words spoken in your recording.",
+    "language": "en"
+  },
+  "expressions": {
+    "crying": {
+      "sad": 0.9,
+      "blinkLeft": 0.35,
+      "blinkRight": 0.35
+    },
+    "love": {
+      "happy": 0.65,
+      "relaxed": 0.3
+    }
+  }
+}

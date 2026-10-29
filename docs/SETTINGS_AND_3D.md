@@ -99,3 +99,11 @@ Custom names are available in companion controls. Interrupt settings refer to â€
 Conversations use the full available content width. Markdown tables render with column headers and rows, including provider replies that collapse the table onto one line. Spoken narration reads each row with its column names, including examples and text after the table.
 
 Pet captions and controls use stable anchors rather than following idle breathing. Captions have vertical scrolling and a custom scrollbar. Quick chat wraps long messages, scrolls vertically, and stays open after sending; Enter sends and Shift+Enter adds a line.
+
+## Character Pack v1 and library
+
+The dedicated Creator Handbook opens from Characters and documents individual images, atlas cells, timed frame lists, layer anchors, VRM expression maps and explicit voice definitions. Folder imports and standalone VRM imports each create new library entries rather than replacing a slot. See `docs/CHARACTER_PACKS.md` and its downloadable JSON examples.
+
+A character with no voice definition stays silent. Prompt-defined voices use Gemini; reference-only voices wait for a future local cloning engine. The renderer isolates built-in atlas silhouettes and preserves proportions. New detailed sheets retain at least 480 source pixels per cell, with a higher-resolution rendering buffer.
+
+Natural requests can produce validated LLM action plans. Movement arrival is awaited before later posture or emotion steps; invalid plans do not execute partially. An explicit off-screen request hides the pet only after reaching a quiet edge. Taskbar-edge drops settle gently, and seated VRM framing includes the feet.

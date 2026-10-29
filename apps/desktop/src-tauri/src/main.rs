@@ -813,6 +813,7 @@ fn main() {
             global_keys::quiet_pet_position,
             global_keys::pet_cursor,
             global_keys::show_pet,
+            global_keys::hide_pet,
             list_apps,
             request_launch,
             resolve_launch,

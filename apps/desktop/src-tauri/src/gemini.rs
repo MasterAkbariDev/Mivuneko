@@ -102,16 +102,18 @@ pub async fn gemini_speak_stream(
     text: String,
     emotion: String,
     character: Option<String>,
+    voice_prompt: Option<String>,
     state: State<'_, Service>,
 ) -> Result<(), String> {
     use tauri::Emitter;
     let id = request_id.clone();
     state
-        .speak_stream(
+        .speak_stream_with_prompt(
             request_id,
             text,
             emotion,
             character.unwrap_or_else(|| "luna".into()),
+            voice_prompt,
             std::sync::Arc::new(move |pcm, sample_rate| {
                 let _ = window.emit(
                     "voice-audio",

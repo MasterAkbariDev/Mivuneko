@@ -1,3 +1,5 @@
+import { CharacterGuide } from "./CharacterGuide";
+import { performCompanionActions } from "./performCompanionActions";
 import {
   companionSequence,
   describeAction,
@@ -64,7 +66,7 @@ export function App() {
   const [codeReveal, setCodeReveal] = useState(0);
   const [showApps, setShowApps] = useState(false);
   const [tab, setTab] = useState<string>(
-      ["Settings", "Characters"].includes(
+      ["Settings", "Characters", "Character guide"].includes(
         new URLSearchParams(location.search).get("tab") ?? "",
       )
         ? new URLSearchParams(location.search).get("tab")!
@@ -307,41 +309,7 @@ export function App() {
         setMood("happy");
         chainActive.current = true;
         try {
-          await runCompanionSequence(
-            sequence.actions,
-            async (action, index) => {
-              publishPet(
-                "happy",
-                `Step ${index + 1} of ${sequence.actions.length}: ${describeAction(action)}.`,
-              );
-              if (action.kind === "move") {
-                const { invoke } = await import("@tauri-apps/api/core");
-                await invoke("recover_pet", { center: false });
-                c.signal.throwIfAborted();
-                await moveCompanion(action.destination, c.signal, () =>
-                  updatePreferences({
-                    petMode: action.gait,
-                    petEdit: false,
-                    focus: false,
-                    monitor: "current",
-                    petAvoiding: action.destination === "unobtrusive",
-                  }),
-                );
-              } else {
-                cancelCompanionTask();
-                updatePreferences({
-                  petMode:
-                    action.kind === "sit"
-                      ? "sit"
-                      : action.kind === "stand"
-                        ? "stand"
-                        : "auto",
-                });
-                await new Promise<void>((resolve) => setTimeout(resolve, 600));
-              }
-            },
-            c.signal,
-          );
+          await performCompanionActions(sequence.actions, c.signal);
         } finally {
           chainActive.current = false;
         }
@@ -355,6 +323,25 @@ export function App() {
         return;
       }
       const intent = desktopIntent(text);
+      if (intent?.kind === "hide") {
+        if (!isNative)
+          throw Error("Desktop movement is available in the installed app.");
+        add(
+          "I'll step out of view. Use Show pet in the tray to bring me back.",
+        );
+        await performCompanionActions([intent], c.signal);
+        return;
+      }
+      if (intent?.kind === "expression") {
+        await performCompanionActions([intent], c.signal);
+        add(
+          intent.expression === "auto"
+            ? "I'll choose my expressions naturally again."
+            : `Showing ${intent.expression}.`,
+        );
+        setMood("happy");
+        return;
+      }
       if (intent?.kind === "locate") {
         if (!isNative) throw Error("Find pet is available in the desktop app.");
         const { invoke } = await import("@tauri-apps/api/core");
@@ -432,6 +419,25 @@ export function App() {
       );
       c.signal.throwIfAborted();
       add(reply.text);
+      if (reply.companionActions?.length) {
+        if (!isNative)
+          throw Error("Desktop actions require the installed app.");
+        setMood(reply.mood ?? "happy");
+        if (preferences.voice !== "off")
+          void voice.speak(
+            speakable(reply, false),
+            preferences.volume,
+            reply.mood,
+          );
+        chainActive.current = true;
+        try {
+          await performCompanionActions(reply.companionActions, c.signal);
+        } finally {
+          chainActive.current = false;
+        }
+        add("Done. I finished the requested companion actions.");
+        return;
+      }
       const hasCode = /```|~~~/.test(reply.text);
       let codeShown = hasCode;
       if (hasCode) {
@@ -1059,7 +1065,9 @@ export function App() {
             </section>
           </div>
         ) : tab === "Characters" ? (
-          <CharacterStudio />
+          <CharacterStudio onOpenGuide={() => setTab("Character guide")} />
+        ) : tab === "Character guide" ? (
+          <CharacterGuide onBack={() => setTab("Characters")} />
         ) : (
           <section className="page">
             <h2>

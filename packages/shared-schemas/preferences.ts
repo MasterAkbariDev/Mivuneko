@@ -48,6 +48,11 @@ export type LocalVoiceStyle = "natural" | "bright" | "multilingual";
 export type LocalVoiceLanguage = "en" | "ja" | "fr" | "es" | "de";
 export interface Preferences {
   renderer: "2d" | "sample-vrm" | "custom-vrm";
+  activePackId: string;
+  activePackName: string;
+  customPackPose: string;
+  customModelId: string;
+  customModelName: string;
   microphoneId: string;
   echoCancellation: boolean;
   noiseSuppression: boolean;
@@ -110,6 +115,11 @@ export interface Preferences {
 }
 export const defaults: Preferences = {
   renderer: "2d",
+  activePackId: "",
+  activePackName: "",
+  customPackPose: "",
+  customModelId: "",
+  customModelName: "",
   microphoneId: "default",
   echoCancellation: true,
   noiseSuppression: true,
@@ -172,6 +182,18 @@ export function parsePreferences(raw: unknown): Preferences {
   const p = (raw && typeof raw === "object" ? raw : {}) as Partial<Preferences>;
   return {
     ...defaults,
+    activePackId:
+      typeof p.activePackId === "string" ? p.activePackId.slice(0, 80) : "",
+    activePackName:
+      typeof p.activePackName === "string" ? p.activePackName.slice(0, 80) : "",
+    customPackPose:
+      typeof p.customPackPose === "string" ? p.customPackPose.slice(0, 80) : "",
+    customModelId:
+      typeof p.customModelId === "string" ? p.customModelId.slice(0, 80) : "",
+    customModelName:
+      typeof p.customModelName === "string"
+        ? p.customModelName.slice(0, 80)
+        : "",
     renderer:
       p.renderer === "sample-vrm" || p.renderer === "custom-vrm"
         ? p.renderer
