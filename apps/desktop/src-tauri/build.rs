@@ -48,6 +48,7 @@ const COMMANDS: &[&str] = &[
     "save_history",
     "load_history",
     "clear_history",
+    "record_spans",
 ];
 fn main() {
     // The resident Kokoro worker, run as `<app> --luna-tts ...` (see tools/luna-tts).

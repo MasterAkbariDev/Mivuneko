@@ -846,6 +846,23 @@ fn clear_history(window: tauri::Window, app: tauri::AppHandle) -> Result<(), Str
     require_main(&window)?;
     desktop_core::clear_history(&history_path(&app)?)
 }
+/// Stores UI latency spans locally (timings and provider/engine names only).
+#[tauri::command]
+fn record_spans(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    spans: Vec<desktop_core::Span>,
+) -> Result<(), String> {
+    if !["main", "pet"].contains(&window.label()) {
+        return Err("Unknown window".into());
+    }
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "Metrics location unavailable")?
+        .join("metrics.sqlite");
+    desktop_core::record_spans(&path, &spans)
+}
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 fn install_tray(app: &tauri::App) -> tauri::Result<()> {
     use tauri::{
@@ -980,7 +997,8 @@ fn main() {
             cancel_voice,
             save_history,
             load_history,
-            clear_history
+            clear_history,
+            record_spans
         ])
         .build(tauri::generate_context!())
         .expect("Unable to build Mivuneko")

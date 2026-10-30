@@ -24,6 +24,7 @@
     "allow-synthesize-phrase",
     "allow-synthesize-speech",
     "allow-transcribe-audio",
-    "allow-foreground-fullscreen"
+    "allow-foreground-fullscreen",
+    "allow-record-spans"
   ]
 }

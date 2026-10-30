@@ -1,3 +1,4 @@
+import { recordSpan } from "./metrics";
 import { useEffect, useRef, useState } from "react";
 import {
   pcm16Wav,
@@ -83,13 +84,18 @@ export function useOpenMic(
         16000,
       );
       const { invoke } = await import("@tauri-apps/api/core");
-      return cleanTranscript(
-        await invoke<string>("transcribe_audio", {
-          wav: Array.from(wav),
-          context: prefs.current.sttContext ? getSpeechContext() : "",
-          engine: prefs.current.sttEngine,
-        }),
+      const sttStart = performance.now();
+      const text = await invoke<string>("transcribe_audio", {
+        wav: Array.from(wav),
+        context: prefs.current.sttContext ? getSpeechContext() : "",
+        engine: prefs.current.sttEngine,
+      });
+      recordSpan(
+        "stt.open_mic",
+        performance.now() - sttStart,
+        prefs.current.sttEngine,
       );
+      return cleanTranscript(text);
     };
     const finish = (submit = true) => {
       if (finishing || !context) return;

@@ -764,6 +764,66 @@ pub fn load_history(path: &Path) -> Result<String, String> {
     validate_history(&data)?;
     Ok(data)
 }
+/// One latency measurement from the UI (see apps/desktop/src/metrics.ts).
+#[derive(Debug, serde::Deserialize)]
+pub struct Span {
+    pub turn: String,
+    pub name: String,
+    pub ms: f64,
+    #[serde(default)]
+    pub detail: String,
+}
+const SPAN_NAMES: [&str; 5] = [
+    "turn.first_text",
+    "turn.reply_done",
+    "turn.first_audio",
+    "stt.transcribe",
+    "stt.open_mic",
+];
+const MAX_SPANS: i64 = 5000;
+/// Appends spans to the local metrics database, keeping the newest `MAX_SPANS` rows.
+/// Only timings and provider/engine names are stored, never message text.
+pub fn record_spans(path: &Path, spans: &[Span]) -> Result<(), String> {
+    if spans.len() > 64
+        || spans.iter().any(|s| {
+            !SPAN_NAMES.contains(&s.name.as_str())
+                || !(0.0..=600_000.0).contains(&s.ms)
+                || s.turn.len() > 64
+                || s.detail.len() > 64
+                || !s
+                    .detail
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-_.:".contains(c))
+        })
+    {
+        return Err("Invalid latency spans".into());
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|_| "Cannot prepare metrics storage")?;
+    }
+    let db = rusqlite::Connection::open(path).map_err(|_| "Cannot open metrics database")?;
+    db.execute_batch(
+        "CREATE TABLE IF NOT EXISTS spans(id INTEGER PRIMARY KEY, at INTEGER NOT NULL, turn TEXT NOT NULL, name TEXT NOT NULL, ms REAL NOT NULL, detail TEXT NOT NULL);",
+    )
+    .map_err(|_| "Cannot initialize metrics database")?;
+    let at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    for s in spans {
+        db.execute(
+            "INSERT INTO spans(at,turn,name,ms,detail) VALUES(?1,?2,?3,?4,?5)",
+            rusqlite::params![at, s.turn, s.name, s.ms, s.detail],
+        )
+        .map_err(|_| "Cannot save latency spans")?;
+    }
+    db.execute(
+        "DELETE FROM spans WHERE id <= (SELECT MAX(id) FROM spans) - ?1",
+        [MAX_SPANS],
+    )
+    .map_err(|_| "Cannot prune latency spans")?;
+    Ok(())
+}
 pub fn clear_history(path: &Path) -> Result<(), String> {
     if path.exists() {
         std::fs::remove_file(path).map_err(|_| "Cannot delete local conversation database")?
@@ -993,5 +1053,37 @@ pub mod kokoro {
             assert!(blend_table(&t, &[(40, vec![(99, 1.0)])]).is_err());
             assert!(blend_table(&t[..100], &[]).is_err());
         }
+    }
+}
+#[cfg(test)]
+mod span_tests {
+    use super::*;
+    fn span(name: &str, ms: f64, detail: &str) -> Span {
+        Span {
+            turn: "t1".into(),
+            name: name.into(),
+            ms,
+            detail: detail.into(),
+        }
+    }
+    #[test]
+    fn spans_are_validated_stored_and_capped() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("metrics.sqlite");
+        assert!(record_spans(&path, &[span("turn.first_text", 812.5, "gemini")]).is_ok());
+        assert!(record_spans(&path, &[span("message.text", 1.0, "")]).is_err());
+        assert!(record_spans(&path, &[span("turn.first_text", -1.0, "")]).is_err());
+        assert!(record_spans(&path, &[span("turn.first_text", 1.0, "hi there")]).is_err());
+        let batch: Vec<Span> = (0..64)
+            .map(|i| span("stt.transcribe", i as f64, "parakeet"))
+            .collect();
+        for _ in 0..80 {
+            record_spans(&path, &batch).unwrap();
+        }
+        let db = rusqlite::Connection::open(&path).unwrap();
+        let count: i64 = db
+            .query_row("SELECT COUNT(*) FROM spans", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, MAX_SPANS);
     }
 }

@@ -22,6 +22,7 @@ import { Icon } from "./Icon";
 import { useActivity, logActivity } from "./activity";
 import { useConversation } from "./conversation";
 import { useEffect, useRef, useState } from "react";
+import { markTurn, startTurn } from "./metrics";
 import type {
   LaunchRequest,
   AppInfo,
@@ -452,16 +453,21 @@ export function App() {
         setMood("happy");
         return;
       }
+      startTurn(preferences.backend);
       const reply = await agentFor(preferences.backend, name).reply(
         text,
         mode,
         c.signal,
         messages,
         (partial) => {
-          if (!c.signal.aborted) setStreaming(partial);
+          if (c.signal.aborted) return;
+          if (partial.trim()) markTurn("turn.first_text");
+          setStreaming(partial);
         },
       );
       c.signal.throwIfAborted();
+      markTurn("turn.first_text");
+      markTurn("turn.reply_done");
       add(reply.text);
       if (reply.companionActions?.length) {
         if (!isNative)

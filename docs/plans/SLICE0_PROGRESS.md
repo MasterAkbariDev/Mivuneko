@@ -22,7 +22,7 @@
 | D1 / PoC 2 — Kokoro worker for app-installed users | done (stage 5) — PoC 2 **go** |
 | D9 — app crate tests in CI | pending |
 | D10 — stale docs | pending |
-| Latency spans + local metrics + idle probe | pending |
+| Latency spans + local metrics + idle probe | done (stage 9) |
 | PoC 1 / PoC 13 — streaming-format A/B | done (stage 6) — format B wins; PoC 13 no measurable effect |
 | Device probe | cut line → Slice 3 (per plan) |
 
@@ -220,3 +220,21 @@ First visible character, p50 ms, by prompt kind:
   - app crate 10 pass, unit 108, type check;
   - check-in E2E 2/2 (incl. one from the baseline failure list).
 - **Not verified:** a positive detection with a real fullscreen game or video on macOS (would disturb the owner's desktop), and the Windows path (needs Windows). Known limitation: a borderless window sized to the display counts as fullscreen, which is the intended behaviour for games.
+
+### Stage 9 — Latency spans, local metrics, idle probe
+- `apps/desktop/src/metrics.ts` marks, from the moment the user sends:
+  - `turn.first_text` — first visible streamed text, or the reply for non-streaming providers;
+  - `turn.reply_done`;
+  - `turn.first_audio` — first scheduled playback, local and Gemini paths.
+- It also times each transcription: `stt.transcribe` (push-to-talk) and `stt.open_mic` (open-mic partials and finals).
+- Spans are batched to the `record_spans` command and stored by `desktop-core` in `app_data/metrics.sqlite`.
+  - Validation: closed span names, 0–600 s, safe detail strings.
+  - Contents: **timings and provider/engine names only, never message text**.
+  - Capped at the newest 5000 rows.
+- `record_spans` is allowed for the main and pet windows. The ACL test caught that the pet reaches `metrics.ts` through `useVoice`; spans are harmless, so the pet is allowed rather than the test weakened.
+- Tools:
+  - `node scripts/bench/spans.mjs` — p50/p95 per span and provider, using Node's built-in `node:sqlite`;
+  - `node scripts/bench/idle-probe.mjs [seconds]` — CPU and RSS of the running app.
+  - Idle-probe limitation: on macOS the WebKit content processes can't be attributed with `ps`, so it reports the app process only. On Windows it includes WebView2 children.
+- These spans give Slice 1 in-app before/after numbers. Today `turn.first_audio` comes after `turn.reply_done` by construction (speech waits for the full reply).
+- Tests: desktop-core 8 (span validation, no text, cap); unit 108 (ACL test kept strict); app crate 10; type check; Prettier clean.
