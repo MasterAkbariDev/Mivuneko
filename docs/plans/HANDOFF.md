@@ -7,9 +7,9 @@ Keep this file current: update it in the same commit as any step that changes st
 | Branch | Purpose | State |
 |---|---|---|
 | `main` | Released baseline (`a3131b0`) | **Do not merge into it** without the owner's explicit approval |
-| `slice-0-foundations` | Slice 0 implementation (pushed) | **Frozen** — waiting for the owner's manual smoke test. Don't add commits |
+| `slice-0-foundations` | Slice 0 implementation (pushed) | **Frozen**, smoke test passed 2026-10-30; awaiting merge approval. Don't add commits |
 | `plan/tts-direction` | Plan-only update: expressive TTS direction (Chatterbox first) | Docs only; branched from `slice-0-foundations` |
-| *(future)* `slice-1-streaming` | Slice 1 | **Not started.** Start only after the owner confirms the smoke tests pass. Branch from `slice-0-foundations` |
+| `slice-1-streaming` | Slice 1 — streaming voice | **In progress** (owner confirmed the Slice 0 smoke test 2026-10-30). Progress: `SLICE1_PROGRESS.md` |
 
 ## Documents (all in `docs/plans/`)
 
@@ -52,7 +52,7 @@ Keep this file current: update it in the same commit as any step that changes st
 
 ## Next steps, in order
 
-1. Owner runs `SMOKE_TEST_SLICE0.md` and reports back.
+1. ~~Owner runs `SMOKE_TEST_SLICE0.md`~~ — confirmed 2026-10-30. Still open: smoke-test S4 (Calculator "not found") and S5 (voice UI) need details from the owner (`KNOWN_ISSUES.md`).
 2. If it passes: create `slice-1-streaming` from `slice-0-foundations`. Implement Slice 1 per `EVOLUTION_PLAN.md` Part D. Benchmark before and after with `spans.mjs` / `stream-ab.mjs`. Add regression tests, then stop for review.
    - **Slice 1 scope:** streaming text, speech from the first sentence, tagged format B with the reviewer's three rules, Groq emotion fix with a safe fallback, one shared chat path, cancellation/audio reliability.
    - **Not in Slice 1:** any new TTS engine.
