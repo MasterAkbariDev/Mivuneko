@@ -76,3 +76,8 @@ Entries are added as each stage is committed.
 - `validate_toolsets` accepts the documented bare array **and** the `{"object":"list","data":[…]}` object that the v0.22.5 code returns. Anything else still fails closed.
 - New test `toolsets_accept_the_list_object_and_still_fail_closed`. agent-client: 4/4 pass; fmt and clippy clean.
 - A live Hermes install was not tested; this only fixes the shape mismatch found in the source.
+
+### Stage 2a — Golden prompt and schema snapshots (no behaviour change)
+- Extracted `chat_request` (Gemini), `system_prompt` (Groq) and `system_prompt` (Hermes) as functions. The bytes sent are unchanged.
+- Golden tests snapshot every mode's system prompt and Gemini `generationConfig` into `crates/*/golden/*.json`. A prompt change now fails the test until the snapshot is re-reviewed (`UPDATE_GOLDEN=1`). This is the safety net for the PromptBuilder in Slice 1b.
+- gemini-client 23 pass, agent-client 5 pass; fmt and clippy clean.

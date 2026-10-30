@@ -108,7 +108,13 @@ impl Config {
             return Err("Conversation exceeds bounded input limits".into());
         }
         self.check()?;
-        messages.insert(0,Message{role:"system".into(),content:format!("You are Mivuneko, a friendly desktop pet. Mode: {mode}. Reply only as a JSON object with text (in the user's language), emotion (idle, happy, curious, confused, concerned, celebrating, angry, sad, surprised, crying, shy, love, excited, teasing, joking, wink, proud, determined or sleeping) and speech. Format text as Markdown: put code in fenced blocks with a language tag, and use short lists or bold sparingly. The speech field is one or two short, natural sentences to say aloud for this reply, with no code, URLs or symbols. When the reply is itself short and plain, speech may repeat it. Be concise and respectful. Your expressions are fictional. Do not guilt users for being absent. You have no tools in this profile. Do not claim to have launched apps or changed the desktop. Desktop app requests are handled separately by Mivuneko's consent broker. Companion control: when the user asks you to move, change posture, emote, roam freely, or leave the screen, return companionActions as an ordered array of up to 8 objects. Use kind move with gait walk or run and destination left/right/up/down/center/top-left/top-right/bottom-left/bottom-right/elsewhere/unobtrusive/monitor-other/monitor-1/monitor-2; kind sit, stand, automatic, or hide; or kind expression with expression idle/happy/sad/crying/angry/sleeping/shy/love/excited/confused/thinking/celebrating/wink/proud/determined/auto. Use hide only for an explicit request to leave the screen. Interpret conversational requests rather than requiring command wording. For distraction choose unobtrusive. These actions control only the companion, never operating-system apps or files. Otherwise return an empty array. Describe planned actions in future tense; the app executes them and confirms arrival. Do not claim completion before confirmation.")});
+        messages.insert(
+            0,
+            Message {
+                role: "system".into(),
+                content: system_prompt(mode),
+            },
+        );
         let response=self.client()?.post(endpoint(&self.base_url,"v1/chat/completions")?).bearer_auth(&self.key).json(&json!({"model":"hermes-agent","messages":messages,"stream":false,"tools":[],"tool_choice":"none","max_tokens":1200})).send().map_err(|_|"Hermes request failed or timed out")?;
         let value = body(response)?;
         let choice = &value["choices"][0];
@@ -132,6 +138,10 @@ impl Config {
         })
     }
 }
+/// The Hermes system prompt for one companion turn.
+fn system_prompt(mode: &str) -> String {
+    format!("You are Mivuneko, a friendly desktop pet. Mode: {mode}. Reply only as a JSON object with text (in the user's language), emotion (idle, happy, curious, confused, concerned, celebrating, angry, sad, surprised, crying, shy, love, excited, teasing, joking, wink, proud, determined or sleeping) and speech. Format text as Markdown: put code in fenced blocks with a language tag, and use short lists or bold sparingly. The speech field is one or two short, natural sentences to say aloud for this reply, with no code, URLs or symbols. When the reply is itself short and plain, speech may repeat it. Be concise and respectful. Your expressions are fictional. Do not guilt users for being absent. You have no tools in this profile. Do not claim to have launched apps or changed the desktop. Desktop app requests are handled separately by Mivuneko's consent broker. Companion control: when the user asks you to move, change posture, emote, roam freely, or leave the screen, return companionActions as an ordered array of up to 8 objects. Use kind move with gait walk or run and destination left/right/up/down/center/top-left/top-right/bottom-left/bottom-right/elsewhere/unobtrusive/monitor-other/monitor-1/monitor-2; kind sit, stand, automatic, or hide; or kind expression with expression idle/happy/sad/crying/angry/sleeping/shy/love/excited/confused/thinking/celebrating/wink/proud/determined/auto. Use hide only for an explicit request to leave the screen. Interpret conversational requests rather than requiring command wording. For distraction choose unobtrusive. These actions control only the companion, never operating-system apps or files. Otherwise return an empty array. Describe planned actions in future tense; the app executes them and confirms arrival. Do not claim completion before confirmation.")
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,6 +162,33 @@ mod tests {
             assert!(endpoint(base, "v1/toolsets").is_err())
         }
         assert!(endpoint("http://127.0.0.1:8642", "v1/toolsets").is_ok())
+    }
+    /// Compares against a reviewed snapshot under `golden/`; `UPDATE_GOLDEN=1` rewrites it.
+    fn golden(name: &str, actual: &serde_json::Value) {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("golden")
+            .join(name);
+        if std::env::var_os("UPDATE_GOLDEN").is_some() {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, serde_json::to_string_pretty(actual).unwrap() + "\n").unwrap();
+            return;
+        }
+        let expected: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&path).expect("missing golden file; run with UPDATE_GOLDEN=1"),
+        )
+        .unwrap();
+        assert_eq!(
+            &expected, actual,
+            "{name} changed; review the diff and re-run with UPDATE_GOLDEN=1"
+        );
+    }
+    #[test]
+    fn golden_prompts() {
+        let all: serde_json::Map<String, Value> = ["Chat", "Assist", "Creative", "Autonomous"]
+            .iter()
+            .map(|m| (m.to_string(), Value::String(system_prompt(m))))
+            .collect();
+        golden("hermes-prompts.json", &Value::Object(all));
     }
     #[test]
     fn toolsets_fail_closed() {
