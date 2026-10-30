@@ -60,6 +60,13 @@ impl Drop for VoiceWorker {
         self.shutdown();
     }
 }
+const ENGINE_START_FAILED: &str = "Could not start the character voice engine";
+const ENGINE_LOAD_FAILED: &str = "Character voice engine failed to load";
+/// True when the resident Kokoro worker could not start or load its model/library,
+/// so a caller may retry with another worker.
+pub fn is_engine_load_failure(error: &str) -> bool {
+    error == ENGINE_START_FAILED || error == ENGINE_LOAD_FAILED
+}
 impl VoiceWorker {
     pub fn cancel(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
@@ -171,7 +178,7 @@ impl VoiceWorker {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
                 .spawn()
-                .map_err(|_| "Could not start the character voice engine")?;
+                .map_err(|_| ENGINE_START_FAILED)?;
             let stdin = child.stdin.take().ok_or("Voice engine has no input")?;
             let mut stdout =
                 BufReader::new(child.stdout.take().ok_or("Voice engine has no output")?);
@@ -180,7 +187,7 @@ impl VoiceWorker {
             if stdout.read_line(&mut line).is_err() || !line.starts_with("READY") {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err("Character voice engine failed to load".into());
+                return Err(ENGINE_LOAD_FAILED.into());
             }
             *slot = Some(TtsResident {
                 child,
@@ -788,7 +795,12 @@ pub fn record_spans(path: &Path, spans: &[Span]) -> Result<(), String> {
         || spans.iter().any(|s| {
             !SPAN_NAMES.contains(&s.name.as_str())
                 || !(0.0..=600_000.0).contains(&s.ms)
+                || s.turn.is_empty()
                 || s.turn.len() > 64
+                || !s
+                    .turn
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-')
                 || s.detail.len() > 64
                 || !s
                     .detail
@@ -802,6 +814,12 @@ pub fn record_spans(path: &Path, spans: &[Span]) -> Result<(), String> {
         std::fs::create_dir_all(parent).map_err(|_| "Cannot prepare metrics storage")?;
     }
     let db = rusqlite::Connection::open(path).map_err(|_| "Cannot open metrics database")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|_| "Cannot protect metrics permissions")?;
+    }
     db.execute_batch(
         "CREATE TABLE IF NOT EXISTS spans(id INTEGER PRIMARY KEY, at INTEGER NOT NULL, turn TEXT NOT NULL, name TEXT NOT NULL, ms REAL NOT NULL, detail TEXT NOT NULL);",
     )
@@ -1074,6 +1092,9 @@ mod span_tests {
         assert!(record_spans(&path, &[span("message.text", 1.0, "")]).is_err());
         assert!(record_spans(&path, &[span("turn.first_text", -1.0, "")]).is_err());
         assert!(record_spans(&path, &[span("turn.first_text", 1.0, "hi there")]).is_err());
+        let mut texty = span("turn.first_text", 1.0, "gemini");
+        texty.turn = "what the user said".into();
+        assert!(record_spans(&path, &[texty]).is_err());
         let batch: Vec<Span> = (0..64)
             .map(|i| span("stt.transcribe", i as f64, "parakeet"))
             .collect();
@@ -1085,5 +1106,27 @@ mod span_tests {
             .query_row("SELECT COUNT(*) FROM spans", [], |r| r.get(0))
             .unwrap();
         assert_eq!(count, MAX_SPANS);
+    }
+}
+#[cfg(all(test, unix))]
+mod worker_load_tests {
+    use super::*;
+    #[test]
+    fn an_unloadable_embedded_worker_reports_a_load_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        // /bin/sh rejects the --luna-tts arguments and exits without READY.
+        let config = TtsConfig {
+            worker: "/bin/sh".into(),
+            model_dir: dir.path().into(),
+            voices: None,
+            library: Some("/nonexistent/libsherpa-onnx-c-api.dylib".into()),
+        };
+        let error = VoiceWorker::default()
+            .synthesize_phrase(&config, "Hello", 3, 1.0)
+            .unwrap_err();
+        assert!(is_engine_load_failure(&error), "{error}");
+        assert!(!is_engine_load_failure(
+            "Speech phrase must contain 1–1500 bytes"
+        ));
     }
 }

@@ -138,6 +138,12 @@ static int run(int argc, char **argv) {
     }
     uint32_t data = (uint32_t)audio->n * 2, total = 44 + data;
     uint8_t *wav = malloc(total);
+    if (!wav) {
+      SherpaOnnxDestroyOfflineTtsGeneratedAudio(audio);
+      printf("ERR out of memory\n");
+      fflush(stdout);
+      continue;
+    }
     memcpy(wav, "RIFF", 4); put32(wav + 4, 36 + data); memcpy(wav + 8, "WAVEfmt ", 8);
     put32(wav + 16, 16); put16(wav + 20, 1); put16(wav + 22, 1);
     put32(wav + 24, audio->sample_rate); put32(wav + 28, audio->sample_rate * 2);

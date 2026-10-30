@@ -154,6 +154,7 @@ export function App() {
     },
     setMood,
     setError,
+    { measureTurn: true },
   );
   const openMic = useOpenMic(
     openMicActive && preferences.voice === "open-mic" && isNative && !onboard,

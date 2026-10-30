@@ -1,7 +1,8 @@
 // Samples CPU and memory of a running Mivuneko for the plan's idle targets (Slice 0, PoC 8).
 // Usage: node scripts/bench/idle-probe.mjs [seconds=180] [interval=5]
-// macOS: reports the app process only; WebKit content processes run as XPC services and
-// cannot be attributed to the app with ps. Windows: includes msedgewebview2 children.
+// The resident Kokoro worker (the app re-run as --luna-tts) is reported separately.
+// macOS: WebKit content processes run as XPC services and can't be attributed with ps, so
+// only the app process is counted. Windows: includes the whole WebView2 process tree.
 import { execFileSync } from "node:child_process";
 
 const seconds = Number(process.argv[2] ?? 180),
@@ -12,7 +13,7 @@ function sample() {
     const out = execFileSync("powershell", [
       "-NoProfile",
       "-Command",
-      "$app = Get-Process mivuneko-desktop -ErrorAction Stop; $ids = @($app.Id) + (Get-CimInstance Win32_Process | Where-Object { $app.Id -contains $_.ParentProcessId -and $_.Name -eq 'msedgewebview2.exe' } | ForEach-Object ProcessId); Get-Process -Id $ids | ForEach-Object { '{0} {1} {2}' -f $_.Id, $_.CPU, $_.WorkingSet64 }",
+      "$all = Get-CimInstance Win32_Process; $app = $all | Where-Object { $_.Name -eq 'mivuneko-desktop.exe' -and $_.CommandLine -notmatch '--luna-tts' }; if (-not $app) { throw 'not running' }; $ids = @($app.ProcessId); do { $more = $all | Where-Object { $ids -contains $_.ParentProcessId -and $ids -notcontains $_.ProcessId -and $_.CommandLine -notmatch '--luna-tts' } | ForEach-Object ProcessId; $ids += $more } while ($more); Get-Process -Id $ids | ForEach-Object { '{0} {1} {2}' -f $_.Id, $_.CPU, $_.WorkingSet64 }",
     ]).toString();
     return out
       .trim()
@@ -24,10 +25,12 @@ function sample() {
         rssMb: bytes / 2 ** 20,
       }));
   }
-  const out = execFileSync("ps", ["-axo", "pid=,%cpu=,rss=,comm="]).toString();
+  const out = execFileSync("ps", ["-axo", "pid=,%cpu=,rss=,args="]).toString();
   return out
     .split("\n")
-    .filter((l) => /mivuneko-desktop$/.test(l.trim()))
+    .filter(
+      (l) => /mivuneko-desktop(\s|$)/.test(l) && !l.includes("--luna-tts"),
+    )
     .map((l) => l.trim().split(/\s+/))
     .map(([pid, cpu, rss]) => ({ pid: +pid, cpu: +cpu, rssMb: +rss / 1024 }));
 }

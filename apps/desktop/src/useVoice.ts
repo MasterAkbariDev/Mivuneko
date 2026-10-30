@@ -24,6 +24,8 @@ export function useVoice(
   onTranscript: (text: string) => void,
   onMood: (mood: Mood) => void,
   onError: (text: string) => void,
+  /** Only the conversation voice marks `turn.first_audio` for latency spans. */
+  options: { measureTurn?: boolean } = {},
 ) {
   const preferences = usePreferences();
   const cloud = preferences.voiceProvider === "gemini";
@@ -255,7 +257,7 @@ export function useVoice(
           node.onended = () => done();
         });
         node.start(at);
-        markTurn("turn.first_audio");
+        if (options.measureTurn) markTurn("turn.first_audio");
         phrases.current.push(node);
         nextAt =
           at +
@@ -350,7 +352,7 @@ export function useVoice(
         nextAt = at + buffer.duration;
         phrases.current.push(node);
         node.start(at);
-        markTurn("turn.first_audio");
+        if (options.measureTurn) markTurn("turn.first_audio");
         if (!played.value) {
           played.value = true;
           setPreparing(false);

@@ -30,7 +30,7 @@ mod platform {
         static kCGWindowBounds: CFTypeRef;
         static kCGWindowOwnerPID: CFTypeRef;
         fn CGWindowListCopyWindowInfo(option: u32, relative_to: u32) -> CFTypeRef;
-        fn CGRectMakeWithDictionaryRepresentation(dict: CFTypeRef, rect: *mut CGRect) -> bool;
+        fn CGRectMakeWithDictionaryRepresentation(dict: CFTypeRef, rect: *mut CGRect) -> u8;
         fn CGGetActiveDisplayList(max: u32, displays: *mut u32, count: *mut u32) -> i32;
         fn CGDisplayBounds(display: u32) -> CGRect;
     }
@@ -39,7 +39,7 @@ mod platform {
         fn CFArrayGetCount(array: CFTypeRef) -> isize;
         fn CFArrayGetValueAtIndex(array: CFTypeRef, index: isize) -> CFTypeRef;
         fn CFDictionaryGetValue(dict: CFTypeRef, key: CFTypeRef) -> CFTypeRef;
-        fn CFNumberGetValue(number: CFTypeRef, kind: isize, out: *mut c_void) -> bool;
+        fn CFNumberGetValue(number: CFTypeRef, kind: isize, out: *mut c_void) -> u8;
         fn CFRelease(value: CFTypeRef);
     }
     const ON_SCREEN_ONLY: u32 = 1;
@@ -51,7 +51,7 @@ mod platform {
         // SAFETY: dict is a live CFDictionary from the window list; out matches kind.
         unsafe {
             let v = CFDictionaryGetValue(dict, key);
-            (!v.is_null() && CFNumberGetValue(v, CF_NUMBER_SINT32, &mut out as *mut _ as _))
+            (!v.is_null() && CFNumberGetValue(v, CF_NUMBER_SINT32, &mut out as *mut _ as _) != 0)
                 .then_some(out)
         }
     }
@@ -84,7 +84,8 @@ mod platform {
                 }
                 let mut r = CGRect::default();
                 let bounds = CFDictionaryGetValue(w, kCGWindowBounds);
-                if !bounds.is_null() && CGRectMakeWithDictionaryRepresentation(bounds, &mut r) {
+                if !bounds.is_null() && CGRectMakeWithDictionaryRepresentation(bounds, &mut r) != 0
+                {
                     result = super::covers_display((r.x, r.y, r.w, r.h), &displays);
                 }
                 break;

@@ -6,6 +6,7 @@ mod pet_displays;
 mod screen;
 use os_broker::{AppInfo, Broker, LaunchPolicy, LaunchRequest, LaunchResult};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
@@ -397,8 +398,9 @@ fn character_voices(
         let temp = target.with_extension("part");
         std::fs::write(&temp, table).map_err(|_| "Cannot write the character voice")?;
         std::fs::rename(&temp, &target).map_err(|_| "Cannot save the character voice")?;
-        remove_stale_voices(&root.join("voices"), character, &target);
     }
+    // Also on reuse: a delete that failed while a worker held the file (Windows) is retried.
+    remove_stale_voices(&root.join("voices"), character, &target);
     Ok(Some(target))
 }
 /// Each blend is a full 28 MB voices.bin copy; keep only the current one per character.
@@ -417,6 +419,57 @@ fn remove_stale_voices(dir: &std::path::Path, character: &str, keep: &std::path:
         }
     }
 }
+/// Set when the embedded worker could not load the installed sherpa-onnx library this session.
+static EMBEDDED_TTS_UNUSABLE: AtomicBool = AtomicBool::new(false);
+fn search(dir: &std::path::Path, name: &str, depth: u8) -> Option<std::path::PathBuf> {
+    if depth == 0 {
+        return None;
+    }
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        if path.file_name()?.to_str()? == name && path.is_file() {
+            return Some(path);
+        }
+        if path.is_dir() {
+            if let Some(found) = search(&path, name, depth - 1) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+/// The Kokoro worker to run and, for the embedded worker, the library it loads.
+/// Prefers a resident worker: a developer-built luna-tts, else this executable loading the
+/// installed sherpa-onnx library. The per-phrase CLI reloads the model every phrase, so it
+/// is the fallback, including after the embedded worker failed to load (`embedded_unusable`).
+fn select_worker(
+    root: &std::path::Path,
+    embedded_unusable: bool,
+) -> Option<(std::path::PathBuf, Option<std::path::PathBuf>)> {
+    let library_name = if cfg!(windows) {
+        "sherpa-onnx-c-api.dll"
+    } else if cfg!(target_os = "macos") {
+        "libsherpa-onnx-c-api.dylib"
+    } else {
+        "libsherpa-onnx-c-api.so"
+    };
+    if root.join("luna-tts").is_file() {
+        return Some((root.join("luna-tts"), None));
+    }
+    let embedded = (!embedded_unusable)
+        .then(|| search(&root.join("runtime"), library_name, 6))
+        .flatten()
+        .zip(std::env::current_exe().ok());
+    if let Some((library, exe)) = embedded {
+        return Some((exe, Some(library)));
+    }
+    let cli = if cfg!(windows) {
+        "sherpa-onnx-offline-tts.exe"
+    } else {
+        "sherpa-onnx-offline-tts"
+    };
+    Some((search(&root.join("runtime"), cli, 6)?, None))
+}
 // The resident Kokoro worker and model sit next to the voice models (.local/tts).
 fn tts_config(app: &tauri::AppHandle) -> Option<desktop_core::TtsConfig> {
     let root = tts_root(app)?;
@@ -425,51 +478,7 @@ fn tts_config(app: &tauri::AppHandle) -> Option<desktop_core::TtsConfig> {
         .flatten()
         .map(|e| e.path())
         .find(|p| p.is_dir() && p.join("model.onnx").is_file())?;
-    fn search(dir: &std::path::Path, name: &str, depth: u8) -> Option<std::path::PathBuf> {
-        if depth == 0 {
-            return None;
-        }
-        for entry in std::fs::read_dir(dir).ok()?.flatten() {
-            let path = entry.path();
-            if path.file_name()?.to_str()? == name && path.is_file() {
-                return Some(path);
-            }
-            if path.is_dir() {
-                if let Some(found) = search(&path, name, depth - 1) {
-                    return Some(found);
-                }
-            }
-        }
-        None
-    }
-    // Prefer a resident worker: a developer-built luna-tts, else this executable loading the
-    // installed sherpa-onnx library. The per-phrase CLI reloads the model every phrase.
-    let library_name = if cfg!(windows) {
-        "sherpa-onnx-c-api.dll"
-    } else if cfg!(target_os = "macos") {
-        "libsherpa-onnx-c-api.dylib"
-    } else {
-        "libsherpa-onnx-c-api.so"
-    };
-    let (worker, library) = if root.join("luna-tts").is_file() {
-        (root.join("luna-tts"), None)
-    } else if let (Some(library), Ok(exe)) = (
-        search(&root.join("runtime"), library_name, 6),
-        std::env::current_exe(),
-    ) {
-        (exe, Some(library))
-    } else {
-        let cli = search(
-            &root.join("runtime"),
-            if cfg!(windows) {
-                "sherpa-onnx-offline-tts.exe"
-            } else {
-                "sherpa-onnx-offline-tts"
-            },
-            6,
-        )?;
-        (cli, None)
-    };
+    let (worker, library) = select_worker(&root, EMBEDDED_TTS_UNUSABLE.load(Ordering::Relaxed))?;
     worker.is_file().then_some(desktop_core::TtsConfig {
         worker,
         model_dir,
@@ -538,7 +547,19 @@ async fn synthesize_phrase(
                 .as_str()
                 .and_then(desktop_core::kokoro::speaker_id))
             .unwrap_or(3) as u32;
-        let wav = worker.synthesize_phrase(&config, &text, speaker, speed.clamp(0.5, 1.6))?;
+        let speed = speed.clamp(0.5, 1.6);
+        let wav = match worker.synthesize_phrase(&config, &text, speaker, speed) {
+            Err(e) if config.library.is_some() && desktop_core::is_engine_load_failure(&e) => {
+                EMBEDDED_TTS_UNUSABLE.store(true, Ordering::Relaxed);
+                eprintln!("Kokoro worker could not load sherpa-onnx ({e}); using the CLI");
+                let fallback = desktop_core::TtsConfig {
+                    voices: config.voices.clone(),
+                    ..tts_config(&app).ok_or(e)?
+                };
+                worker.synthesize_phrase(&fallback, &text, speaker, speed)?
+            }
+            result => result?,
+        };
         if worker.ticket() != ticket {
             return Err("Voice operation was cancelled".into());
         }
@@ -848,7 +869,7 @@ fn clear_history(window: tauri::Window, app: tauri::AppHandle) -> Result<(), Str
 }
 /// Stores UI latency spans locally (timings and provider/engine names only).
 #[tauri::command]
-fn record_spans(
+async fn record_spans(
     window: tauri::Window,
     app: tauri::AppHandle,
     spans: Vec<desktop_core::Span>,
@@ -861,7 +882,9 @@ fn record_spans(
         .app_data_dir()
         .map_err(|_| "Metrics location unavailable")?
         .join("metrics.sqlite");
-    desktop_core::record_spans(&path, &spans)
+    tauri::async_runtime::spawn_blocking(move || desktop_core::record_spans(&path, &spans))
+        .await
+        .map_err(|_| "Metrics worker failed")?
 }
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 fn install_tray(app: &tauri::App) -> tauri::Result<()> {
@@ -1078,6 +1101,37 @@ mod voice_pack_tests {
                 .join("voices/mochi-0000000000000000.bin")
                 .is_file(),
             "other characters' blends are untouched"
+        );
+    }
+    #[test]
+    fn worker_selection_falls_back_to_the_cli_when_embedded_is_unusable() {
+        let root = tempfile::tempdir().unwrap();
+        let lib = root.path().join("runtime/x/lib");
+        let bin = root.path().join("runtime/x/bin");
+        std::fs::create_dir_all(&lib).unwrap();
+        std::fs::create_dir_all(&bin).unwrap();
+        let library = lib.join(if cfg!(windows) {
+            "sherpa-onnx-c-api.dll"
+        } else if cfg!(target_os = "macos") {
+            "libsherpa-onnx-c-api.dylib"
+        } else {
+            "libsherpa-onnx-c-api.so"
+        });
+        let cli = bin.join(if cfg!(windows) {
+            "sherpa-onnx-offline-tts.exe"
+        } else {
+            "sherpa-onnx-offline-tts"
+        });
+        std::fs::write(&library, b"").unwrap();
+        std::fs::write(&cli, b"").unwrap();
+        let (worker, chosen) = select_worker(root.path(), false).unwrap();
+        assert_eq!(worker, std::env::current_exe().unwrap());
+        assert_eq!(chosen, Some(library));
+        assert_eq!(select_worker(root.path(), true).unwrap(), (cli, None));
+        std::fs::write(root.path().join("luna-tts"), b"").unwrap();
+        assert_eq!(
+            select_worker(root.path(), false).unwrap(),
+            (root.path().join("luna-tts"), None)
         );
     }
     #[test]

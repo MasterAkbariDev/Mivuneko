@@ -13,7 +13,10 @@ pub struct AppInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
 }
-/// How launch requests are decided. Stored and enforced in Rust; webviews only display it.
+/// How launch requests are decided. Rust enforces `enabled` and `Deny` and binds each token to
+/// its target and window; `Ask` vs `Auto` is decided by the main window's UI (whether it
+/// shows a card before resolving). Fine for local-reversible launches only: send-capable
+/// actions need a confirmation the webview cannot synthesize (plan Slice 6).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ApprovalMode {

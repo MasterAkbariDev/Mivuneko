@@ -248,3 +248,23 @@ First visible character, p50 ms, by prompt kind:
   - `ARCHITECTURE.md`: approval tokens, Rust policy, command ACL, current STT/TTS engines, open-mic limits, barge-in, latency spans (replaces "29 seconds" and "`say`").
   - `GAPS.md`: barge-in and text streaming exist; what remains is speaking while streaming, streaming ASR and full-duplex. The ACL item is resolved; links to the plan.
 - CI itself has not run: the branch is not pushed.
+
+### Stage 11 — Fixes from the independent Slice-0 code review
+Review: `REVIEW_SLICE0.md`, Opus session. Verdict: "mergeable for dev use". Stage 3 found no bypass, replay or self-approval; every invoke literal was cross-checked against its window. 1 High, 3 Medium, 8 Low.
+
+| # | Finding | Action |
+|---|---|---|
+| S0-1 High | The embedded worker had no runtime fallback (the CLI was chosen only when the library file was *absent*). A notarized build will refuse to load the downloaded dylib | **Fixed:** a load/start failure marks the embedded worker unusable for the session and retries that phrase on the CLI (`select_worker`, `is_engine_load_failure`). Tests: an unloadable worker reports a load failure; selection falls back to the CLI. **Planned:** the signing slice ships the signed sherpa-onnx + onnxruntime libraries in the bundle and adds a hardened-runtime smoke test (plan Part D, Slice 5 updated) |
+| S0-2 Med | In Rust, Ask ≡ Auto; only off/deny are enforced | **Documented** on `ApprovalMode`: Rust enforces off/deny and token binding; ask vs auto is the main window's UI decision. Acceptable for local-reversible launches only. Send-capable work needs a non-synthesizable confirmation (Slice 6) |
+| S0-3 Med | The metrics turn never ended, so later speech could be attributed to an old turn; open-mic partials mixed with finals | **Fixed:** `turn.first_audio` counts only within 30 s of `reply_done` and ends the turn. Only the conversation voice (`useVoice(..., {measureTurn:true})`) marks it. Open-mic spans are tagged `<engine>:partial` / `<engine>:final` |
+| S0-4 Med | Windows worker never compiled; non-ASCII model paths may reach sherpa as ANSI | **Open:** needs CI or a Windows machine (branch unpushed). The ANSI-path risk predates this work (the CLI path has it too). Planned fix if a non-ASCII `%APPDATA%` test fails: `activeCodePage=UTF-8` in the Windows manifest |
+| S0-5 Low | Turn charset unchecked; `record_spans` ran on the UI thread | **Fixed:** turn must be `[A-Za-z0-9-]` (test added); command is async with `spawn_blocking`; `metrics.sqlite` set to 0600 |
+| S0-6 Low | Unchecked `malloc` in the worker | **Fixed** (`ERR out of memory`) |
+| S0-7 Low | No timeout on resident worker reads (pre-existing) | Deferred to the voice slices |
+| S0-8 Low | `CFNumberGetValue` declared `bool` | **Fixed:** `u8`, also for `CGRectMakeWithDictionaryRepresentation` |
+| S0-9 Low | Idle probe counted the worker as the app; WebView2 grandchildren missed | **Fixed:** worker excluded by its `--luna-tts` argument; the Windows tree is walked fully |
+| S0-10 Low | A stale blend persists if a Windows delete fails | **Fixed:** the sweep runs on every call, not only on writes |
+| S0-11 Low | Payload hash binds the path, not the bundle identity | Deferred: for send-capable actions, bind bundle id + version (Slice 6) |
+| S0-12 Low | `InlineChat.tsx` is dead code | Deferred to Slice 1a (shared `runTurn`); the ACL test guards against re-mounting it in the pet |
+
+Tests after the fixes: unit 108; desktop-core 9; app crate 11; os-broker 13; clippy and fmt clean; both C variants compile; voice E2E 16/17 (the one failure is pre-existing `settings-redesign.spec.ts:714`).

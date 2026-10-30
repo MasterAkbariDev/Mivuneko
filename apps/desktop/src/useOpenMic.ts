@@ -71,6 +71,7 @@ export function useOpenMic(
       frames: Float32Array[],
       size: number,
       sampleRate: number,
+      phase: "partial" | "final",
     ) => {
       if (!size) return "";
       const samples = new Float32Array(size);
@@ -93,7 +94,7 @@ export function useOpenMic(
       recordSpan(
         "stt.open_mic",
         performance.now() - sttStart,
-        prefs.current.sttEngine,
+        `${prefs.current.sttEngine}:${phase}`,
       );
       return cleanTranscript(text);
     };
@@ -110,7 +111,7 @@ export function useOpenMic(
         try {
           await pending;
           if (stopped) return;
-          const final = (await snapshot(frames, size, rate)).trim();
+          const final = (await snapshot(frames, size, rate, "final")).trim();
           if (stopped) return;
           callbacks.current.onPartial("");
           if (!submit) {
@@ -190,7 +191,7 @@ export function useOpenMic(
             const frames = chunks.slice(),
               size = total,
               rate = context.sampleRate;
-            pending = snapshot(frames, size, rate)
+            pending = snapshot(frames, size, rate, "partial")
               .then((text) => {
                 if (!stopped && text.trim()) {
                   transcript = text.trim();
