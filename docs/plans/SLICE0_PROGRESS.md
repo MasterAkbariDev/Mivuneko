@@ -312,3 +312,23 @@ Tests after the fixes: unit 108; desktop-core 9; app crate 11; os-broker 13; cli
   - Kokoro OOV words silently dropped;
   - worker restart on character switch;
   - worker read timeouts.
+
+## GitHub CI (pushed 2026-10-30)
+
+Run 40985496966 on `ad7977f` vs `main`'s last run 40931385272 on `a3131b0`:
+
+| Job | `main` | Slice 0 |
+|---|---|---|
+| core (fmt, 4-crate tests, clippy; Ubuntu) | pass | pass |
+| macOS aarch64 (tests + **app crate tests (new)** + app bundle) | pass | pass |
+| macOS x86_64 (same) | pass | pass |
+| **Windows** (tests + **app crate tests (new)**, which compile the embedded worker's `windows.h` path with MSVC, + build) | pass | **pass** |
+| frontend (Prettier, unit, build, E2E) | E2E 4 fail / 56 pass | E2E **the same 4** fail / 56 pass |
+
+**No new regressions.** The 4 CI E2E failures are pre-existing (`KNOWN_ISSUES.md` K1, K4, K7, K8).
+
+- **S0-4 update:** the Windows worker now *compiles* in CI. It has not been *run* on Windows, so non-ASCII paths remain open.
+- **Also added:**
+  - [KNOWN_ISSUES.md](KNOWN_ISSUES.md) — baseline E2E failures and platform issues;
+  - [IDLE_CPU.md](IDLE_CPU.md) — idle-CPU investigation and proposals;
+  - [SMOKE_TEST_SLICE0.md](SMOKE_TEST_SLICE0.md) — the owner's manual checklist.
