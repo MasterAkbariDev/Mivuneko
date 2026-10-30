@@ -6,6 +6,7 @@
 | Date | 2026-10-29 |
 | Baseline | `main` @ `a3131b0` |
 | Supersedes | v2 (`EVOLUTION_PLAN.v2.md`), v1 |
+| Update 2026-10-30 | Expressive TTS direction: Chatterbox family first (§3.1–3.3b, PoC 5, Slice 3). Slice 1 scope unchanged |
 | Review | Independent Opus review: `REVIEW_OPUS.md`; owner's review of v2 |
 | Status | **Planning only.** Nothing is implemented, deleted, installed or downloaded until the owner approves. |
 
@@ -45,7 +46,7 @@ Sources: **O#** = owner's review point; **C/H/M/L#** = `REVIEW_OPUS.md`. All wer
 | O6 | High | `/v1/toolsets` shape | [V] at tag v0.22.5 the code returns `{object, platform, data[]}` (`api_server.py:2891-2916`); the docs at the same tag show a bare array (`api-server.md:831-835`); our client calls `as_array()` on the body (`agent-client/src/lib.rs:52`) | **Code beats docs:** against v0.22.5 the client fails. Decision: accept both shapes, fail closed otherwise. A live test only confirms. Request `tools`/`tool_choice` are ignored upstream [V], so `tools:[]` protects nothing |
 | H1 | **High** | The approval boundary is in the webview: `request_launch`/`resolve_launch` have no window check; `allow` and `approvalMode` come from JS; no command ACL | [V] `main.rs:122-145`, `App.tsx:261-275`, `build.rs` | §2.4. Policy is stored and evaluated in Rust. Payload-bound nonces for `send-capable`/`destructive`, approvable only from the main window. Tauri app-manifest command permissions. Voice may approve `local-reversible` at most. Moved into Phase 0 / Slice 0 |
 | O4 / H2 | **High** | Generic "retry once" could double-send. "Field cleared" and "title changed" don't prove a send | [V] plan v2 §2.3, §4.4, §5.3 | §4.2. Explicit send state chain, `idempotent` flag per capability, at-most-once action ids, persisted state machine, "uncertain" outcome with no auto-retry, recipient bound to a confirmed identifier |
-| O2 | **High** | No Qwen3-TTS variant gives a custom identity **and** emotion instruction | [V `qwen_tts/inference/qwen3_tts_model.py`] Base has no `instruct`; CustomVoice uses 9 preset speakers only; 0.6B CustomVoice drops `instruct`; VoiceDesign is non-deterministic (#298); clone+instruct only in the unreleased 25Hz VoiceEditing (#14) | §3.3. Identity = stored clone prompt from a 4–6 s anchor. Emotion = a bank of per-emotion reference clips gated by speaker similarity (sherpa-onnx embeddings). Per-character calibration gate for real-time use. Fine-tuning dropped. Bake-off (VoxCPM2, CosyVoice3) only on a Qwen no-go, time-boxed |
+| O2 | **High** | No Qwen3-TTS variant gives a custom identity **and** emotion instruction | [V `qwen_tts/inference/qwen3_tts_model.py`] Base has no `instruct`; CustomVoice uses 9 preset speakers only; 0.6B CustomVoice drops `instruct`; VoiceDesign is non-deterministic (#298); clone+instruct only in the unreleased 25Hz VoiceEditing (#14) | §3.3b. Identity = stored clone prompt from a 4–6 s anchor. Emotion = a bank of per-emotion reference clips gated by speaker similarity (sherpa-onnx embeddings). Per-character calibration gate for real-time use. Fine-tuning dropped. Bake-off (VoxCPM2, CosyVoice3) only on a Qwen no-go, time-boxed |
 | O3 | **High** | Incremental JSON delays first text. Groq JSON is prompt-only | [V] serde_json is built without `preserve_order` (Cargo.lock: no indexmap), so the `json!` schema goes out alphabetically: `appQuery, companionActions, emotion, speech, text`. Gemini keeps schema order [R], so **visible text is generated last**, after actions, emotion and the duplicate `speech`. [V] Groq sends no `response_format` (`groq.rs:144`); malformed replies are shown and spoken with braces (`shared-schemas/agent.ts:9-10,61`) | §3.4. Interim fix: `propertyOrdering` array + drop `speech`. Target format chosen by a Phase-0 A/B: (A) ordered JSON, (B) tagged header + plain body + `@actions` trailer, (C) tagged header + body + function call. Lean: B |
 | H3 | High | "Zero-LLM" workflow triggering still runs a parallel LLM call; regex triggers miss most phrasings, especially Persian | [V] `desktop-intent.ts:29-99` | §2.3. The one companion turn that already runs selects `run{workflow_id, slots}`. Metric: 0 calls during execution, ≤ 1 shared selection call. Hotkey, button and scheduler triggers are truly zero-call |
 | H4 | High | Memory poisoning into send-capable actions | [O] design gap | §5.2. Extract only from user-authored turns. Contact identifiers need `user-confirmed` source. Cards show the resolved identifier. Poisoning cases added to the corpus |
@@ -58,13 +59,13 @@ Sources: **O#** = owner's review point; **C/H/M/L#** = `REVIEW_OPUS.md`. All wer
 | M3 | Medium | No single audio owner; mic audio sent as JSON number arrays | [V] four `useVoice` instances share `cancel_voice` (`useVoice.ts:76`); `Array.from(wav)` (`useOpenMic.ts:88`) | §3.6. One audio owner, decided in Slice 1. Binary mic channel. Mic stays in the webview for echo cancellation |
 | M4 | Medium | Streaming speech must be Markdown-aware | [V] `speech.ts:4-30`, `App.tsx:453-470` | §3.4. Streaming `speakable` that holds back inside fences/tables |
 | M5 | Medium | Mixed-language replies switch voices mid-reply | [O] | §3.5. **Per-turn** routing: any Persian or other Arabic-script text → the whole turn uses Gemini |
-| M6 | Medium | Real-time Qwen serves a narrow hardware band | [R] | §3.3. A second use: **pre-rendered** expressive lines on mid-tier hardware. Two go/no-go decisions |
+| M6 | Medium | Real-time Qwen serves a narrow hardware band | [R] | §3.3 / §3.3b. A second use: **pre-rendered** expressive lines on mid-tier hardware. Two go/no-go decisions |
 | M7 | Medium | The workflow recorder is risky and unspecified | [O] | §5.5. v1 learned workflows compose **registry capabilities only**; raw AX steps in v2 after spike data |
 | M8 | Medium | MCP facade transport/auth unspecified | [O] | §2.5. One transport rule: authenticated loopback/socket, per-client tokens, a separate signed helper bundle |
 | M9 | Medium | Signing is a prerequisite for desktop control | [V] `bundle.active: false`, nothing signed | Part D. Signing is a hard dependency of Slice 6 |
 | M10 | Medium | Idle targets conflict with the WebView throttling-disable flags | [V] `tauri.conf.json` | §7. Measure first; per-OS targets; flags only on the audio-owner window |
 | M11 | Medium | Per-turn memory in the system prompt defeats prefix caching | [R] | §2.2. Prompt order: rules → persona → pinned memory → history → per-turn retrieval last |
-| M12 | Medium | Imported packs: persona injection, cloned real voices | [V] `character-pack.ts` | §3.3. Capped, delimited persona fields; reference-audio consent on import |
+| M12 | Medium | Imported packs: persona injection, cloned real voices | [V] `character-pack.ts` | §3.3b. Capped, delimited persona fields; reference-audio consent on import |
 | D-fixes | — | D1 fix method; D2 scope; D3 numbers; D5 diagnosis | [V] see §1.3 | §1.3 corrected |
 | L1–L8 | Low | Contract test as dev script; grace window; panel size; reference HW; quarantine; FTS/ZWNJ; Intel mapping; keychain shell-out | [V]/[O] | Applied in place |
 
@@ -77,7 +78,7 @@ Sources: **O#** = owner's review point; **C/H/M/L#** = `REVIEW_OPUS.md`. All wer
 5. **Structured-first desktop ladder** (channels → AX/UIA → vision opt-in) behind a `DesktopDriver` trait.
 6. **Telegram via deep links**, no MTProto client.
 7. **IDE edits delegated** to an installed coding agent; Mivuneko owns scope, diffs and approvals.
-8. **Voice tiers:** Light (Kokoro, Pocket) / Expressive (Qwen) / Cloud (Gemini), plus language routing.
+8. **Voice tiers:** Light (Kokoro, Pocket) / Expressive (engine chosen by the PoC-5 bake-off; Chatterbox Turbo tested first, Qwen as comparison) / Cloud (Gemini), plus language routing.
 9. **Storage classes:** cleanup only in disposable classes; `user/` never auto-deleted.
 10. **Streaming speech** as the first user-visible win. **Phase-0 measurement first.**
 
@@ -99,7 +100,7 @@ Sources: **O#** = owner's review point; **C/H/M/L#** = `REVIEW_OPUS.md`. All wer
 4. **External executors** (Hermes, coding agents) are a separate OS trust domain, started outside our process tree. They reach our tools only through an authenticated facade, and only as far as their grant allows.
 5. **Voice:**
    - Kokoro and Pocket TTS for real-time everywhere.
-   - Qwen3-TTS Base with per-character anchor and emotion-reference banks for real-time on strong hardware, and pre-rendered lines elsewhere.
+   - An expressive engine (Chatterbox Turbo first; Qwen, CosyVoice3, Pocket compared in PoC 5) with per-character identity references and emotion clip banks, real-time on strong hardware and pre-rendered lines elsewhere.
    - Gemini for Persian.
    - Per-character persona and voice identity live in the pack.
 6. **Listening:**
@@ -216,7 +217,7 @@ flowchart LR
   end
   subgraph Local[Local processes]
     Workers[(sherpa / whisper / luna-tts)]
-    TTSs[(Qwen sidecar)]
+    TTSs[(Expressive TTS sidecar\nPoC 5 winner)]
     Drv[(Desktop driver)]
   end
   subgraph Ext[Separate trust domain - launched outside our process tree]
@@ -411,77 +412,122 @@ Starting suite: **5 tasks per category** (desktop via facade, research, coding c
 
 ## 3. Voice and character system
 
-### 3.1 Verified Qwen3-TTS capabilities [V source / R docs]
+### 3.1 Expressive English TTS — candidates and verified facts (updated 2026-10-30)
 
-| Variant | Speaker | `instruct` | Reference clone | Notes |
-|---|---|---|---|---|
-| 1.7B CustomVoice | 9 presets (2 native English) | yes | no | Can't use our voices |
-| 0.6B CustomVoice | presets | **dropped** in code | no | — |
-| 1.7B / 0.6B Base | from reference | **no parameter** (#25) | yes (in-context or x-vector) | Identity source |
-| 1.7B VoiceDesign | from description | = description | no | Non-deterministic (sampling, no seed; #298) → **offline authoring only** |
+Owner direction (2026-10-30): the **Chatterbox family is the leading candidate** for expressive English character voices. Qwen is kept as a comparison, Kokoro and Pocket as lightweight fallbacks, Gemini for Persian. This is a test order, **not a final engine choice**; PoC 5 decides. Facts below are from source code and model cards [V] or reports [R]; "[U]" means unverified.
 
-**Other verified facts:**
-- **Clone prompt:** `create_voice_clone_prompt(...)` output is reusable; mlx-audio and faster-qwen3-tts cache it. Longer references cost more on every call.
-- **Streaming:**
-  - official `qwen-tts`: no audio streaming;
-  - **mlx-audio:** streams all variants (6-bit 1.7B CustomVoice ~85 ms first audio, 3.88 GB [R README]);
-  - **faster-qwen3-tts:** streams all variants (RTX 4060 Windows ~413 ms; experimental Base `instruct`, rejected by its GGML backend).
-- **Drift:**
-  - gradual text-feed mode drifts in speed (+16.7% with a 12.9 s reference; 0% with full-text prefill, #239);
-  - Base clone speaker switches in ~20% of one user's English requests (#80);
-  - mixed languages change the voice (#61).
-- **Nonverbals:** not supported; only implicit ("haha", random; #9). "Very happy" caused unwanted laughter (#16).
-- **Pronunciation:** no phoneme or lexicon input.
-- **Fine-tuning:** Base only, single speaker, no instruct data. Instruct afterwards has "minimal impact" (#72). Open bugs #179, #343, PR #351.
-- **Sizes:** 1.7B Base 3.86 GB, 0.6B Base 1.83 GB, + 0.68 GB tokenizer (bf16) [R].
+**Chatterbox variants** (resemble-ai/chatterbox v0.1.7; code and weights MIT):
 
-### 3.2 Tiers
+| Variant | Text model | Speech decoder | Emotion controls | Sound tags | Cloning |
+|---|---|---|---|---|---|
+| Chatterbox (original) | Llama 0.5B (30 layers) | S3Gen, 10 flow-matching steps **with CFG (two copies per step)** + HiFT vocoder | `exaggeration` (one intensity number, not an emotion category) and `cfg_weight` [V `cond_enc.py:56-88`, `t3.py:310,344`] | none | yes: reference WAV, no transcript |
+| Multilingual v2 / v3 | same 0.5B | same | `exaggeration` reported nearly ineffective on v1/v2 (#355); v3 [U] | none | yes (not used: English only locally) |
+| **Turbo** | GPT-2 medium (~350M) | distilled decoder, 2 steps, **no CFG** | **none**: `exaggeration`/`cfg_weight` are ignored with a warning [V `tts_turbo.py:159,290`] | **9 official**: `[laugh] [chuckle] [sigh] [gasp] [cough] [groan] [sniff] [shush] [clear throat]`. 10 more emotion tags (`[angry] [happy] [crying] [fear] [surprised] [sarcastic] [whispering] [dramatic] [narration] [advertisement]`) exist in the tokenizer but are **not officially supported**; reports differ by runtime (no effect on MLX, #557; "sometimes artefacts" on ONNX, #492) | yes, reference **> 5 s** (assert) |
+| Nano | GPT-2 small (~110M), same class as Turbo | same decoder as Turbo | none | same as Turbo | yes |
 
-| Tier | Engine | Lang | Use |
+What this means:
+- **No Chatterbox variant can be asked for "angry" or "sad".** Delivery comes from (a) the **reference clip's own delivery**, (b) the wording and punctuation, and (c) on the original only, an intensity knob. Sound tags (laugh, sigh, gasp) are separate and only on Turbo/Nano. So per-emotion reference clips (§3.3b) are needed for Chatterbox exactly as for Qwen.
+- **Parameter counts mislead.**
+  - Every variant also loads the same ~1.06 GB S3Gen decoder. The Turbo and Nano text-model files are 1.9 GB and 870 MB.
+  - Turbo is faster because it drops CFG and uses 2 decoder steps instead of 10. Same H100, stock code: original 1.37 s to first audio / RTF 0.34; Turbo 0.59 s / RTF 0.16 [R mstar #305].
+  - Nano's claimed "3× real-time on 8 CPU cores" is unverified, and the shared decoder may dominate on CPU [U].
+- **Voices are cacheable and swappable** [V].
+  - A voice's `Conditionals` (speaker embedding, prompt tokens, mel features, x-vector) can be saved and loaded: ~150–200 KB each.
+  - One loaded model serves every character by swapping conditionals; no weights are reloaded.
+  - The cost: `conds` is shared state, so generations run one at a time.
+- **Watermark:**
+  - The Python package applies Perth to every finished clip; disabling it is a one-line change, and Perth is MIT.
+  - The official Turbo ONNX example and mlx-audio's port don't watermark.
+  - Perth works on whole clips, which conflicts with streaming. It is installed from unpinned git master (#198).
+- **Runtimes:**
+  - **Official PyTorch:** pins torch 2.6.0, which has no Intel-Mac wheel, so **Intel Macs are blocked** on the official stack. MPS has open bugs (#147 channel limit, #218 leak) and can be slower than CPU (M4 Turbo: RTF 0.87 on MLX vs 2.63 on torch MPS [R sglang-omni #2243]).
+  - **mlx-audio:** supports original, Turbo (fp16 and 4/5/6/8-bit, `stream=True`) and Multilingual v3, but **not Nano**.
+  - **ONNX:** official `ResembleAI/chatterbox-turbo-ONNX` (fp32/fp16/q8/q4); community exports of the original and Nano [U quality].
+  - **CrispASR** (MIT, C++/ggml): all variants, with Windows x64 and macOS x86_64 builds. **The only verified Intel-Mac path.**
+  - **Not available:** a Rust/Candle port (#384); sherpa-onnx declined Chatterbox (#2271).
+  - **Windows:** CUDA works but is reported ~2× slower than Linux (#73). DirectML is unofficial [U].
+- **Streaming:** none official. Community: mlx-audio Turbo; chatterbox-streaming (original; 4090 Linux 0.47 s first chunk, 3090 Windows 4.8 s); mstar (Turbo with CUDA graphs, 0.07 s on an H100). Chunked decoder output can click at the seams (HF Turbo discussion #18).
+- **Known issues:**
+  - Turbo hallucinates above ~350 characters (#424), so split by sentence.
+  - Very short segments can turn to gibberish (#97).
+  - Endings can trail into breath or silence (#388).
+  - A ~4.9 kHz vocoder tone and raised noise floor (#536).
+  - Measured WER: original 0.2% vs Turbo 1.2% [R mstar].
+  - Upstream has been quiet since July 2026.
+- **Licences:** code and weights MIT. Dependencies are MIT/Apache/ISC/BSD, except **`pykakasi` (GPL-3.0+)**, a hard dependency used only for Japanese. Exclude it from anything we distribute.
+
+**Comparison and fallback engines:**
+
+| Engine | Cloning | Requested emotion | Sound tags | Runtime fit | Licence |
+|---|---|---|---|---|---|
+| Qwen3-TTS Base 0.6B/1.7B | yes: 3 s reference **+ transcript** (or x-vector only) | **no** (instructions exist only on CustomVoice/VoiceDesign, which can't clone) | no (implicit "haha") | mlx-audio, faster-qwen3-tts (CUDA); real-time only on strong hardware (details: `EVOLUTION_PLAN.v2.md` §3.1) | Apache-2.0 |
+| Fun-CosyVoice3 0.5B | yes | **yes: text instructions** (emotion, speed) — the only candidate with clone + requested emotion | `[laughter]`, `[breath]` | CUDA-oriented; same S3/flow/HiFT lineage, so similar decoder cost; English instructions are sometimes read aloud (#1802) | Apache-2.0 |
+| Kyutai Pocket TTS | yes (exportable embedding) | no | no | CPU, ~200 ms first chunk, ~6× real-time; **already in sherpa-onnx** | code MIT, weights CC-BY-4.0 |
+| Kokoro (current) | no (blends only) | no | no | sherpa-onnx, resident worker (Slice 0) | Apache-2.0 |
+| Gemini TTS (current) | no (prebuilt voices) | yes (style prompts) | — | cloud, streams; **only Persian voice** | API terms |
+
+### 3.2 Decision: what to test first, what could change it [P]
+
+**Why Chatterbox leads:**
+1. Sound tags (laugh, sigh, gasp…) that no other local candidate offers reliably.
+2. Cheap cloning from one reference clip with **no transcript**, with cacheable per-character conditionals and one resident model for every character.
+3. The Turbo variant is built for voice agents: no CFG, 2-step decoder, official ONNX export, an MLX port with streaming.
+4. MIT licence end to end (after dropping `pykakasi`).
+
+**Test order (PoC 5):**
+1. **Chatterbox Turbo** — first candidate for real-time English conversation (fastest variant with official support and ports).
+2. **Chatterbox original** — comparison for expressive control (`exaggeration`), at roughly 2× Turbo's compute because of CFG and 10 decoder steps. Worth it only if listeners rate its emotional range clearly higher, mainly for **pre-rendered** lines (greetings, check-ins, reactions) on CUDA or Apple Silicon.
+3. **Chatterbox Nano** — candidate CPU fallback (Windows without a GPU; Intel Mac only via CrispASR/ONNX), *if* it beats Pocket on quality at acceptable CPU cost.
+4. **Comparisons:** Qwen3-TTS Base (same reference clips), **CosyVoice3** (the only clone + requested-emotion model; tests whether per-line emotion beats reference-clip emotion), Pocket TTS and Kokoro (lightweight baselines).
+
+**Results that would select a different engine:**
+- **Identity:** Turbo's speaker-switch rate across a character's emotion clips is > 1%, or listeners can't tell characters apart (ABX < 80%). Qwen or Pocket wins if they pass where Turbo fails.
+- **Emotion:** listener emotion identification with Turbo + emotion clips is < 60%. Prefer original Chatterbox (if it reaches ≥ 60% at acceptable cost) or **CosyVoice3** (if requested emotion beats reference-clip emotion by ≥ 15 points).
+- **Speed:** Turbo misses first audio ≤ 700 ms p50 or RTF < 1 on the target tier, or ruins a running game's frame rate. Then Turbo is pre-render only, with Pocket/Kokoro for real time.
+- **Quality:** pronunciation WER > 3% on the hard-words list, audible seams in streamed chunks, or the vocoder tone (#536) judged unacceptable by listeners.
+- **Platform:** no workable Windows runtime (CUDA or ONNX) within the time box. Intel Mac is not a target for the expressive tier; it uses Kokoro/Pocket.
+
+### 3.3 Tiers (unchanged structure; engines pending PoC 5)
+
+| Tier | Engine (PoC-5 candidates) | Lang | Use |
 |---|---|---|---|
-| Light (default) | Kokoro + **Pocket TTS** (CC-BY-4.0 weights [R]) on sherpa-onnx | en | Real-time everywhere, CPU, game-safe |
-| Expressive real-time | Qwen3-TTS **Base 1.7B** (0.6B if the PoC shows it is enough) via mlx-audio (Apple Silicon) / faster-qwen3-tts (NVIDIA) sidecar | en | Only on devices passing the benchmark |
-| Expressive pre-rendered | Same engine, run while idle | en | Check-ins, greetings, reminders, reaction barks on mid-tier hardware; cached under the LRU budget |
-| Cloud | Gemini TTS (streams; Persian supported [R]) | en + **fa** | The only Persian voice |
+| Light (default) | Kokoro + Pocket TTS on sherpa-onnx (Nano if it wins its slot) | en | Real-time everywhere, CPU, game-safe |
+| Expressive real-time | **Chatterbox Turbo** first (MLX on Apple Silicon; PyTorch CUDA or official ONNX on Windows), sidecar | en | Only on devices passing the on-device benchmark |
+| Expressive pre-rendered | Winner of PoC 5 (possibly **original Chatterbox** for its intensity control), run while idle | en | Greetings, check-ins, reminders, reaction barks; cached under the LRU budget |
+| Cloud | Gemini TTS | en + **fa** | **The only Persian voice** until a local Persian TTS passes testing |
 | System | macOS `say`, Windows SAPI | en | Explicit last resort |
 
-### 3.3 Character voice identity with emotion [P]
+**Persian and fallbacks:**
+- A turn containing Persian (or other Arabic-script text) is spoken entirely by Gemini (§3.5).
+- If Gemini is unreachable, Persian is shown as text.
+- If the expressive engine is missing, too slow or failing its speaker guard, the turn uses the Light tier, decided per turn and never mid-turn.
 
-1. **Authoring (offline, once per character):**
-   - Design the voice with VoiceDesign, or use a **consented** recording.
-   - Choose a **4–6 s neutral English anchor clip** and store its clone prompt.
-2. **Emotion bank:**
-   - Generate candidate clips per emotion family (neutral, bright/happy, soft/sad, excited, calm/teasing…) with VoiceDesign: "<identity description>, <emotion>".
-   - **Accept a clip only if** its speaker-embedding cosine (sherpa-onnx extractor, §3.3 step 4) to the anchor is ≥ baseline mean − 2σ **and** above its similarity to every other character.
-   - Keep 3–6 clips per character.
-3. **Runtime:**
-   - Clone with Base in-context mode using the clip for the line's emotion.
-   - Full-text prefill per call, calls < 30 s, the same clone-prompt cache.
-   - One resident model.
-   - Intensity is expressed through the clip choice + speed/pause from the persona mapper.
-4. **Speaker guard:**
-   - **Similarity model:** the ECAPA-class speaker-embedding extractors (wespeaker / 3D-Speaker ONNX) in the **sherpa-onnx runtime we already ship**. No speechbrain or torch. Checks run on every tier without Python.
-   - **Pre-rendered:** always check and regenerate on failure.
-   - **Real-time — per-character calibration gate:**
-     1. In the PoC, synthesize ~200 lines per character across its emotion bank and measure the speaker-switch rate.
-     2. Real-time Qwen ships only for characters at **≤ 1%**.
-     3. At runtime, score each line **asynchronously** and log locally (no pre-play delay).
-     4. If a character's rolling switch rate rises above the threshold, it is demoted to the Light tier **from the next turn**. Voices never switch mid-turn.
-   - A pre-play gate (score ~1.5 s before playback) remains an option that PoC 5 measures. It is not the default, because it costs ~0.75 s + scoring at RTF ~2.
-5. **Experiment to run:** keep the anchor's `ref_spk_embedding` with the emotion clip's `ref_code`.
-6. **Fallback bake-off — only on a Qwen no-go** (overall, or for a specific character). It is **time-boxed** (≤ 1 week), limited to **2 alternates** chosen for licence and runtime fit, and run under the same protocol:
-   - **VoxCPM2** (Apache-2.0; reuses mlx-audio);
-   - **CosyVoice3** (Apache-2.0; `[laughter]`/`[breath]` tags; CMU phonemes).
-   - The English-only / Persian-via-Gemini rule applies to any alternate.
-   - **No fine-tuning.** No CustomVoice for our characters.
-7. **Expressive flags** (`laugh`, `whisper`, `hesitation`) in the pack are **gated by engine capability**: punctuation and pauses where unsupported, tags where verified. **Qwen is not promised laughter or whisper.**
-8. **Consent and packs (M12):**
-   - Built-in characters use designed voices only.
-   - User or imported reference audio requires an attestation ("my voice or I have permission"), stays on-device and is deletable.
-   - Synthetic speech is disclosed.
-   - Imported `persona` fields are length-capped, URL-free, and placed in a delimited prompt section that can't override rules.
+### 3.3b Character voice profiles — identity and emotion [P]
 
-**Pack schema additions:** `persona` (summary, traits, speechStyle, proactivity) and `voice` (`identity.anchor`, `emotionBank[]`, per-engine settings, `lexicon`, `expressive`). All optional; existing packs keep working.
+Engine-independent, so the same profile serves Chatterbox, Qwen, Pocket or CosyVoice in the comparison:
+
+1. **Identity reference (one per character):** a 6–10 s neutral English recording.
+   - Built-in characters use **designed or licensed** voices; a consented user recording is optional. Chatterbox Turbo needs > 5 s; the README suggests ~10 s.
+   - Store the source WAV (on-device) and each engine's cached voice object (Chatterbox `Conditionals`, Qwen clone prompt, Pocket embedding).
+2. **Emotion clip bank** (because no cloning engine accepts a requested emotion except CosyVoice3):
+   - 6–10 s clips of **the same voice** delivering each family: happy, sad, angry, excited, curious, shy, comforting/empathetic, surprised. Recorded, or generated once with an expressive engine and then gated.
+   - **A clip is accepted only if** its speaker embedding (sherpa-onnx wespeaker / 3D-Speaker extractor) is within baseline mean − 2σ of the identity reference, **and** closer to it than to any other character.
+   - Each accepted clip is cached as its own voice object.
+   - Runtime picks the clip for the turn's emotion. Intensity comes from clip choice, speed and pauses (persona mapper), plus `exaggeration` on the original model only.
+3. **Vocalizations:** laughter and sighs come from sound tags where the engine supports them (Turbo/Nano), otherwise from punctuation or omitted. The pack's `expressive` flags are gated by engine capability.
+4. **Switching characters** swaps the cached voice objects; the model stays loaded. Generations run one at a time (shared state), which matches the single-audio-owner design (§3.6).
+5. **Speaker guard:** unchanged from the previous plan.
+   - Pre-rendered lines are always checked.
+   - Real time uses a per-character calibration gate (~200 lines, switch rate ≤ 1%) and asynchronous scoring with demotion from the next turn.
+   - Uses sherpa-onnx embeddings, no Python.
+6. **Chunking:** sentence-level requests ≤ ~300 characters (Turbo hallucinates above ~350). The first chunk is short for low first audio. Seams are smoothed with short crossfades and measured in PoC 5.
+7. **Consent, licences and watermark:**
+   - User or imported reference audio requires an attestation, stays on-device and is deletable. Synthetic speech is disclosed.
+   - **Watermark policy is the owner's call** (Part E): Perth on pre-rendered clips (no streaming conflict) is recommended; real-time streamed audio runs unwatermarked unless a streaming-compatible watermark is found.
+   - `pykakasi` (GPL) is excluded from bundles.
+8. **Sidecar packaging** follows the owner's rule: optional, pinned and hash-verified, isolated environment, removable, with disk cleanup. Model files are downloaded only in Slice 3, after approval.
+
+**Pack schema additions:** `persona` (summary, traits, speechStyle, proactivity) and `voice` (`identity.reference`, `emotionBank[{emotion, clip}]`, per-engine cached voice ids, `lexicon`, `expressive`). All optional; existing packs keep working.
 
 ### 3.4 Streaming format and pipeline [P]
 
@@ -874,7 +920,7 @@ sequenceDiagram
 | Decision | Recommended | Alternatives | Why / risk |
 |---|---|---|---|
 | Streaming format | Decided by A/B; lean tagged header + plain body + `@actions` trailer | Ordered JSON; function calls | Fastest first text on both providers, no escaping; risk: model drift from the format → graceful defaults |
-| Qwen identity + emotion | Base + anchor + similarity-gated emotion clip bank + per-character calibration gate | CustomVoice instruct (wrong voice); fine-tuning (bugs, no instruct); VoiceDesign at runtime (non-deterministic) | Only path that keeps our voice; risk: emotion range limited to clips, speaker flips → guard |
+| Expressive English voice | **Chatterbox Turbo first** (sound tags, transcript-free cloning, cacheable per-character voices, no CFG, official ONNX + MLX streaming), chosen by the PoC-5 bake-off | Chatterbox original (intensity control, ~2× compute), Nano (CPU), Qwen3-TTS Base, CosyVoice3 (clone + requested emotion), Pocket/Kokoro | No engine except CosyVoice3 takes a requested emotion, so emotion comes from per-character clip banks; risks: Turbo emotion tags unsupported, >350-character drift, vocoder tone, Python stack multi-GB, no Intel-Mac path except CrispASR, shared state = one generation at a time |
 | External executors | Out-of-process-tree, token-authenticated, observe-only default grant | Child processes; trusting Hermes config | TCC isolation; config fails open |
 | Hermes host tools | Whole-Hermes container only (opt-in) | Terminal backend container; Seatbelt (deferred) | Terminal backend doesn't isolate Hermes's own tools |
 | Approval enforcement | Rust policy + payload nonces + app-manifest ACL | Today's JS-side approval | Required before any send-capable capability |
@@ -980,7 +1026,7 @@ Each experiment is ≤ 3 days and produces numbers plus a go/no-go.
 | 2 | CI-built, signed `luna-tts` externalBin on macOS arm64/x64 + Windows x64 | Runs from an app-installed Kokoro; first phrase < 1 s warm | Keep the CLI path; document |
 | 3 | Nemotron streaming on sherpa-onnx (pinned v2.0.1 or a bumped pin) on macOS + Windows | Online server present; RTF < 1 at 560 ms chunks on CPU-only | Moonshine streaming (en) or Parakeet + segment partials |
 | 4 | BuzzASR → ggml q5_0 conversion; RTF + CER on owner Persian clips (CPU-only, M-series, NVIDIA) | CER better than Gemini or large-v3-turbo, at final RTF < 0.5 on gated HW | Gemini first, Whisper turbo offline |
-| 5 | Qwen Base 1.7B / 0.6B + anchor + emotion bank (mlx-audio M-series; faster-qwen3-tts RTX 3060/4060; with a game running); per-character calibration of ~200 lines; sherpa-onnx speaker embeddings | Speaker-switch rate ≤ 1% per character; bank similarity gate passes; listener emotion identification ≥ 60%; real-time first audio within target on the tier | Real-time no-go → pre-render only; full no-go → time-boxed bake-off with 2 alternates (VoxCPM2, CosyVoice3) |
+| 5 | **Expressive voice bake-off.** Same 3 characters, same identity references and emotion clip banks, same scripts for every engine: **Chatterbox Turbo** (first), Chatterbox original, Chatterbox Nano (CPU), Qwen3-TTS Base, CosyVoice3, Pocket TTS, Kokoro. Runtimes: MLX on Apple Silicon; PyTorch CUDA / official ONNX on Windows+NVIDIA; CPU-only laptop; each also run with a GPU game or benchmark in the background. Measure: first audio, total synthesis time, RTF, model load, character-switch latency (cached voice swap), CPU/RAM, GPU/VRAM, streamed-chunk seams, pronunciation WER (hard-words list), speaker-switch rate per character (~200 lines), **blind listening test** (≥ 8 listeners; naturalness 1–5, emotion identification across happy/sad/angry/excited/curious/shy/comforting/surprised, ABX "same character?", vocalization naturalness). | Turbo: speaker-switch ≤ 1% per character; ABX ≥ 80%; emotion identification ≥ 60%; first audio ≤ 700 ms p50 and RTF < 1 on its tier; pronunciation WER ≤ 3%; no audible seams | Rules in §3.2: original Chatterbox (pre-render) if it adds ≥ 15 points of emotion ID at acceptable cost; CosyVoice3 if requested emotion beats clip emotion by ≥ 15 points; Qwen/Pocket if they keep identity where Turbo does not; real-time no-go → pre-render only, Light tier for real time |
 | 6 | Telegram Desktop (macOS + Windows) AX/UIA observability: chat header identifier, input value, outgoing bubble appearance, call UI; deep links with `domain` and `phone` | `chat_open`, `draft_filled`, `sent_observed`, `call_ui_observed` observable in ≥ 95% of 50 trials | Draft-only flow (user presses send); calls = open chat + instruct user |
 | 7 | Hermes isolation: Mode-1 config + runtime toolset assertion + canaries; TCC check for the LaunchAgent route; confirm the `_room_execution_policy` behaviour in a throwaway install | All canaries fail; assertion detects a corrupted config | Hermes stays disabled |
 | 8 | Windows WebView2 + macOS WKWebView idle CPU/RAM with current flags, and with flags only on the pet window | Data for the per-OS targets | — |
@@ -1007,7 +1053,7 @@ Sizes: **S** ≈ days, **M** ≈ 1–2 weeks, **L** ≈ 3–5 weeks (one develop
 | **1. Streaming voice (TS path)** | Speech at first sentence (Kokoro/Gemini); shared `runTurn()` (D6); streaming `speakable`; single audio owner; binary mic channel; failover rule; per-turn language routing; format A (ordered JSON, no `speech`) | M | 0, PoC 1 & 13 | First-audio targets met on Light tier; no barge-in regressions | Binary mic → Slice 3 |
 | **1b. Format + persona** | Winning format from PoC 1 (if not A); Rust PromptBuilder (`promptV2`); persona fields + 12 built-ins; prompt order for caching; `auto` = best p50 | M | 1 | Reply-validity ≥ baseline; persona listening check | Persona for imported packs → later |
 | **2. Listening** | Silero VAD; Smart Turn (EN); adaptive silence + grace (FA); stable-prefix partials; LID toggle; Nemotron (PoC 3); Persian path (PoC 4/11); Settings ranking + benchmark | L | 0 | §10 STT targets; false-cut/interruption rates | Benchmark UI → heuristic only; BuzzASR → Gemini/Whisper |
-| **3. Expressive voice** | `TtsProvider` trait; Pocket TTS; PoC 5 → Qwen sidecar (real-time and/or pre-render); emotion banks for 3 characters first; speaker guard; consent flow | L | 1 | PoC 5 gates; resource caps; listening panel | Remaining characters' banks; real-time tier |
+| **3. Expressive voice** | `TtsProvider` trait; Pocket TTS; character identity references + emotion clip banks (3 characters first); **PoC 5 bake-off (Chatterbox Turbo first)** → winning engine as an optional, pinned sidecar (real-time and/or pre-render); speaker guard; consent flow; watermark policy | L | 1 | PoC 5 gates (§3.2 decision rules); resource caps; listening panel | Remaining characters' banks; real-time tier; original/Nano variants |
 | **4. Personal memory + storage + secrets** | Tables + migration; extraction from user turns; retrieval; deletion lifecycle; Memory UI; `keyring`; model manifest; quarantine; Storage UI | L | 1b | Memory precision/recall; deletion canary suite; sweep never touches `user/` | Embeddings; export formats |
 | **5. Signing** | Developer ID + notarization; Windows signing; sidecars signed with the same identity; **ship the sherpa-onnx C API + onnxruntime libraries inside the bundle, signed with our identity** (download models only), because the hardened runtime's library validation refuses the downloaded dylib that the embedded Kokoro worker (Slice 0) loads. Never put `disable-library-validation` on the main app. CI smoke test: hardened-runtime ad-hoc sign → `--luna-tts` → `READY` | S–M | — (start early, parallel) | TCC grants survive an update; signed-build worker smoke test passes | — (hard prerequisite for 6) |
 | **6. Registry + desktop + safe sends** | Generalized broker with nonces + audit; `open_url`; driver spike (PoC 9) → one backend per OS; adapters (Telegram, browser, VS Code, Finder/Explorer); task runner `desktop` profile; **send/call state machine** (PoC 6) | L | 0 (ACL), 4 (confirmed identifiers), 5 | At-most-once tests; injection corpus zero unconfirmed sends; scenario suite on both OSes | Calls; second adapter set |
@@ -1046,6 +1092,8 @@ Sizes: **S** ≈ days, **M** ≈ 1–2 weeks, **L** ≈ 3–5 weeks (one develop
 6. **BuzzASR ggml hosting:** deferred until conversion, licence, accuracy and runtime are verified.
 7. **Hermes issue:** investigate in an isolated environment (PoC 7). If confirmed, report privately upstream through its security channel. No public exploit details.
 
+**Open owner decision (Slice 3):** watermarking policy for cloned character speech. Recommended: Perth on pre-rendered clips, none on real-time streams (Perth needs whole clips).
+
 **Authorization:** Slice 0 only. Later slices need explicit approval. Slice 0 downloads no Qwen or other large models.
 
 The items below were the questions as originally posed.
@@ -1059,7 +1107,7 @@ The items below were the questions as originally posed.
 6. Driver: native AX on macOS, cua-driver (minus the AGPL extension) on Windows, pending PoC 9.
 
 **Owner-level questions:**
-7. **Python sidecar** (pinned, hash-verified) for the Qwen tier: acceptable?
+7. **Python sidecar** (pinned, hash-verified) for the expressive tier: acceptable? (answered yes, 2026-10-30)
 8. **Cloud model for memory extraction**, or local-only (which needs a local LLM and changes the resource budget)?
 9. **SQLCipher** for the memory DB, or OS file permissions only?
 10. **Signing:** Apple Developer ID + a Windows code-signing certificate (cost and identity are the owner's).

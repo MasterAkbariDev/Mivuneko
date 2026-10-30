@@ -56,4 +56,4 @@ Keep this file current: update it in the same commit as any step that changes st
 2. If it passes: create `slice-1-streaming` from `slice-0-foundations`. Implement Slice 1 per `EVOLUTION_PLAN.md` Part D. Benchmark before and after with `spans.mjs` / `stream-ab.mjs`. Add regression tests, then stop for review.
    - **Slice 1 scope:** streaming text, speech from the first sentence, tagged format B with the reviewer's three rules, Groq emotion fix with a safe fallback, one shared chat path, cancellation/audio reliability.
    - **Not in Slice 1:** any new TTS engine.
-3. Slice 3 voice evaluation follows `EVOLUTION_PLAN.md` §3 and PoC 5 (Chatterbox first; Qwen, Kokoro and Pocket as comparisons).
+3. Slice 3 voice evaluation follows `EVOLUTION_PLAN.md` §3.1–3.3b and PoC 5: Chatterbox Turbo first, then original Chatterbox, Nano, Qwen3-TTS Base, CosyVoice3, Pocket and Kokoro, with the same references and scripts. No model downloads before Slice 3 is approved.
