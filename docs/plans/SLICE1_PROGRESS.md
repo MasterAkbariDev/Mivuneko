@@ -22,7 +22,7 @@ Owner priorities, in order:
 | Item | Status |
 |---|---|
 | Baseline: in-app streaming-voice benchmark (E2E) | done (stage 0) |
-| Tagged reply format (variant B) in Rust for Gemini and Groq; safe emotion fallback; Groq receives the app list; flag `replyFormat` | pending |
+| Tagged reply format (variant B) in Rust for Gemini and Groq; safe emotion fallback; Groq receives the app list; flag `replyFormat` | done (stage 1, Rust side) |
 | Frontend tagged streaming parser (holds back `@` lines), early mood from the header | pending |
 | Early speech: streaming `speakable`, streaming playback in `useVoice`, no failover after audio starts, stop on app-launch replies; flag `earlySpeech` | pending |
 | Mic: restart open mic after each submitted phrase (smoke-test S1); "thinking" during final transcription (S2) | pending |
@@ -43,3 +43,28 @@ Owner priorities, in order:
 The test asserts that speech starts ≥ 500 ms before the reply completes. It **fails on the baseline by design** and must pass after Slice 1.
 
 ## Stage log
+
+### Stage 1 — Tagged reply format (Rust)
+
+**New `gemini-client::tagged`:**
+- `ReplyFormat {Json (default, legacy), Tagged}`.
+- `instructions(apps)`: one shared format instruction set for every provider.
+- `normalize(raw, apps)`: turns a finished reply into the JSON object the UI already parses (`{text, emotion, appQuery, speech, companionActions}`), so `parseAgentReply` is unchanged. Rules:
+  - missing or invalid `@meta` → emotion `idle` (the safe fallback for Groq's invalid-emotion bug);
+  - `@actions` is read only from the final line, outside code fences;
+  - a malformed trailer drops the actions, not the reply;
+  - stray tag lines are never shown;
+  - an `appQuery` not in the installed catalog is dropped.
+
+  Both providers already reject any finish except a clean stop, so a truncated reply never produces actions.
+
+**Wiring:**
+- **Gemini** (`chat_request`): the tagged format sends no JSON schema, only the shared instructions.
+- **Groq** (`system_prompt`): the tagged format also receives the installed-app catalog in Assist/Autonomous mode, so Groq can now propose launches. This fixes the gap behind smoke-test S3.
+- **Commands:** `gemini_chat_stream` and `groq_chat` take an optional `format`; absent means `Json`, so older frontends and rollback keep working. Catalog lookup moved to a shared `launch_catalog`, used only in Assist/Autonomous mode.
+
+**Tests:**
+- 8 new `tagged` tests: header/body/trailer, idle fallback, catalog-only apps, malformed trailer, fenced trailer, stray tags, empty reply, instructions.
+- New golden snapshots `gemini-chat-tagged.json` and `groq-prompts-tagged.json`; the existing JSON snapshots are unchanged.
+- The snapshot caught an escaping bug before commit: the example trailer reached the model as `{\"companionActions\"…}`. Fixed.
+- gemini-client 33 pass; app crate 11 pass; clippy clean.
