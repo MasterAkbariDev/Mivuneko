@@ -145,6 +145,9 @@ test("speech starts on the first streamed sentence, before the reply finishes", 
   await expect
     .poll(() => page.evaluate(() => (window as any).__times.firstSynthesis))
     .toBeGreaterThan(0);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__times.reply))
+    .toBeGreaterThan(0);
   const times = await page.evaluate(() => (window as any).__times);
   console.log(
     `STREAMING-VOICE first synthesis ${Math.round(times.firstSynthesis)} ms, reply complete ${Math.round(times.reply)} ms`,
@@ -157,4 +160,47 @@ test("speech starts on the first streamed sentence, before the reply finishes", 
   expect(phrases.join(" ")).toContain("Hello there");
   expect(phrases.join(" ")).toContain("chat again");
   expect(phrases.join(" ")).not.toMatch(/@meta|@actions|[{}"]/);
+});
+
+async function turn(page: any, prefs: object) {
+  await page.addInitScript((p: object) => {
+    const base = JSON.parse(
+      localStorage.getItem("mivuneko.preferences.v1") ?? "{}",
+    );
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ ...base, ...p }),
+    );
+  }, prefs);
+  await page.goto("/?view=chat");
+  await page.getByLabel("Message Mivuneko", { exact: true }).fill("Hi there");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__times.firstSynthesis))
+    .toBeGreaterThan(0);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__times.reply))
+    .toBeGreaterThan(0);
+  return page.evaluate(() => ({
+    times: (window as any).__times,
+    calls: (window as any).__calls.map((c: any) => c.command),
+    format: (window as any).__calls.find(
+      (c: any) => c.command === "gemini_chat_stream",
+    )?.args.format,
+  }));
+}
+
+test("rollback: with early speech off, speech waits for the full reply", async ({
+  page,
+}) => {
+  const { times } = await turn(page, { earlySpeech: false });
+  expect(times.firstSynthesis).toBeGreaterThanOrEqual(times.reply - 50);
+});
+
+test("rollback: the legacy JSON format still streams text into early speech", async ({
+  page,
+}) => {
+  const { times, format } = await turn(page, { replyFormat: "json" });
+  expect(format).toBeUndefined();
+  expect(times.firstSynthesis).toBeLessThan(times.reply - 300);
 });

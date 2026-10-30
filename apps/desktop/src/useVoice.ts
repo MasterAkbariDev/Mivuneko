@@ -13,6 +13,7 @@ import {
 import {
   deliveryFor,
   splitSpeech,
+  type Phrase,
   type VoicePack,
 } from "../../../packages/shared-schemas/voice-style.ts";
 import { pronounce } from "../../../packages/shared-schemas/pronounce.ts";
@@ -20,6 +21,42 @@ import { getSpeechContext } from "./speechContext";
 import { cleanTranscript } from "../../../packages/shared-schemas/transcript.ts";
 import { publishPet } from "./session";
 import { microphoneConstraints } from "./microphone";
+/** Text that arrives over time (a streaming reply); any reader can walk it from the start. */
+function createSegments() {
+  const items: string[] = [];
+  let ended = false;
+  let waiting: (() => void)[] = [];
+  const notify = () => {
+    const wake = waiting;
+    waiting = [];
+    wake.forEach((f) => f());
+  };
+  return {
+    push(text: string) {
+      if (ended || !text.trim()) return;
+      items.push(text);
+      notify();
+    },
+    end() {
+      ended = true;
+      notify();
+    },
+    text: () => items.join(" "),
+    /** The segment at `index`, waiting for it; null once the stream ended. */
+    async next(index: number): Promise<string | null> {
+      while (index >= items.length && !ended)
+        await new Promise<void>((wake) => waiting.push(wake));
+      return index < items.length ? items[index] : null;
+    },
+    /** Segments already available from `index`, without waiting. */
+    ready: (index: number) => items.slice(index),
+    async all(): Promise<string> {
+      while (!ended) await new Promise<void>((wake) => waiting.push(wake));
+      return items.join(" ");
+    },
+  };
+}
+type Segments = ReturnType<typeof createSegments>;
 export function useVoice(
   onTranscript: (text: string) => void,
   onMood: (mood: Mood) => void,
@@ -44,7 +81,8 @@ export function useVoice(
     timer = useRef<ReturnType<typeof setTimeout> | null>(null),
     frame = useRef(0),
     discard = useRef(false),
-    starting = useRef(false);
+    starting = useRef(false),
+    streams = useRef(new Set<Segments>());
   function prepare() {
     if (!context.current) context.current = new AudioContext();
     void context.current.resume();
@@ -57,6 +95,8 @@ export function useVoice(
   async function stop() {
     generation.current++;
     discard.current = true;
+    for (const open of streams.current) open.end();
+    streams.current.clear();
     if (recorder.current?.state === "recording") recorder.current.stop();
     releaseMic();
     source.current?.stop();
@@ -183,13 +223,15 @@ export function useVoice(
     if (recorder.current?.state === "recording") recorder.current.stop();
   }
   // Luna's own voice: speech is split into phrases; the first plays as soon as it is
-  // ready while the rest are made, with a natural pause after each. Returns false when
-  // the character has no voice pack or the engine is unavailable.
+  // ready while the rest are made, with a natural pause after each. Phrases may still be
+  // streaming in (early speech); playback waits for more text when it catches up. Returns
+  // false when the character has no voice pack or the engine is unavailable.
   async function speakCharacter(
-    text: string,
+    segments: Segments,
     volume: number,
     emotion: Mood,
     ticket: number,
+    played: { value: boolean },
   ): Promise<boolean> {
     const system = preferences.voiceProvider === "system";
     const character =
@@ -205,10 +247,23 @@ export function useVoice(
     const pack: VoicePack | null | undefined = system
       ? { engine: "kokoro", speed: 1, gain: 1 }
       : packs.current.get(character);
-    const parts = speechChunks(pronounce(text), 220).flatMap((part) =>
-      splitSpeech(part),
-    );
-    if (!pack || !parts.length || ticket !== generation.current) return false;
+    if (!pack || ticket !== generation.current) return false;
+    let index = 0;
+    const queued: Phrase[] = [];
+    const nextPhrase = async (): Promise<Phrase | null> => {
+      while (!queued.length) {
+        const segment = await segments.next(index++);
+        if (segment === null) return null;
+        queued.push(
+          ...speechChunks(pronounce(segment), 220).flatMap((part) =>
+            splitSpeech(part),
+          ),
+        );
+      }
+      return queued.shift()!;
+    };
+    let phrase = await nextPhrase();
+    if (!phrase || ticket !== generation.current) return true;
     const delivery = deliveryFor(emotion, pack);
     const audio = context.current!;
     await audio.resume();
@@ -217,13 +272,13 @@ export function useVoice(
     out.gain.value = volume * delivery.gain;
     analyser.connect(out);
     out.connect(audio.destination);
-    const make = (phrase: string) => {
+    const make = (text: string) => {
       const request = invoke<number[]>(
         system ? "synthesize_speech" : "synthesize_phrase",
         {
           style: preferences.localVoiceStyle,
           language: preferences.localVoiceLanguage,
-          text: phrase,
+          text,
           character,
           mood: emotion,
           speed: delivery.speed,
@@ -232,12 +287,11 @@ export function useVoice(
       request.catch(() => {});
       return request;
     };
-    let pending = make(parts[0].text),
+    let pending = make(phrase.text),
       nextAt = 0,
-      started = false,
       lastEnded: Promise<void> | undefined;
     try {
-      for (let i = 0; i < parts.length; i++) {
+      while (phrase) {
         let buffer: AudioBuffer;
         try {
           buffer = await pending;
@@ -246,7 +300,7 @@ export function useVoice(
           throw e;
         }
         if (ticket !== generation.current) return true;
-        if (i + 1 < parts.length) pending = make(parts[i + 1].text);
+        const upcoming = nextPhrase();
         const node = audio.createBufferSource();
         node.buffer = buffer;
         node.connect(analyser);
@@ -260,11 +314,9 @@ export function useVoice(
         if (options.measureTurn) markTurn("turn.first_audio");
         phrases.current.push(node);
         nextAt =
-          at +
-          buffer.duration +
-          (parts[i].pauseMs * delivery.pauseScale) / 1000;
-        if (!started) {
-          started = true;
+          at + buffer.duration + (phrase.pauseMs * delivery.pauseScale) / 1000;
+        if (!played.value) {
+          played.value = true;
           setSpeaking(true);
           setPreparing(false);
           onMood("speaking");
@@ -274,13 +326,17 @@ export function useVoice(
             if (ticket !== generation.current) return;
             if (now - shown > 80) {
               analyser.getFloatTimeDomainData(samples);
-              publishPet("speaking", text, rms(samples), emotion);
+              publishPet("speaking", segments.text(), rms(samples), emotion);
               shown = now;
             }
             frame.current = requestAnimationFrame(animate);
           };
           frame.current = requestAnimationFrame(animate);
         }
+        // Start making the next phrase as soon as its text exists.
+        phrase = await upcoming;
+        if (ticket !== generation.current) return true;
+        if (phrase) pending = make(phrase.text);
       }
       await lastEnded;
     } finally {
@@ -293,12 +349,12 @@ export function useVoice(
     if (ticket === generation.current) {
       setSpeaking(false);
       onMood(emotion);
-      publishPet(emotion, text, 0);
+      publishPet(emotion, segments.text(), 0);
     }
     return true;
   }
   async function speakCloud(
-    text: string,
+    segments: Segments,
     volume: number,
     emotion: Mood,
     ticket: number,
@@ -315,6 +371,7 @@ export function useVoice(
     let nextAt = audio.currentTime + 0.04;
     let lastEnded: Promise<void> | undefined;
     let playbackError: unknown;
+    let said = false;
     const { listen } = await import("@tauri-apps/api/event");
     const { invoke } = await import("@tauri-apps/api/core");
     const unlisten = await listen<{
@@ -364,7 +421,7 @@ export function useVoice(
             if (ticket !== generation.current) return;
             if (now - shown > 60) {
               analyser.getFloatTimeDomainData(meter);
-              publishPet("speaking", text, rms(meter), emotion);
+              publishPet("speaking", segments.text(), rms(meter), emotion);
               shown = now;
             }
             frame.current = requestAnimationFrame(animate);
@@ -379,22 +436,34 @@ export function useVoice(
     requests.current.add(requestId);
     try {
       if (ticket !== generation.current) return;
-      for (const part of speechChunks(text)) {
-        if (ticket !== generation.current) return;
-        await invoke("gemini_speak_stream", {
-          requestId,
-          text: part,
-          emotion,
-          voicePrompt: packVoicePrompt.current,
-          character: preferences.activePackId
-            ? "custom-pack"
-            : preferences.renderer === "sample-vrm"
-              ? "haru"
-              : preferences.character,
-        });
+      // Each request speaks everything that arrived while the previous one ran, so a
+      // streaming reply costs a few cloud calls, not one per sentence.
+      let index = 0;
+      let batch = await segments.next(index++);
+      while (batch !== null) {
+        for (const part of speechChunks(batch)) {
+          if (ticket !== generation.current) return;
+          said = true;
+          await invoke("gemini_speak_stream", {
+            requestId,
+            text: part,
+            emotion,
+            voicePrompt: packVoicePrompt.current,
+            character: preferences.activePackId
+              ? "custom-pack"
+              : preferences.renderer === "sample-vrm"
+                ? "haru"
+                : preferences.character,
+          });
+        }
+        const arrived = segments.ready(index);
+        index += arrived.length;
+        batch = arrived.length
+          ? arrived.join(" ")
+          : await segments.next(index++);
       }
       if (playbackError) throw playbackError;
-      if (!played.value) throw Error("No speech audio was returned");
+      if (said && !played.value) throw Error("No speech audio was returned");
       await lastEnded;
     } finally {
       requests.current.delete(requestId);
@@ -408,12 +477,18 @@ export function useVoice(
       setSpeaking(false);
       setPreparing(false);
       onMood(emotion);
-      publishPet(emotion, text, 0);
+      publishPet(emotion, segments.text(), 0);
     }
   }
-  async function speak(text: string, volume: number, emotion: Mood = "happy") {
+  async function run(
+    segments: Segments,
+    volume: number,
+    emotion: Mood,
+    played: { value: boolean },
+  ) {
     if (!isNative) return;
     await stop();
+    streams.current.add(segments);
     // Standalone VRM imports carry no voice identity; never borrow another character's voice.
     const voiceTicket = generation.current;
     packVoicePrompt.current = undefined;
@@ -422,7 +497,7 @@ export function useVoice(
       if (voiceTicket !== generation.current) return;
       if (pack?.manifest.voice.kind !== "prompt") {
         onMood(emotion);
-        publishPet(emotion, text, 0);
+        publishPet(emotion, await segments.all(), 0);
         return;
       }
       if (!cloud) {
@@ -434,7 +509,7 @@ export function useVoice(
       packVoicePrompt.current = pack.manifest.voice.prompt;
     } else if (preferences.renderer === "custom-vrm") {
       onMood(emotion);
-      publishPet(emotion, text, 0);
+      publishPet(emotion, await segments.all(), 0);
       return;
     }
     const ticket = generation.current;
@@ -447,16 +522,16 @@ export function useVoice(
         preferences.voiceProvider === "local" ||
         preferences.voiceProvider === "system"
       ) {
-        if (await speakCharacter(text, volume, emotion, ticket)) return;
+        if (await speakCharacter(segments, volume, emotion, ticket, played))
+          return;
         throw new Error(
           "Local character voice is not installed. Install Kokoro or choose Gemini in Character voice settings.",
         );
       }
       if (ticket !== generation.current) return;
       if (cloud) {
-        const played = { value: false };
         try {
-          await speakCloud(text, volume, emotion, ticket, played);
+          await speakCloud(segments, volume, emotion, ticket, played);
           return;
         } catch (e) {
           if (ticket !== generation.current) return;
@@ -471,7 +546,8 @@ export function useVoice(
           onError(
             `Gemini speech unavailable (${String(e)}). Using the local character voice.`,
           );
-          if (await speakCharacter(text, volume, emotion, ticket)) return;
+          if (await speakCharacter(segments, volume, emotion, ticket, played))
+            return;
           throw new Error(
             "Gemini speech is unavailable and the local character voice is not installed. Your reply is still available as text.",
           );
@@ -492,7 +568,30 @@ export function useVoice(
         publishPet("idle", "", 0);
         onError(String(e));
       }
+    } finally {
+      streams.current.delete(segments);
     }
+  }
+  async function speak(text: string, volume: number, emotion: Mood = "happy") {
+    const segments = createSegments();
+    segments.push(text);
+    segments.end();
+    await run(segments, volume, emotion, { value: false });
+  }
+  /**
+   * Early speech: returns a handle to feed speakable text as a reply streams in. Playback
+   * starts with the first segment; `started()` tells whether any audio has played.
+   */
+  function startSpeech(volume: number, emotion: Mood = "happy") {
+    const segments = createSegments();
+    const played = { value: false };
+    const done = run(segments, volume, emotion, played);
+    return {
+      push: (text: string) => segments.push(text),
+      end: () => segments.end(),
+      started: () => played.value,
+      done,
+    };
   }
   useEffect(() => {
     const hidden = () => {
@@ -533,6 +632,7 @@ export function useVoice(
     record,
     finishRecording,
     speak,
+    startSpeech,
     stop,
     prepare,
   };

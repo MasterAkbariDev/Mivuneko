@@ -39,7 +39,10 @@ import { useVoice } from "./useVoice";
 import { useOpenMic } from "./useOpenMic";
 import { MicButton } from "./MicButton";
 import { Markdown } from "./Markdown";
-import { speakable } from "../../../packages/shared-schemas/speech.ts";
+import {
+  speakable,
+  speakableStream,
+} from "../../../packages/shared-schemas/speech.ts";
 import { setSpeechContext } from "./speechContext";
 import { loadHistory, saveHistory, clearHistory } from "./history";
 import {
@@ -455,33 +458,66 @@ export function App() {
         return;
       }
       startTurn(preferences.backend);
-      let streamedMood = false;
-      const reply = await agentFor(preferences.backend, name).reply(
-        text,
-        mode,
-        c.signal,
-        messages,
-        (partial, meta) => {
-          if (c.signal.aborted) return;
-          // The tagged header names the emotion before any text: show it right away.
-          if (meta?.emotion && !streamedMood) {
-            streamedMood = true;
-            setMood(meta.emotion);
-          }
-          if (partial.trim()) markTurn("turn.first_text");
-          setStreaming(partial);
-        },
-        { format: preferences.replyFormat },
-      );
+      let streamedMood: Mood | undefined;
+      // Early speech: each sentence is spoken as soon as it streams in.
+      const early =
+        isNative && preferences.voice !== "off" && preferences.earlySpeech;
+      const nextSpoken = speakableStream();
+      let speech: ReturnType<typeof voice.startSpeech> | null = null;
+      const reply = await agentFor(preferences.backend, name)
+        .reply(
+          text,
+          mode,
+          c.signal,
+          messages,
+          (partial, meta) => {
+            if (c.signal.aborted) return;
+            // The tagged header names the emotion before any text: show it right away.
+            if (meta?.emotion && !streamedMood) {
+              streamedMood = meta.emotion;
+              setMood(meta.emotion);
+            }
+            if (partial.trim()) markTurn("turn.first_text");
+            setStreaming(partial);
+            if (!early) return;
+            const said = nextSpoken(partial);
+            if (!said) return;
+            speech ??= voice.startSpeech(
+              preferences.volume,
+              streamedMood ?? "happy",
+            );
+            speech.push(said);
+          },
+          {
+            format: preferences.replyFormat,
+            // Never switch providers once part of a reply is queued for speech.
+            canRetry: () => !speech,
+          },
+        )
+        .catch((e) => {
+          // Let what was already said finish; no more text is coming.
+          (speech as ReturnType<typeof voice.startSpeech> | null)?.end();
+          throw e;
+        });
       c.signal.throwIfAborted();
       markTurn("turn.first_text");
       markTurn("turn.reply_done");
       add(reply.text);
+      const streamedSpeech = speech as ReturnType<
+        typeof voice.startSpeech
+      > | null;
+      if (streamedSpeech) {
+        // The finished reply is authoritative: speak whatever the stream had not yet.
+        streamedSpeech.push(nextSpoken(reply.text, true));
+        streamedSpeech.end();
+        // A launch proposal is handled by the approval flow, not read aloud.
+        if (reply.appQuery) await voice.stop();
+      }
       if (reply.companionActions?.length) {
         if (!isNative)
           throw Error("Desktop actions require the installed app.");
         setMood(reply.mood ?? "happy");
-        if (preferences.voice !== "off")
+        if (preferences.voice !== "off" && !streamedSpeech)
           void voice.speak(
             speakable(reply, false),
             preferences.volume,
@@ -536,7 +572,7 @@ export function App() {
         await applyApproval(p);
       } else {
         setMood(reply.mood ?? "happy");
-        if (preferences.voice !== "off" && isNative)
+        if (preferences.voice !== "off" && isNative && !streamedSpeech)
           void voice.speak(
             speakable(reply, codeShown),
             preferences.volume,

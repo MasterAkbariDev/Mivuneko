@@ -24,7 +24,7 @@ Owner priorities, in order:
 | Baseline: in-app streaming-voice benchmark (E2E) | done (stage 0) |
 | Tagged reply format (variant B) in Rust for Gemini and Groq; safe emotion fallback; Groq receives the app list; flag `replyFormat` | done (stage 1, Rust side) |
 | Frontend tagged streaming parser (holds back `@` lines), early mood from the header | done (stage 2) |
-| Early speech: streaming `speakable`, streaming playback in `useVoice`, no failover after audio starts, stop on app-launch replies; flag `earlySpeech` | pending |
+| Early speech: streaming `speakable`, streaming playback in `useVoice`, no failover after audio starts, stop on app-launch replies; flag `earlySpeech` | done (stage 3) |
 | Mic: restart open mic after each submitted phrase (smoke-test S1); "thinking" during final transcription (S2) | pending |
 | Cancellation: separate speech and transcription cancel counters (review D2) | pending |
 | One chat path: remove dead `InlineChat.tsx`; more tolerant launch phrasing, EN + FA (smoke-test S3) | pending |
@@ -100,3 +100,38 @@ The test asserts that speech starts ≥ 500 ms before the reply completes. It **
 **Tests:**
 - Unit 115 (+7 `tagged.test.mjs`, including character-by-character "never reveals a tag" and "invalid actions dropped"); type check passes.
 - `desktop.spec.ts`: 25/27 pass. Failures across two runs were `:90`, `:260`, `:327` (all on the baseline list) and `:178` (history), which passed 4/4 alone, so it is load-dependent and noted in `KNOWN_ISSUES.md`.
+
+### Stage 3 — Early speech
+
+**`speakableStream()`** (`packages/shared-schemas/speech.ts`):
+- Returns newly speakable text as a reply streams. It cuts only after a finished sentence or line, never inside an open code fence, never inside a table (narrated whole), and never after a bare list number ("1.").
+- It recognises text already spoken even when leading whitespace differs, so the final, authoritative reply text continues the stream without repeating it. Stream events and the command result arrive on separate channels, so the last streamed fragment can lag.
+
+**`useVoice`:**
+- Speech now reads from a segment queue that is filled as text arrives and can be replayed from the start (used when Gemini falls back to Kokoro).
+- `speak(text)` = push everything, then end, so behaviour is unchanged. The new `startSpeech()` returns `{push, end, started, done}`.
+- **Kokoro:** synthesizes the next phrase as soon as its text exists; playback waits only when it catches up with the stream.
+- **Gemini:** each request speaks everything that arrived while the previous one ran, so a reply costs a few cloud calls, not one per sentence.
+- `stop()` ends open streams, so nothing waits forever.
+
+**`App.send`:**
+- With early speech on, each speakable segment is pushed as it streams, in the emotion from the tagged header.
+- Provider fallback is disabled once any speech is queued (stricter than review M2's "once audio started").
+- The final reply text flushes the rest. If the reply is an app-launch proposal, the voice stops (the approval card takes over). A provider error ends the stream, so already-queued speech finishes.
+- The old full-reply path runs when early speech is off.
+
+**Measured** (`tests/e2e/streaming-voice.spec.ts`; mock streams 3 sentences, deltas at 150/700/1250 ms, reply at ~1.6 s):
+
+| | Before | After |
+|---|---|---|
+| Send → first speech synthesis | 1671 ms (after the reply, 1592 ms) | **749–1119 ms** (3 runs), always ~800 ms **before** the reply completes |
+
+The first sentence of this mock ends exactly at a delta boundary ("…see you." with nothing after), so it is released when the next delta arrives. A sentence end can't be told from "3." or "you.." until the next character. Real streams send small tokens every few tens of ms, so in practice the wait is one token.
+
+**Tests:**
+- Unit 120 (+5 `speakable-stream.test.mjs`: streamed speech equals whole-reply speech at every chunk size 1–50 on five Markdown samples; never speaks code, table pipes or bare list numbers; first sentence released early; open code held; the final flush doesn't repeat).
+- E2E `streaming-voice.spec.ts` 3/3:
+  - early speech;
+  - rollback with early speech off waits for the full reply;
+  - rollback to the legacy JSON format still streams into early speech.
+- Full E2E 48 pass / 15 fail (22 min under load). Every failure is on the known list except `desktop.spec.ts:749` ×2 (open mic; pass alone, load-dependent) and `character-packs.spec.ts:23`, which fails on Slice 0 too (known issue K10, pre-existing).

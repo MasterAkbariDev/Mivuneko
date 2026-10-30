@@ -68,3 +68,72 @@ export function speechChunks(text: string, max = 700): string[] {
   if (current) chunks.push(current);
   return chunks;
 }
+
+// Where a streamed reply can safely be cut for speech: just after a finished sentence or a
+// finished line, never inside an open code fence, never inside a table (which is narrated
+// whole) and never right after a bare list number such as "1.".
+function safeEnd(text: string, from: number): number {
+  let best = from,
+    fenced = false,
+    lineStart = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (i === lineStart) {
+      const line = text.slice(i, text.indexOf("\n", i) + 1 || text.length);
+      const trimmed = line.trimStart();
+      if (/^(```|~~~)/.test(trimmed)) fenced = !fenced;
+      if (fenced || trimmed.startsWith("|") || /^(```|~~~)/.test(trimmed)) {
+        // Skip to the end of this line; it can only end a chunk once a fence closes.
+        const end = text.indexOf("\n", i);
+        if (end < 0) break;
+        if (!fenced && !trimmed.startsWith("|") && end + 1 > from)
+          best = end + 1;
+        i = end;
+        lineStart = end + 1;
+        continue;
+      }
+    }
+    const c = text[i];
+    if (c === "\n") {
+      lineStart = i + 1;
+      // A finished line ends a chunk unless the next line continues a table.
+      if (
+        i + 1 > from &&
+        !text
+          .slice(i + 1)
+          .trimStart()
+          .startsWith("|")
+      )
+        best = i + 1;
+      continue;
+    }
+    if (
+      /[.!?…]/.test(c) &&
+      /\s/.test(text[i + 1] ?? "") &&
+      !/^\s*\d+[.)]$/.test(text.slice(lineStart, i + 1)) &&
+      i + 1 > from
+    )
+      best = i + 1;
+  }
+  return best;
+}
+
+/**
+ * Incremental `speakable` for a reply that is still streaming. Call it with the full visible
+ * text so far; it returns the newly speakable part (possibly ""), cut only at safe
+ * boundaries. Call once more with `final = true` to flush the rest.
+ */
+export function speakableStream(codeShown = false) {
+  let spoken = "";
+  return (visible: string, final = false): string => {
+    // Align with what was already spoken, ignoring leading whitespace, so the final
+    // (authoritative, trimmed) reply text continues the stream without repeating it.
+    const base = visible.trimStart(),
+      done = spoken.trimStart();
+    if (!base.startsWith(done)) return "";
+    const consumed = visible.length - base.length + done.length;
+    const end = final ? visible.length : safeEnd(visible, consumed);
+    if (end <= consumed) return "";
+    spoken = visible.slice(0, end);
+    return speakable({ text: visible.slice(consumed, end) }, codeShown);
+  };
+}
