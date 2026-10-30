@@ -25,8 +25,8 @@ Owner priorities, in order:
 | Tagged reply format (variant B) in Rust for Gemini and Groq; safe emotion fallback; Groq receives the app list; flag `replyFormat` | done (stage 1, Rust side) |
 | Frontend tagged streaming parser (holds back `@` lines), early mood from the header | done (stage 2) |
 | Early speech: streaming `speakable`, streaming playback in `useVoice`, no failover after audio starts, stop on app-launch replies; flag `earlySpeech` | done (stage 3) |
-| Mic: restart open mic after each submitted phrase (smoke-test S1); "thinking" during final transcription (S2) | pending |
-| Cancellation: separate speech and transcription cancel counters (review D2) | pending |
+| Mic: restart open mic after each submitted phrase (smoke-test S1); "thinking" during final transcription (S2) | done (stage 4) |
+| Cancellation: separate speech and transcription cancel counters (review D2) | done (stage 4) |
 | One chat path: remove dead `InlineChat.tsx`; more tolerant launch phrasing, EN + FA (smoke-test S3) | pending |
 | After-measurements, full suite, CI, review | pending |
 
@@ -135,3 +135,19 @@ The first sentence of this mock ends exactly at a delta boundary ("…see you." 
   - rollback with early speech off waits for the full reply;
   - rollback to the legacy JSON format still streams into early speech.
 - Full E2E 48 pass / 15 fail (22 min under load). Every failure is on the known list except `desktop.spec.ts:749` ×2 (open mic; pass alone, load-dependent) and `character-packs.spec.ts:23`, which fails on Slice 0 too (known issue K10, pre-existing).
+
+### Stage 4 — Microphone and cancellation reliability
+
+- **Smoke-test S1 (mic dead after each reply):** `useOpenMic` now restarts capture after every submitted phrase, not only after an empty one. With barge-in on (the default), `paused` never changed during a reply, so capture never came back.
+  - New E2E test: "open mic keeps listening across consecutive turns without being toggled" — two spoken turns, capture restarts by itself, both messages are sent.
+  - **Verified to fail without the fix** and pass with it.
+- **Smoke-test S2 (no "thinking" while the phrase is processed):** while open mic transcribes the final phrase (`working`), the pet's mood is "thinking". Push-to-talk already did this. Not asserted automatically (the following send also sets "thinking"); covered by the manual checklist.
+- **Review D2 (shared cancel counter):**
+  - `VoiceWorker` has separate transcription and speech generations, and the process runner takes the counter it watches.
+  - Kokoro CLI and macOS `say` use the speech counter; whisper-cli uses the transcription counter.
+  - `transcribe_audio` cancels only the previous transcription; `synthesize_speech` cancels only previous speech.
+  - `cancel_voice` (the user's Stop) still cancels both.
+  - So starting a transcription (e.g. an open-mic snapshot) no longer kills a phrase being synthesized, and the reverse.
+  - New unit test `speech_and_transcription_cancel_independently`.
+- **Not changed:** each window still owns its own `useVoice`. A single audio owner across windows is deferred until speech moves out of the webview (Slice 1c/scheduler work); the cross-window cancel coupling it would remove is gone now that the counters are split.
+- **Tests:** unit 120; desktop-core 10; app crate 11; clippy and fmt clean; open-mic E2E 3/3.

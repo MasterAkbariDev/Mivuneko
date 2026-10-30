@@ -1108,3 +1108,87 @@ test("Markdown tables are readable in the widened conversation", async ({
     .evaluate((e) => e.getBoundingClientRect().width);
   expect(width).toBeGreaterThan(850);
 });
+
+test("open mic keeps listening across consecutive turns without being toggled", async ({
+  page,
+}) => {
+  await fakeNative(page, true);
+  await page.addInitScript(() => {
+    const w = window as any;
+    let now = 0;
+    w.__processors = 0;
+    w.__said = "first spoken turn";
+    Object.defineProperty(performance, "now", { value: () => now });
+    w.__speak = () => {
+      const frame = (value: number) => {
+        now += 256;
+        w.__processor?.onaudioprocess?.({
+          inputBuffer: {
+            getChannelData: () => new Float32Array(4096).fill(value),
+          },
+        });
+      };
+      for (let i = 0; i < 4; i++) frame(0);
+      for (let i = 0; i < 10; i++) frame(0.1);
+      for (let i = 0; i < 16; i++) frame(0);
+    };
+    const track = { stop: () => {} };
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: async () => ({ getTracks: () => [track] }) },
+    });
+    w.AudioContext = class {
+      sampleRate = 16000;
+      destination = {};
+      resume() {
+        return Promise.resolve();
+      }
+      close() {
+        return Promise.resolve();
+      }
+      createMediaStreamSource() {
+        return { connect() {} };
+      }
+      createScriptProcessor() {
+        w.__processors++;
+        return (w.__processor = {
+          connect() {},
+          disconnect() {},
+          onaudioprocess: null,
+        });
+      }
+      createGain() {
+        return { gain: { value: 0 }, connect() {} };
+      }
+      decodeAudioData() {
+        return Promise.reject(Error("test has no playback"));
+      }
+    };
+    const previous = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) =>
+      command === "transcribe_audio" ? w.__said : previous(command, args);
+  });
+  await chat(page);
+  await settings(page);
+  await page.getByLabel("Voice mode").selectOption("open-mic");
+  await page
+    .getByRole("button", { name: "Conversations", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Start open mic" }).click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__processors))
+    .toBe(1);
+  await page.evaluate(() => (window as any).__speak());
+  await expect(page.getByRole("log")).toContainText("first spoken turn");
+  // Capture restarts by itself after the phrase is sent (barge-in stays on).
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__processors))
+    .toBeGreaterThanOrEqual(2);
+  await page.evaluate(() => {
+    (window as any).__said = "second spoken turn";
+    (window as any).__speak();
+  });
+  await expect(page.getByRole("log")).toContainText("second spoken turn");
+  await expect(
+    page.getByRole("log").locator(".message.user:not([aria-live])"),
+  ).toHaveCount(2);
+});

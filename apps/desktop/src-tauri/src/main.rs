@@ -529,7 +529,7 @@ async fn synthesize_phrase(
     state: tauri::State<'_, Arc<desktop_core::VoiceWorker>>,
 ) -> Result<Vec<u8>, String> {
     let worker = state.inner().clone();
-    let ticket = worker.ticket();
+    let ticket = worker.speech_ticket();
     tauri::async_runtime::spawn_blocking(move || {
         let pack = voice_pack(&app, &character).ok_or("No voice pack for this character")?;
         let mut config = tts_config(&app).ok_or("Character voice engine is not installed")?;
@@ -560,7 +560,7 @@ async fn synthesize_phrase(
             }
             result => result?,
         };
-        if worker.ticket() != ticket {
+        if worker.speech_ticket() != ticket {
             return Err("Voice operation was cancelled".into());
         }
         Ok(wav)
@@ -577,8 +577,8 @@ async fn synthesize_speech(
     state: tauri::State<'_, Arc<desktop_core::VoiceWorker>>,
 ) -> Result<Vec<u8>, String> {
     let worker = state.inner().clone();
-    worker.cancel();
-    let ticket = worker.ticket();
+    worker.cancel_speech();
+    let ticket = worker.speech_ticket();
     tauri::async_runtime::spawn_blocking(move || {
         worker.synthesize_for_character(
             &text,
@@ -776,7 +776,8 @@ async fn transcribe_audio(
     state: tauri::State<'_, Arc<desktop_core::VoiceWorker>>,
 ) -> Result<String, String> {
     let worker = state.inner().clone();
-    worker.cancel();
+    // A new transcription supersedes the previous one; speech keeps playing.
+    worker.cancel_transcription();
     let ticket = worker.ticket();
     tauri::async_runtime::spawn_blocking(move || {
         let config = whisper_config(&app, engine.as_deref())?;

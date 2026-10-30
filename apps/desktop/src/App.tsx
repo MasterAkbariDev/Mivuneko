@@ -182,6 +182,10 @@ export function App() {
     setInput,
   );
   useEffect(() => {
+    // Between the end of speech and the reply, the companion is working on it.
+    if (openMic.working) setMood("thinking");
+  }, [openMic.working]);
+  useEffect(() => {
     if (preferences.voice !== "open-mic") setOpenMicActive(false);
     const hidden = () => {
       if (document.hidden && !isNative) setOpenMicActive(false);

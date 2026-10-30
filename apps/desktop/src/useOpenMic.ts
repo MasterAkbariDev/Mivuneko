@@ -119,8 +119,12 @@ export function useOpenMic(
             callbacks.current.onError(
               "Recording limit reached. Your words are saved in the draft; review and send when ready.",
             );
-          } else if (final) callbacks.current.onFinal(final);
-          else setRestart((n) => n + 1);
+          } else if (final) {
+            callbacks.current.onFinal(final);
+            // Keep listening for the next phrase. Without this the mic stayed off after
+            // every reply whenever barge-in kept it from being paused (smoke-test S1).
+            setRestart((n) => n + 1);
+          } else setRestart((n) => n + 1);
         } catch (e) {
           if (!stopped) callbacks.current.onError(String(e));
         } finally {

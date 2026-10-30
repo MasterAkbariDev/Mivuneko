@@ -51,7 +51,10 @@ struct TtsResident {
 }
 #[derive(Default)]
 pub struct VoiceWorker {
+    /// Transcription generation; a new transcription supersedes the previous one.
     generation: AtomicU64,
+    /// Speech generation, separate so speaking never cancels listening and vice versa.
+    speech_generation: AtomicU64,
     resident: Mutex<Option<Resident>>,
     tts: Mutex<Option<TtsResident>>,
 }
@@ -68,11 +71,23 @@ pub fn is_engine_load_failure(error: &str) -> bool {
     error == ENGINE_START_FAILED || error == ENGINE_LOAD_FAILED
 }
 impl VoiceWorker {
+    /// Cancels both speech and transcription (the user's Stop).
     pub fn cancel(&self) {
+        self.cancel_transcription();
+        self.cancel_speech();
+    }
+    pub fn cancel_transcription(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
     }
+    pub fn cancel_speech(&self) {
+        self.speech_generation.fetch_add(1, Ordering::SeqCst);
+    }
+    /// Transcription ticket.
     pub fn ticket(&self) -> u64 {
         self.generation.load(Ordering::SeqCst)
+    }
+    pub fn speech_ticket(&self) -> u64 {
+        self.speech_generation.load(Ordering::SeqCst)
     }
     /// Stops the resident whisper-server (app exit).
     pub fn shutdown(&self) {
@@ -142,7 +157,12 @@ impl VoiceWorker {
                 .arg(format!("--output-filename={}", output.display()))
                 .arg("--")
                 .arg(text);
-            self.run(command, Duration::from_secs(90), self.ticket())?;
+            self.run(
+                command,
+                Duration::from_secs(90),
+                &self.speech_generation,
+                self.speech_ticket(),
+            )?;
             return std::fs::read(output).map_err(|_| "Character voice returned no audio".into());
         }
         let mut slot = self.tts.lock().map_err(|_| "Voice engine state poisoned")?;
@@ -506,13 +526,19 @@ impl VoiceWorker {
         }
         Ok(body["text"].as_str().unwrap_or("").trim().to_string())
     }
-    fn run(&self, mut command: Command, timeout: Duration, generation: u64) -> Result<(), String> {
+    fn run(
+        &self,
+        mut command: Command,
+        timeout: Duration,
+        counter: &AtomicU64,
+        generation: u64,
+    ) -> Result<(), String> {
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
             command.creation_flags(0x08000000);
         }
-        if self.ticket() != generation {
+        if counter.load(Ordering::SeqCst) != generation {
             return Err("Voice operation was cancelled".into());
         }
         let mut child = command
@@ -531,7 +557,7 @@ impl VoiceWorker {
             .map_err(|_| "Could not start the configured local voice worker")?;
         let start = Instant::now();
         loop {
-            if self.generation.load(Ordering::SeqCst) != generation || start.elapsed() > timeout {
+            if counter.load(Ordering::SeqCst) != generation || start.elapsed() > timeout {
                 let _ = child.kill();
                 let _ = child.wait();
                 return Err("Local voice operation cancelled or timed out".into());
@@ -623,7 +649,12 @@ impl VoiceWorker {
             .arg(&output)
             .arg("--file-format=WAVE")
             .arg("--data-format=LEI16@22050");
-        self.run(command, Duration::from_secs(60), ticket)?;
+        self.run(
+            command,
+            Duration::from_secs(60),
+            &self.speech_generation,
+            ticket,
+        )?;
         read_bounded(&output, 12 * 1024 * 1024)
     }
     /// Transcribes 16 kHz mono WAV. Uses the resident whisper-server when configured and
@@ -703,7 +734,7 @@ impl VoiceWorker {
         if let Some(vad) = config.vad_model.as_ref().filter(|v| v.is_file()) {
             command.arg("--vad").arg("-vm").arg(vad);
         }
-        self.run(command, Duration::from_secs(90), ticket)?;
+        self.run(command, Duration::from_secs(90), &self.generation, ticket)?;
         let bytes = read_bounded(&output.with_extension("txt"), 16000)?;
         String::from_utf8(bytes)
             .map(|s| s.trim().to_string())
@@ -1128,5 +1159,27 @@ mod worker_load_tests {
         assert!(!is_engine_load_failure(
             "Speech phrase must contain 1–1500 bytes"
         ));
+    }
+}
+#[cfg(test)]
+mod cancel_tests {
+    use super::*;
+    #[test]
+    fn speech_and_transcription_cancel_independently() {
+        let worker = VoiceWorker::default();
+        let (listen, speak) = (worker.ticket(), worker.speech_ticket());
+        worker.cancel_speech();
+        assert_eq!(worker.ticket(), listen, "speaking never cancels listening");
+        assert_ne!(worker.speech_ticket(), speak);
+        let speak = worker.speech_ticket();
+        worker.cancel_transcription();
+        assert_eq!(
+            worker.speech_ticket(),
+            speak,
+            "listening never cancels speaking"
+        );
+        let (listen, speak) = (worker.ticket(), worker.speech_ticket());
+        worker.cancel();
+        assert!(worker.ticket() != listen && worker.speech_ticket() != speak);
     }
 }
