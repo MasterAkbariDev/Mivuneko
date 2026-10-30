@@ -23,6 +23,7 @@
     "allow-sync-pet-displays",
     "allow-synthesize-phrase",
     "allow-synthesize-speech",
-    "allow-transcribe-audio"
+    "allow-transcribe-audio",
+    "allow-foreground-fullscreen"
   ]
 }

@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod fullscreen;
 mod gemini;
 mod global_keys;
 mod pet_displays;
@@ -956,6 +957,7 @@ fn main() {
             global_keys::pet_cursor,
             global_keys::show_pet,
             global_keys::hide_pet,
+            fullscreen::foreground_fullscreen,
             list_apps,
             request_launch,
             resolve_launch,

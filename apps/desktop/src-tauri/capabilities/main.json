@@ -55,6 +55,7 @@
     "allow-cancel-voice",
     "allow-save-history",
     "allow-load-history",
-    "allow-clear-history"
+    "allow-clear-history",
+    "allow-foreground-fullscreen"
   ]
 }

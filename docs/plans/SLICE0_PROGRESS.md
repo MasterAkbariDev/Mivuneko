@@ -18,7 +18,7 @@
 | D13 — Groq `reasoning_effort` | done (stage 6) |
 | D11 — allow pinning Gemini or Groq | done (stage 7) |
 | D3 — Kokoro blend cache garbage collection | done (stage 4) |
-| D4 — native fullscreen detection for check-ins | pending |
+| D4 — native fullscreen detection for check-ins | done (stage 8) |
 | D1 / PoC 2 — Kokoro worker for app-installed users | done (stage 5) — PoC 2 **go** |
 | D9 — app crate tests in CI | pending |
 | D10 — stale docs | pending |
@@ -206,3 +206,17 @@ First visible character, p50 ms, by prompt kind:
 - Also: `capabilities/*.json` (stage 3) reformatted with Prettier; CI checks it.
 - Tests: unit 108 (preference migration and pinning cases added to `gemini-character.test.mjs`); type check passes; backend and routing E2E 4/4 pass.
 - Not changed here: Automatic still alternates per turn. Choosing by rolling p50 is review item M1, planned for Slice 1b.
+
+### Stage 8 — D4: proactive check-ins respect other apps' fullscreen
+- New command `foreground_fullscreen` (`src-tauri/src/fullscreen.rs`), using raw FFI like `global_keys.rs`, so no new crates:
+  - **macOS:** `CGWindowListCopyWindowInfo` front to back. The first normal-layer (0) window not owned by Mivuneko is fullscreen if its bounds match an active display's bounds within 1 pt. Bounds, layer and owner PID need no Screen Recording permission; only window titles would.
+  - **Windows:** `SHQueryUserNotificationState` returns busy fullscreen app, D3D fullscreen game or presentation mode.
+  - **Other platforms:** false.
+- The pet's 15 s check-in tick asks this only while proactive check-ins are enabled, and ORs it with the old webview check.
+- Allowed for both windows; the manifest, capabilities and ACL test were updated.
+- Tests:
+  - geometry unit test (display match, menu-bar-offset maximized window is *not* fullscreen, multi-display);
+  - a live call on this Mac returns without error;
+  - app crate 10 pass, unit 108, type check;
+  - check-in E2E 2/2 (incl. one from the baseline failure list).
+- **Not verified:** a positive detection with a real fullscreen game or video on macOS (would disturb the owner's desktop), and the Windows path (needs Windows). Known limitation: a borderless window sized to the display counts as fullscreen, which is the intended behaviour for games.

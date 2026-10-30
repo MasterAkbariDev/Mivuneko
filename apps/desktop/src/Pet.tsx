@@ -353,7 +353,14 @@ export function Pet() {
     };
   }, []);
   useEffect(() => {
-    const timer = setInterval(() => {
+    const timer = setInterval(async () => {
+      // Only ask the OS while check-ins are enabled; the webview can't see other apps.
+      const otherAppFullscreen =
+        isNative && prefs.proactive
+          ? await import("@tauri-apps/api/core")
+              .then(({ invoke }) => invoke<boolean>("foreground_fullscreen"))
+              .catch(() => false)
+          : false;
       const now = Date.now(),
         today = new Date().toDateString();
       if (today !== day.current) {
@@ -372,7 +379,7 @@ export function Pet() {
             prefs.focus ||
             prefs.petMode === "focus" ||
             prefs.petMode === "sleep",
-          fullscreen: !!document.fullscreenElement,
+          fullscreen: !!document.fullscreenElement || otherAppFullscreen,
           quietHours: isQuietHour(hour, prefs.quietStart, prefs.quietEnd),
           todayCount: promptCount.current,
           maxPerDay: prefs.dailyLimit,

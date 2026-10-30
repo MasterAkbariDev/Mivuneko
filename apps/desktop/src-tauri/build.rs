@@ -24,6 +24,7 @@ const COMMANDS: &[&str] = &[
     "pet_cursor",
     "show_pet",
     "hide_pet",
+    "foreground_fullscreen",
     "list_apps",
     "request_launch",
     "resolve_launch",
