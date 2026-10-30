@@ -38,3 +38,13 @@ Tracked so they get fixed, not ignored. Each entry gives its status and where it
 | P6 | `tauri build` rewrites the `tauri` features in `apps/desktop/src-tauri/Cargo.toml`; discard it, don't commit | Build hygiene; consider adding `macos-private-api` to the base dependency |
 | P7 | `InlineChat.tsx` is dead code | Slice 1 (shared `runTurn`) |
 | P8 | Pre-existing clippy findings in `examples/` and one `let_unit_value` in `main.rs` (not linted by CI) | Housekeeping |
+
+## Found in the owner's Slice 0 smoke test (2026-10-30)
+
+| # | Report | Diagnosis | Slice 0 regression? | Plan |
+|---|---|---|---|---|
+| S1 | After the pet finishes speaking, open mic stops listening until it is turned off and on | **Confirmed in code.** `useOpenMic.finish()` tears capture down after a submitted phrase and restarts only on an *empty* transcript (`setRestart`). Otherwise restart depends on `paused` changing, but with barge-in on (the default) `paused` ignores `busy`, so it never changes | **No.** Identical on `main` (`useOpenMic.ts:115`, `App.tsx:133`); Slice 0 only added timing spans | Slice 1 (mic/cancellation reliability): restart capture after every submitted phrase. Regression test: two consecutive open-mic turns without toggling |
+| S2 | No "thinking" state while the spoken phrase is being transcribed and sent | Open mic sets its own `working` phase but never changes the pet's mood during final transcription | No (same code on `main`) | Slice 1: mood → thinking from end-of-speech until the reply starts |
+| S3 | "Open Telegram" answered "I cannot open apps directly" | Likely: the phrasing didn't match the strict local `open X` rule (only one of "can you"/"please" is stripped, e.g. "can you please open…"). The turn then went to the model, and **Groq's prompt cannot propose app launches** (known gap from the plan audit). Not yet confirmed: need the exact phrase and backend | No (rule and Groq prompt unchanged) | Slice 1 unified chat path: one launch-intent path for every provider; more tolerant phrasing (EN and FA) |
+| S4 | "Open Calculator" answered "not found" | **Not yet diagnosed.** On this Mac the real catalog lists Calculator and a Rust launch request for it succeeds (checked). Need the exact message, OS, typed vs spoken, and where it was asked | Unknown until reproduced | Diagnose first |
+| S5 | Voice UI looks broken/ugly | Needs specifics (which screen, screenshot) | Unknown (Slice 0 made no UI layout changes) | After details |
