@@ -14,7 +14,7 @@
 | Plan + review committed; baseline recorded | done |
 | H1 — Rust-side launch policy, CSPRNG one-time approval tokens bound to action / payload / expiry / approval context, window checks, Tauri command ACL | pending |
 | Hermes `/v1/toolsets` accepts both response shapes, fails closed otherwise | done (stage 1) |
-| D5 — Gemini `propertyOrdering` (text no longer generated last) + golden prompt/schema tests | pending |
+| D5 — Gemini `propertyOrdering` (text no longer generated last) + golden prompt/schema tests | done (stages 2a, 2b) |
 | D13 — Groq `reasoning_effort` | pending (decided by benchmark) |
 | D11 — allow pinning Gemini or Groq | pending |
 | D3 — Kokoro blend cache garbage collection | pending |
@@ -81,3 +81,10 @@ Entries are added as each stage is committed.
 - Extracted `chat_request` (Gemini), `system_prompt` (Groq) and `system_prompt` (Hermes) as functions. The bytes sent are unchanged.
 - Golden tests snapshot every mode's system prompt and Gemini `generationConfig` into `crates/*/golden/*.json`. A prompt change now fails the test until the snapshot is re-reviewed (`UPDATE_GOLDEN=1`). This is the safety net for the PromptBuilder in Slice 1b.
 - gemini-client 23 pass, agent-client 5 pass; fmt and clippy clean.
+
+### Stage 2b — D5: Gemini key order
+- Without serde_json's `preserve_order`, the schema went out alphabetically (`appQuery, companionActions, emotion, speech, text`). Gemini follows schema order, so the visible `text` was generated last.
+- The schema now sets `propertyOrdering: [emotion, text, speech, appQuery, companionActions]`.
+- New wire test `chat_schema_generates_emotion_then_text_first`. The golden diff contains only the new ordering lines.
+- The `speech` field is kept; its removal belongs to the Slice-1 streaming-format change.
+- gemini-client 24 pass; clippy clean. The measured effect is in the PoC 1/13 benchmark entry.

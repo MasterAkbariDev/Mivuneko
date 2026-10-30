@@ -75,6 +75,13 @@
             "type": "STRING"
           }
         },
+        "propertyOrdering": [
+          "emotion",
+          "text",
+          "speech",
+          "appQuery",
+          "companionActions"
+        ],
         "required": [
           "text",
           "emotion",
@@ -168,6 +175,13 @@
             "type": "STRING"
           }
         },
+        "propertyOrdering": [
+          "emotion",
+          "text",
+          "speech",
+          "appQuery",
+          "companionActions"
+        ],
         "required": [
           "text",
           "emotion",
@@ -261,6 +275,13 @@
             "type": "STRING"
           }
         },
+        "propertyOrdering": [
+          "emotion",
+          "text",
+          "speech",
+          "appQuery",
+          "companionActions"
+        ],
         "required": [
           "text",
           "emotion",
@@ -354,6 +375,13 @@
             "type": "STRING"
           }
         },
+        "propertyOrdering": [
+          "emotion",
+          "text",
+          "speech",
+          "appQuery",
+          "companionActions"
+        ],
         "required": [
           "text",
           "emotion",
