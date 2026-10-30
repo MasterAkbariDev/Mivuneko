@@ -6,7 +6,7 @@
 | Date | 2026-10-29 |
 | Baseline | `main` @ `a3131b0` |
 | Supersedes | v2 (`EVOLUTION_PLAN.v2.md`), v1 |
-| Update 2026-10-30 | Expressive TTS direction: Chatterbox family first (§3.1–3.3b, PoC 5, Slice 3). Slice 1 scope unchanged |
+| Update 2026-10-30 | Expressive TTS direction: Chatterbox family first (§3.1–3.3b, PoC 5, Slice 3); real-time watermarking left open (PoC 14). Slice 1 scope unchanged |
 | Review | Independent Opus review: `REVIEW_OPUS.md`; owner's review of v2 |
 | Status | **Planning only.** Nothing is implemented, deleted, installed or downloaded until the owner approves. |
 
@@ -523,7 +523,8 @@ Engine-independent, so the same profile serves Chatterbox, Qwen, Pocket or CosyV
 6. **Chunking:** sentence-level requests ≤ ~300 characters (Turbo hallucinates above ~350). The first chunk is short for low first audio. Seams are smoothed with short crossfades and measured in PoC 5.
 7. **Consent, licences and watermark:**
    - User or imported reference audio requires an attestation, stays on-device and is deletable. Synthetic speech is disclosed.
-   - **Watermark policy is the owner's call** (Part E): Perth on pre-rendered clips (no streaming conflict) is recommended; real-time streamed audio runs unwatermarked unless a streaming-compatible watermark is found.
+   - **Watermark (owner decision 2026-10-30):** PerTh watermarking is **kept on pre-rendered audio** wherever the engine supports it. **Real-time speech is not finalized as unwatermarked**; it is an **unresolved Slice-3 decision** settled by PoC 14.
+   - Synthetic-voice disclosure and reference-audio consent stay in the design whatever PoC 14 decides.
    - `pykakasi` (GPL) is excluded from bundles.
 8. **Sidecar packaging** follows the owner's rule: optional, pinned and hash-verified, isolated environment, removable, with disk cleanup. Model files are downloaded only in Slice 3, after approval.
 
@@ -1035,6 +1036,7 @@ Each experiment is ≤ 3 days and produces numbers plus a go/no-go.
 | 11 | Gemini Persian STT/TTS quality and latency | CER and listening acceptable to the owner | Whisper turbo / BuzzASR only for STT; text-only Persian if TTS is unacceptable |
 | 12 | Hermes skills read-only via `external_dirs` without `skill_manage` | Skills readable, not writable | No skill sharing with Hermes |
 | 13 | Gemini `propertyOrdering` honoured while streaming (request-body log + chunk order) | `text` streams right after `emotion`/`lang` | Variant B/C mandatory |
+| 14 | **Watermarking real-time speech** (Slice 3, open owner decision). Apply PerTh (and any streaming-capable alternative found, e.g. AudioSeal-style models, licence checked first) to (a) whole pre-rendered clips, (b) each streamed sentence chunk, (c) short fixed windows on the playback stream. Measure: added first-audio latency and per-chunk cost on each tier (CPU/GPU), detection rate on whole utterances and on chunk-concatenated audio after normal playback/recording paths, false positives on non-watermarked audio, blind listening (ABX watermarked vs not; any audible artefact, seams), and CPU/RAM. Review upstream behaviour (ONNX/MLX ports omit it), PerTh's MIT terms, each model's redistribution terms, and any applicable synthetic-media disclosure requirements | **Go for streaming watermark:** ≤ 50 ms added first-audio p50 on the expressive tier, no ABX-detectable artefact (listeners ≤ 55% correct), ≥ 95% detection on full utterances, ≤ 1% false positives | **No-go:** document the trade-off and the fallback. Pre-rendered audio stays watermarked. Real-time audio is unwatermarked **only with owner approval**, then always with a visible synthetic-voice disclosure in the UI, consent records for reference audio, and a locally logged provenance record (character, engine, time; no text) |
 
 ---
 
@@ -1053,7 +1055,7 @@ Sizes: **S** ≈ days, **M** ≈ 1–2 weeks, **L** ≈ 3–5 weeks (one develop
 | **1. Streaming voice (TS path)** | Speech at first sentence (Kokoro/Gemini); shared `runTurn()` (D6); streaming `speakable`; single audio owner; binary mic channel; failover rule; per-turn language routing; format A (ordered JSON, no `speech`) | M | 0, PoC 1 & 13 | First-audio targets met on Light tier; no barge-in regressions | Binary mic → Slice 3 |
 | **1b. Format + persona** | Winning format from PoC 1 (if not A); Rust PromptBuilder (`promptV2`); persona fields + 12 built-ins; prompt order for caching; `auto` = best p50 | M | 1 | Reply-validity ≥ baseline; persona listening check | Persona for imported packs → later |
 | **2. Listening** | Silero VAD; Smart Turn (EN); adaptive silence + grace (FA); stable-prefix partials; LID toggle; Nemotron (PoC 3); Persian path (PoC 4/11); Settings ranking + benchmark | L | 0 | §10 STT targets; false-cut/interruption rates | Benchmark UI → heuristic only; BuzzASR → Gemini/Whisper |
-| **3. Expressive voice** | `TtsProvider` trait; Pocket TTS; character identity references + emotion clip banks (3 characters first); **PoC 5 bake-off (Chatterbox Turbo first)** → winning engine as an optional, pinned sidecar (real-time and/or pre-render); speaker guard; consent flow; watermark policy | L | 1 | PoC 5 gates (§3.2 decision rules); resource caps; listening panel | Remaining characters' banks; real-time tier; original/Nano variants |
+| **3. Expressive voice** | `TtsProvider` trait; Pocket TTS; character identity references + emotion clip banks (3 characters first); **PoC 5 bake-off (Chatterbox Turbo first)** → winning engine as an optional, pinned sidecar (real-time and/or pre-render); speaker guard; consent flow; watermarking per PoC 14 | L | 1 | PoC 5 gates (§3.2 decision rules); PoC 14 watermark decision approved by the owner; resource caps; listening panel | Remaining characters' banks; real-time tier; original/Nano variants |
 | **4. Personal memory + storage + secrets** | Tables + migration; extraction from user turns; retrieval; deletion lifecycle; Memory UI; `keyring`; model manifest; quarantine; Storage UI | L | 1b | Memory precision/recall; deletion canary suite; sweep never touches `user/` | Embeddings; export formats |
 | **5. Signing** | Developer ID + notarization; Windows signing; sidecars signed with the same identity; **ship the sherpa-onnx C API + onnxruntime libraries inside the bundle, signed with our identity** (download models only), because the hardened runtime's library validation refuses the downloaded dylib that the embedded Kokoro worker (Slice 0) loads. Never put `disable-library-validation` on the main app. CI smoke test: hardened-runtime ad-hoc sign → `--luna-tts` → `READY` | S–M | — (start early, parallel) | TCC grants survive an update; signed-build worker smoke test passes | — (hard prerequisite for 6) |
 | **6. Registry + desktop + safe sends** | Generalized broker with nonces + audit; `open_url`; driver spike (PoC 9) → one backend per OS; adapters (Telegram, browser, VS Code, Finder/Explorer); task runner `desktop` profile; **send/call state machine** (PoC 6) | L | 0 (ACL), 4 (confirmed identifiers), 5 | At-most-once tests; injection corpus zero unconfirmed sends; scenario suite on both OSes | Calls; second adapter set |
@@ -1092,7 +1094,7 @@ Sizes: **S** ≈ days, **M** ≈ 1–2 weeks, **L** ≈ 3–5 weeks (one develop
 6. **BuzzASR ggml hosting:** deferred until conversion, licence, accuracy and runtime are verified.
 7. **Hermes issue:** investigate in an isolated environment (PoC 7). If confirmed, report privately upstream through its security channel. No public exploit details.
 
-**Open owner decision (Slice 3):** watermarking policy for cloned character speech. Recommended: Perth on pre-rendered clips, none on real-time streams (Perth needs whole clips).
+**Open owner decision (Slice 3):** watermarking of real-time cloned character speech, decided by PoC 14's go/no-go test. Settled so far: PerTh stays on pre-rendered audio; disclosure and consent are mandatory; unwatermarked real-time speech is **not** a default until the owner approves it after PoC 14.
 
 **Authorization:** Slice 0 only. Later slices need explicit approval. Slice 0 downloads no Qwen or other large models.
 
