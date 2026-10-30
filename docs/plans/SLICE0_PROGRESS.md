@@ -15,7 +15,7 @@
 | H1 — Rust-side launch policy, CSPRNG one-time approval tokens bound to action / payload / expiry / approval context, window checks, Tauri command ACL | done (stage 3) |
 | Hermes `/v1/toolsets` accepts both response shapes, fails closed otherwise | done (stage 1) |
 | D5 — Gemini `propertyOrdering` (text no longer generated last) + golden prompt/schema tests | done (stages 2a, 2b) |
-| D13 — Groq `reasoning_effort` | pending (decided by benchmark) |
+| D13 — Groq `reasoning_effort` | done (stage 6) |
 | D11 — allow pinning Gemini or Groq | pending |
 | D3 — Kokoro blend cache garbage collection | done (stage 4) |
 | D4 — native fullscreen detection for check-ins | pending |
@@ -23,7 +23,7 @@
 | D9 — app crate tests in CI | pending |
 | D10 — stale docs | pending |
 | Latency spans + local metrics + idle probe | pending |
-| PoC 1 / PoC 13 — streaming-format A/B | pending |
+| PoC 1 / PoC 13 — streaming-format A/B | done (stage 6) — format B wins; PoC 13 no measurable effect |
 | Device probe | cut line → Slice 3 (per plan) |
 
 ## Environment notes (dev machine: Intel i9-8950HK Mac, macOS 15.4)
@@ -148,3 +148,53 @@ Entries are added as each stage is committed.
   - sherpa-onnx v2.0.1 Kokoro with the lexicon config logs `OOV word skipped: 'apps'` — words missing from the lexicon are silently dropped. This is a likely cause of "incorrect pronunciation" reports.
   - A character switch still restarts the worker (new voices table).
 - Tests: desktop-core 7, app crate 8, CI-equivalent clippy and fmt clean.
+
+### Stage 6 — PoC 1 / PoC 13 streaming-format A/B, and D13
+**Method** (`scripts/bench/stream-ab.mjs`, 2026-10-30, dev Mac, home network, real APIs with the project `.env` keys):
+- Prompts: 20 (7 chat, 4 code/Markdown, 4 Persian, 1 mixed, 4 companion actions).
+- 11 configurations × 2 runs, interleaved; 880 requests, 1 dropped connection.
+- Models: Gemini `gemini-3.1-flash-lite`; Groq `openai/gpt-oss-120b`.
+- Variants:
+  - **A0** — today's request (alphabetical schema / prompt-only JSON);
+  - **A1** — ordered JSON (D5);
+  - **B** — `@meta emotion=…` header + plain Markdown + optional final `@actions {…}` line;
+  - **C** — header + body + native function call;
+  - `-low` — Groq `reasoning_effort: low`;
+  - `-minthink` — Gemini `thinkingLevel: minimal`.
+- Times in ms from request start. "First char" is when a UI could show the first visible character; "first sentence" is when the first complete sentence is available to TTS.
+
+| cell | n | err | first byte p50 | first char p50/p90 | first sentence p50/p90 | end p50 | malformed | emotion ok | actions ok (action prompts) | action latency p50 | trailer leak |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| gemini-A0 | 40 | 0 | 1430 | 1430 / 2000 | 1469 / 2379 | 1686 | 0% | 100% | 100% | 1798 | 0 |
+| gemini-A1 | 40 | 0 | 1356 | 1356 / 3557 | 1356 / 3557 | 1661 | 0% | 100% | 100% | 1280 | 0 |
+| gemini-B | 40 | 1 | 874 | 941 / 1812 | 1006 / 1904 | 1242 | 0% | 100% | 100% | 1120 | 0 |
+| gemini-C | 40 | 0 | 998 | 1035 / 2813 | 1074 / 2813 | 1271 | 0% | 100% | 13% | 786 | 0 |
+| gemini-B-minthink | 40 | 0 | 834 | 908 / 2972 | 959 / 3514 | 1248 | 0% | 100% | 100% | 1047 | 0 |
+| groq-A0 | 40 | 0 | 611 | 977 / 1316 | 1014 / 1388 | 1061 | 0% | 55% | 100% | 1180 | 0 |
+| groq-A1 | 40 | 0 | 359 | 885 / 1173 | 947 / 1191 | 1071 | 0% | 40% | 100% | 918 | 0 |
+| groq-B | 40 | 0 | 602 | 867 / 1197 | 940 / 1219 | 1063 | 0% | 100% | 100% | 1198 | 0 |
+| groq-C | 40 | 0 | 370 | 578 / 937 | 759 / 973 | 1058 | 28% | 73% | 100% | 1093 | 0 |
+| groq-A0-low | 40 | 0 | 602 | 717 / 852 | 740 / 850 | 839 | 0% | 35% | 100% | 840 | 0 |
+| groq-B-low | 40 | 0 | 372 | 501 / 713 | 525 / 771 | 743 | 0% | 90% | 100% | 625 | 0 |
+
+First visible character, p50 ms, by prompt kind:
+
+| kind | gemini-A0 | gemini-A1 | gemini-B | groq-A0 | groq-A0-low | groq-B | groq-B-low |
+|---|---|---|---|---|---|---|---|
+| chat | 1322 | 1422 | 1081 | 1014 | 749 | 932 | 639 |
+| code | 1927 | 1787 | 887 | 919 | 682 | 721 | 633 |
+| fa | 1222 | 1519 | 1112 | 991 | 694 | 794 | 437 |
+| mixed | 2379 | 1204 | 5851 | 1012 | 767 | 920 | 438 |
+| action | 1446 | 1148 | 927 | 1063 | 720 | 1114 | 501 |
+
+**Results:**
+- **PoC 1 → format B.**
+  - Fastest on both providers: Gemini first char 1430 → 941 ms (−34%); Groq 977 → 501 ms (−49%) with low reasoning.
+  - 0% malformed, 0 trailer leaks, 100% valid actions on action prompts. Consistent across chat, code and Persian.
+  - **C (function calls) is rejected:** Gemini emitted valid actions on only 13% of action prompts; Groq replies were malformed in 28% of runs.
+- **Found:** today's Groq path (A0) returns a missing or invalid emotion in **45%** of replies, because JSON is prompt-only. B gives 90–100%.
+- **PoC 13 → no measurable latency effect.** Ordered JSON (A1) p50 is 1356 vs 1430 ms, within noise: short Gemini replies arrive in one or two large chunks. The D5 ordering is kept (correct, harmless). The latency win comes from the format change.
+- **Gemini minimal thinking:** no gain (908 vs 941 ms p50, worse p90). Not adopted.
+- **D13 applied:** Groq requests to `openai/gpt-oss*` send `reasoning_effort: "low"`. In today's format that is 977 → 717 ms to first char and 1061 → 839 ms to finish. Other models omit the parameter. gemini-client 25 pass.
+- **Not measured here:** time to first audio. It needs the Slice-1 streaming speech; the spans for it ship in a later Slice-0 stage.
+- **Slice 1 input:** adopt variant B with the reviewer's three rules (`@actions` only as the last line outside fences after a clean finish; hold back `@`-lines until newline; truncated finish → no actions), plus Groq low reasoning.

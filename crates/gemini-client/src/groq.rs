@@ -138,9 +138,13 @@ impl GroqService {
                 .iter()
                 .map(|m| json!({"role":m.role,"content":m.content})),
         );
-        let mut response = client.post("https://api.groq.com/openai/v1/chat/completions").bearer_auth(key)
-            .json(&json!({"model":self.model,"messages":input,"stream":true,"max_completion_tokens":1024}))
-            .send().await.map_err(|_| "Groq connection failed. Check the network or configured proxy.")?;
+        let mut response = client
+            .post("https://api.groq.com/openai/v1/chat/completions")
+            .bearer_auth(key)
+            .json(&request_body(&self.model, input))
+            .send()
+            .await
+            .map_err(|_| "Groq connection failed. Check the network or configured proxy.")?;
         let code = response.status().as_u16();
         if !response.status().is_success() {
             return Err(format!(
@@ -202,6 +206,17 @@ fn consume(
     }
     Ok(())
 }
+/// Chat request for one turn. gpt-oss reasons before writing any visible text; low effort
+/// cut time-to-first-text by ~27% in the Slice 0 benchmark (docs/plans/SLICE0_PROGRESS.md).
+fn request_body(model: &str, messages: Vec<Value>) -> Value {
+    let mut body =
+        json!({"model":model,"messages":messages,"stream":true,"max_completion_tokens":1024});
+    // Other models may reject the parameter.
+    if model.starts_with("openai/gpt-oss") {
+        body["reasoning_effort"] = json!("low");
+    }
+    body
+}
 /// The Groq system prompt for one companion turn.
 pub(crate) fn system_prompt(mode: &str) -> String {
     format!("You are Mivuneko, a friendly desktop companion in {mode} mode. Be concise. Do not claim to execute tools or access the desktop. App launches are handled separately by the application. Format replies as Markdown: put code in fenced blocks with a language tag, and use short lists or bold sparingly. Return only a JSON object with text, emotion and companionActions. Companion control: when the user asks you to move, change posture, emote, roam freely, or leave the screen, return companionActions as an ordered array of up to 8 objects. Use kind move with gait walk or run and destination left/right/up/down/center/top-left/top-right/bottom-left/bottom-right/elsewhere/unobtrusive/monitor-other/monitor-1/monitor-2; kind sit, stand, automatic, or hide; or kind expression with expression idle/happy/sad/crying/angry/sleeping/shy/love/excited/confused/thinking/celebrating/wink/proud/determined/auto. Use hide only for an explicit request to leave the screen. Interpret conversational requests rather than requiring command wording. For distraction choose unobtrusive. These actions control only the companion, never operating-system apps or files. Otherwise return an empty array. Describe planned actions in future tense; the app executes them and confirms arrival. Do not claim completion before confirmation.")
@@ -209,6 +224,16 @@ pub(crate) fn system_prompt(mode: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn gpt_oss_uses_low_reasoning_and_other_models_omit_it() {
+        assert_eq!(
+            request_body("openai/gpt-oss-120b", vec![])["reasoning_effort"],
+            "low"
+        );
+        assert!(request_body("llama-3.3-70b-versatile", vec![])
+            .get("reasoning_effort")
+            .is_none());
+    }
     #[test]
     fn handles_deltas_finish_and_done() {
         let mut text = String::new();
