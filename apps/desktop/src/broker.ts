@@ -1,4 +1,7 @@
-import type { Broker } from "../../../packages/shared-schemas/index.ts";
+import type {
+  Broker,
+  LaunchPolicy,
+} from "../../../packages/shared-schemas/index.ts";
 import { createMockBroker } from "../../../packages/shared-schemas/mock-broker.ts";
 const native = "__TAURI_INTERNALS__" in window;
 export const isNative = native;
@@ -22,3 +25,17 @@ export const broker: Broker = native
       },
     }
   : createMockBroker();
+
+/** The launch policy enforced by the native broker; null outside the native app. */
+export async function getLaunchPolicy(): Promise<
+  (LaunchPolicy & { stored: boolean }) | null
+> {
+  if (!native) return null;
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke("get_launch_policy");
+}
+export async function setLaunchPolicy(policy: LaunchPolicy): Promise<void> {
+  if (!native) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("set_launch_policy", { policy });
+}

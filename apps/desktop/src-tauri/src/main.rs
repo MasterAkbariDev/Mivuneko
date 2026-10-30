@@ -3,7 +3,7 @@ mod gemini;
 mod global_keys;
 mod pet_displays;
 mod screen;
-use os_broker::{AppInfo, Broker, LaunchRequest, LaunchResult};
+use os_broker::{AppInfo, Broker, LaunchPolicy, LaunchRequest, LaunchResult};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -109,8 +109,17 @@ fn publish_pet_state(
     *state.lock().map_err(|_| "Session unavailable")? = event.clone();
     app.emit("pet-state", event).map_err(|e| e.to_string())
 }
+/// Commands that change or reveal app launching, history or policy are main-window only.
+fn require_main(window: &tauri::Window) -> Result<(), String> {
+    if window.label() == "main" {
+        Ok(())
+    } else {
+        Err("This action is only available in the Mivuneko window".into())
+    }
+}
 #[tauri::command]
-async fn list_apps(state: State<'_>) -> Result<Vec<AppInfo>, String> {
+async fn list_apps(window: tauri::Window, state: State<'_>) -> Result<Vec<AppInfo>, String> {
+    require_main(&window)?;
     let broker = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
         Ok(broker.lock().map_err(|_| "Broker unavailable")?.list_apps())
@@ -119,31 +128,41 @@ async fn list_apps(state: State<'_>) -> Result<Vec<AppInfo>, String> {
     .map_err(|_| "App discovery worker failed")?
 }
 #[tauri::command]
-async fn request_launch(app_id: String, state: State<'_>) -> Result<LaunchRequest, String> {
+async fn request_launch(
+    window: tauri::Window,
+    app_id: String,
+    state: State<'_>,
+) -> Result<LaunchRequest, String> {
+    require_main(&window)?;
+    let context = window.label().to_string();
     let broker = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let mut guard = broker.lock().map_err(|_| "Broker unavailable")?;
-        guard.request(&app_id)
+        guard.request(&app_id, &context)
     })
     .await
     .map_err(|_| "Approval worker failed")?
 }
 #[tauri::command]
 async fn resolve_launch(
+    window: tauri::Window,
     request_id: String,
     allow: bool,
     state: State<'_>,
 ) -> Result<LaunchResult, String> {
+    require_main(&window)?;
+    let context = window.label().to_string();
     let broker = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let mut guard = broker.lock().map_err(|_| "Broker unavailable")?;
-        guard.resolve(&request_id, allow)
+        guard.resolve(&request_id, allow, &context)
     })
     .await
     .map_err(|_| "Launch worker failed")?
 }
 #[tauri::command]
-async fn revoke(state: State<'_>) -> Result<(), String> {
+async fn revoke(window: tauri::Window, state: State<'_>) -> Result<(), String> {
+    require_main(&window)?;
     let broker = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
         broker.lock().map_err(|_| "Broker unavailable")?.revoke();
@@ -151,6 +170,60 @@ async fn revoke(state: State<'_>) -> Result<(), String> {
     })
     .await
     .map_err(|_| "Revocation worker failed")?
+}
+fn policy_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map(|p| p.join("launch-policy.json"))
+        .map_err(|_| "Policy location unavailable".into())
+}
+/// The persisted launch policy, or None before the user's preference was migrated.
+fn stored_policy(app: &tauri::AppHandle) -> Option<LaunchPolicy> {
+    serde_json::from_slice(&std::fs::read(policy_path(app).ok()?).ok()?).ok()
+}
+#[derive(Serialize)]
+struct PolicyState {
+    #[serde(flatten)]
+    policy: LaunchPolicy,
+    stored: bool,
+}
+#[tauri::command]
+fn get_launch_policy(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    state: State<'_>,
+) -> Result<PolicyState, String> {
+    require_main(&window)?;
+    let policy = state.lock().map_err(|_| "Broker unavailable")?.policy();
+    Ok(PolicyState {
+        policy,
+        stored: stored_policy(&app).is_some(),
+    })
+}
+#[tauri::command]
+fn set_launch_policy(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    policy: LaunchPolicy,
+    state: State<'_>,
+) -> Result<(), String> {
+    require_main(&window)?;
+    let path = policy_path(&app)?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|_| "Cannot save permissions")?;
+    }
+    let temp = path.with_extension("json.part");
+    std::fs::write(
+        &temp,
+        serde_json::to_vec(&policy).map_err(|e| e.to_string())?,
+    )
+    .map_err(|_| "Cannot save permissions")?;
+    std::fs::rename(temp, &path).map_err(|_| "Cannot save permissions")?;
+    state
+        .lock()
+        .map_err(|_| "Broker unavailable")?
+        .set_policy(policy);
+    Ok(())
 }
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
@@ -706,11 +779,13 @@ fn save_history(
     desktop_core::save_history(&history_path(&app)?, &json)
 }
 #[tauri::command]
-fn load_history(app: tauri::AppHandle) -> Result<String, String> {
+fn load_history(window: tauri::Window, app: tauri::AppHandle) -> Result<String, String> {
+    require_main(&window)?;
     desktop_core::load_history(&history_path(&app)?)
 }
 #[tauri::command]
-fn clear_history(app: tauri::AppHandle) -> Result<(), String> {
+fn clear_history(window: tauri::Window, app: tauri::AppHandle) -> Result<(), String> {
+    require_main(&window)?;
     desktop_core::clear_history(&history_path(&app)?)
 }
 #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -774,6 +849,11 @@ fn main() {
         .manage(gemini)
         .manage(gemini_client::groq::GroqService::default())
         .setup(|_app| {
+            if let Some(policy) = stored_policy(_app.handle()) {
+                if let Ok(mut broker) = _app.state::<Arc<Mutex<Broker>>>().lock() {
+                    broker.set_policy(policy);
+                }
+            }
             #[cfg(any(target_os = "windows", target_os = "macos"))]
             install_tray(_app)?;
             #[cfg(target_os = "macos")]
@@ -818,6 +898,8 @@ fn main() {
             request_launch,
             resolve_launch,
             revoke,
+            get_launch_policy,
+            set_launch_policy,
             quit_app,
             get_pet_state,
             publish_pet_state,

@@ -1,8 +1,8 @@
 #[cfg(windows)]
 mod windows_catalog;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
-    collections::HashMap,
     path::PathBuf,
     time::{Duration, Instant},
 };
@@ -13,10 +13,35 @@ pub struct AppInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
 }
+/// How launch requests are decided. Stored and enforced in Rust; webviews only display it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ApprovalMode {
+    #[default]
+    Ask,
+    Auto,
+    Deny,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LaunchPolicy {
+    pub enabled: bool,
+    pub mode: ApprovalMode,
+}
+impl Default for LaunchPolicy {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            mode: ApprovalMode::Ask,
+        }
+    }
+}
 #[derive(Clone, Serialize)]
 pub struct LaunchRequest {
+    /// One-time approval token (256 bits from the OS CSPRNG, hex).
     pub id: String,
     pub app: AppInfo,
+    /// The policy that will decide this request, so the UI can show it.
+    pub policy: ApprovalMode,
 }
 #[derive(Serialize)]
 pub struct LaunchResult {
@@ -28,13 +53,42 @@ struct Entry {
     info: AppInfo,
     path: PathBuf,
 }
+/// What an approval token is bound to: the action, its payload, its expiry and the
+/// context allowed to approve it.
 struct Pending {
+    token: [u8; 32],
     app: String,
+    payload: [u8; 32],
+    context: String,
     created: Instant,
 }
+const APPROVAL_TTL: Duration = Duration::from_secs(60);
 #[derive(Default)]
 pub struct Broker {
-    pending: HashMap<String, Pending>,
+    pending: Vec<Pending>,
+    policy: LaunchPolicy,
+}
+/// SHA-256 over the capability, app id and the exact target path that would run.
+fn payload_digest(entry: &Entry) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(b"app.launch\0");
+    hash.update(entry.info.id.as_bytes());
+    hash.update(b"\0");
+    hash.update(entry.path.to_string_lossy().as_bytes());
+    hash.finalize().into()
+}
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+fn decode_token(token: &str) -> Option<[u8; 32]> {
+    if token.len() != 64 {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    for (i, byte) in out.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(token.get(i * 2..i * 2 + 2)?, 16).ok()?;
+    }
+    Some(out)
 }
 fn scan_mac_roots(roots: &[PathBuf]) -> Vec<Entry> {
     use sha2::{Digest, Sha256};
@@ -223,46 +277,97 @@ impl Broker {
     pub fn list_apps(&self) -> Vec<AppInfo> {
         catalog().into_iter().map(|e| e.info).collect()
     }
-    pub fn request(&mut self, app_id: &str) -> Result<LaunchRequest, String> {
-        let app = catalog()
+    pub fn policy(&self) -> LaunchPolicy {
+        self.policy
+    }
+    /// Replaces the policy. Pending approvals are revoked so none outlive the change.
+    pub fn set_policy(&mut self, policy: LaunchPolicy) {
+        self.policy = policy;
+        self.pending.clear();
+    }
+    /// Creates a one-time approval token for launching `app_id`, approvable only from
+    /// `context` (the requesting window).
+    pub fn request(&mut self, app_id: &str, context: &str) -> Result<LaunchRequest, String> {
+        self.request_from(catalog(), app_id, context)
+    }
+    fn request_from(
+        &mut self,
+        catalog: Vec<Entry>,
+        app_id: &str,
+        context: &str,
+    ) -> Result<LaunchRequest, String> {
+        if !self.policy.enabled {
+            return Err("App launching is turned off in Permissions.".into());
+        }
+        let app = catalog
             .into_iter()
             .find(|e| e.info.id == app_id)
             .ok_or("Unknown or unavailable app")?;
-        self.pending
-            .retain(|_, p| p.created.elapsed() < Duration::from_secs(60));
+        self.pending.retain(|p| p.created.elapsed() < APPROVAL_TTL);
         if self.pending.len() >= 8 {
             return Err("Too many pending requests".into());
         }
-        let id = uuid::Uuid::new_v4().to_string();
-        self.pending.insert(
-            id.clone(),
-            Pending {
-                app: app_id.into(),
-                created: Instant::now(),
-            },
-        );
-        Ok(LaunchRequest { id, app: app.info })
+        let mut token = [0u8; 32];
+        getrandom::fill(&mut token).map_err(|_| "Secure randomness unavailable")?;
+        self.pending.push(Pending {
+            token,
+            app: app_id.into(),
+            payload: payload_digest(&app),
+            context: context.into(),
+            created: Instant::now(),
+        });
+        Ok(LaunchRequest {
+            id: token.iter().map(|b| format!("{b:02x}")).collect(),
+            app: app.info,
+            policy: self.policy.mode,
+        })
     }
-    pub fn resolve(&mut self, id: &str, allow: bool) -> Result<LaunchResult, String> {
-        let pending = self
+    /// Consumes the token (before anything runs), then checks expiry, approval context,
+    /// policy and that the target is still exactly what was approved.
+    pub fn resolve(
+        &mut self,
+        token: &str,
+        allow: bool,
+        context: &str,
+    ) -> Result<LaunchResult, String> {
+        self.resolve_with(token, allow, context, catalog, launch)
+    }
+    fn resolve_with(
+        &mut self,
+        token: &str,
+        allow: bool,
+        context: &str,
+        catalog: impl FnOnce() -> Vec<Entry>,
+        run: impl FnOnce(&Entry) -> Result<LaunchResult, String>,
+    ) -> Result<LaunchResult, String> {
+        let wanted = decode_token(token).ok_or("Request expired or consumed")?;
+        let index = self
             .pending
-            .remove(id)
+            .iter()
+            .position(|p| constant_time_eq(&p.token, &wanted))
             .ok_or("Request expired or consumed")?;
-        if pending.created.elapsed() > Duration::from_secs(60) {
+        let pending = self.pending.swap_remove(index);
+        if pending.created.elapsed() > APPROVAL_TTL {
             return Err("Request expired".into());
         }
-        if !allow {
+        if !constant_time_eq(pending.context.as_bytes(), context.as_bytes()) {
+            return Err("This approval belongs to another window".into());
+        }
+        if !allow || !self.policy.enabled || self.policy.mode == ApprovalMode::Deny {
             return Ok(LaunchResult {
                 ok: false,
                 message: "Launch denied.".into(),
             });
         }
+        // Only rediscovered catalog targets, never shell text or arbitrary user paths.
         let app = catalog()
             .into_iter()
             .find(|e| e.info.id == pending.app)
             .ok_or("App is no longer available")?;
-        // Only rediscovered catalog targets, never shell text or arbitrary user paths.
-        launch(&app)
+        if !constant_time_eq(&payload_digest(&app), &pending.payload) {
+            return Err("The app changed after approval was requested".into());
+        }
+        run(&app)
     }
     pub fn revoke(&mut self) {
         self.pending.clear()
@@ -271,49 +376,119 @@ impl Broker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn entry(id: &str, path: &str) -> Entry {
+        Entry {
+            info: AppInfo {
+                id: id.into(),
+                name: id.into(),
+                location: None,
+            },
+            path: path.into(),
+        }
+    }
+    fn launched(_: &Entry) -> Result<LaunchResult, String> {
+        Ok(LaunchResult {
+            ok: true,
+            message: "launched".into(),
+        })
+    }
+    fn calc() -> Vec<Entry> {
+        vec![entry("calc", "/Applications/Calculator.app")]
+    }
     #[test]
     fn unknown_ids_cannot_launch() {
         let mut b = Broker::default();
-        assert!(b.request("../../cmd.exe").is_err());
-        assert!(b.resolve("fake", true).is_err());
+        assert!(b.request("../../cmd.exe", "main").is_err());
+        assert!(b.resolve("fake", true, "main").is_err());
+        assert!(b.resolve(&"0".repeat(64), true, "main").is_err());
+    }
+    #[test]
+    fn tokens_are_256_bit_unique_and_single_use() {
+        let mut b = Broker::default();
+        let first = b.request_from(calc(), "calc", "main").unwrap();
+        let second = b.request_from(calc(), "calc", "main").unwrap();
+        assert_eq!(first.id.len(), 64);
+        assert_ne!(first.id, second.id);
+        let ok = b
+            .resolve_with(&first.id, true, "main", calc, launched)
+            .unwrap();
+        assert!(ok.ok);
+        assert!(b
+            .resolve_with(&first.id, true, "main", calc, launched)
+            .is_err());
     }
     #[test]
     fn denial_consumes_request() {
         let mut b = Broker::default();
-        b.pending.insert(
-            "test".into(),
-            Pending {
-                app: "fake".into(),
-                created: Instant::now(),
-            },
+        let r = b.request_from(calc(), "calc", "main").unwrap();
+        assert!(
+            !b.resolve_with(&r.id, false, "main", calc, launched)
+                .unwrap()
+                .ok
         );
-        assert!(!b.resolve("test", false).unwrap().ok);
-        assert!(b.resolve("test", true).is_err());
+        assert!(b.resolve_with(&r.id, true, "main", calc, launched).is_err());
+    }
+    #[test]
+    fn wrong_context_is_rejected_and_burns_the_token() {
+        let mut b = Broker::default();
+        let r = b.request_from(calc(), "calc", "main").unwrap();
+        assert!(b.resolve_with(&r.id, true, "pet", calc, launched).is_err());
+        assert!(b.resolve_with(&r.id, true, "main", calc, launched).is_err());
+    }
+    #[test]
+    fn changed_target_is_rejected() {
+        let mut b = Broker::default();
+        let r = b.request_from(calc(), "calc", "main").unwrap();
+        let moved = || vec![entry("calc", "/tmp/Evil.app")];
+        assert!(b
+            .resolve_with(&r.id, true, "main", moved, launched)
+            .is_err());
+    }
+    #[test]
+    fn policy_is_enforced_in_rust() {
+        let mut b = Broker::default();
+        b.set_policy(LaunchPolicy {
+            enabled: false,
+            mode: ApprovalMode::Auto,
+        });
+        assert!(b.request_from(calc(), "calc", "main").is_err());
+        b.set_policy(LaunchPolicy {
+            enabled: true,
+            mode: ApprovalMode::Deny,
+        });
+        let r = b.request_from(calc(), "calc", "main").unwrap();
+        assert_eq!(r.policy, ApprovalMode::Deny);
+        assert!(
+            !b.resolve_with(&r.id, true, "main", calc, launched)
+                .unwrap()
+                .ok
+        );
+    }
+    #[test]
+    fn policy_change_revokes_pending_approvals() {
+        let mut b = Broker::default();
+        let r = b.request_from(calc(), "calc", "main").unwrap();
+        b.set_policy(LaunchPolicy::default());
+        assert!(b.resolve_with(&r.id, true, "main", calc, launched).is_err());
     }
     #[test]
     fn revoke_invalidates_all() {
         let mut b = Broker::default();
-        b.pending.insert(
-            "test".into(),
-            Pending {
-                app: "fake".into(),
-                created: Instant::now(),
-            },
-        );
+        let r = b.request_from(calc(), "calc", "main").unwrap();
         b.revoke();
-        assert!(b.resolve("test", true).is_err());
+        assert!(b.resolve_with(&r.id, true, "main", calc, launched).is_err());
     }
     #[test]
     fn expired_approval_rejected() {
         let mut b = Broker::default();
-        b.pending.insert(
-            "test".into(),
-            Pending {
-                app: "fake".into(),
-                created: Instant::now() - Duration::from_secs(61),
-            },
-        );
-        assert!(b.resolve("test", true).is_err());
+        let r = b.request_from(calc(), "calc", "main").unwrap();
+        b.pending[0].created = Instant::now() - Duration::from_secs(61);
+        assert!(b.resolve_with(&r.id, true, "main", calc, launched).is_err());
+    }
+    #[test]
+    fn policy_serializes_as_lowercase() {
+        let json = serde_json::to_string(&LaunchPolicy::default()).unwrap();
+        assert_eq!(json, r#"{"enabled":true,"mode":"ask"}"#);
     }
 }
 

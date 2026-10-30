@@ -12,7 +12,7 @@
 | Item | Status |
 |---|---|
 | Plan + review committed; baseline recorded | done |
-| H1 — Rust-side launch policy, CSPRNG one-time approval tokens bound to action / payload / expiry / approval context, window checks, Tauri command ACL | pending |
+| H1 — Rust-side launch policy, CSPRNG one-time approval tokens bound to action / payload / expiry / approval context, window checks, Tauri command ACL | done (stage 3) |
 | Hermes `/v1/toolsets` accepts both response shapes, fails closed otherwise | done (stage 1) |
 | D5 — Gemini `propertyOrdering` (text no longer generated last) + golden prompt/schema tests | done (stages 2a, 2b) |
 | D13 — Groq `reasoning_effort` | pending (decided by benchmark) |
@@ -88,3 +88,29 @@ Entries are added as each stage is committed.
 - New wire test `chat_schema_generates_emotion_then_text_first`. The golden diff contains only the new ordering lines.
 - The `speech` field is kept; its removal belongs to the Slice-1 streaming-format change.
 - gemini-client 24 pass; clippy clean. The measured effect is in the PoC 1/13 benchmark entry.
+
+### Stage 3 — H1: approvals and policy enforced in Rust
+- **Approval tokens** (`os-broker`):
+  - 256 bits from the OS CSPRNG (`getrandom`, already in the lockfile), sent to the UI as 64 hex characters. They replace UUIDs.
+  - Bound to the capability (`app.launch`), the SHA-256 of the exact target (app id + path), a 60 s expiry, and the approval context (the requesting window label).
+  - Validation: constant-time compare, then the token is **removed before anything else** (one-time). Then expiry, context (a wrong context burns the token), policy, and re-discovery with a payload-hash match (a changed target is refused).
+- **Launch policy in Rust:**
+  - `LaunchPolicy {enabled, mode: ask|auto|deny}` lives in the broker and persists to `app_config_dir/launch-policy.json`.
+  - Enforced on request (disabled → refused) and on resolve (deny/disabled → denied even if a webview sends `allow`).
+  - Changing it revokes pending tokens.
+  - `request_launch` returns the deciding policy, so the UI no longer decides from localStorage.
+- **Main-window only:** `list_apps`, `request_launch`, `resolve_launch`, `revoke`, `get/set_launch_policy`, `load_history`, `clear_history` (`save_history` already was).
+- **Tauri command ACL:**
+  - `build.rs` declares all 45 commands in the app manifest. Tauri now denies any command a window's capability doesn't list.
+  - `capabilities/main.json` allows all of them; `capabilities/pet.json` allows only the 13 the pet uses (state, placement, voice playback).
+  - The retired `pet-monitor-*` windows get no capability.
+  - `tests/unit/acl.test.mjs` keeps the handler list, manifest and capabilities in sync. It also fails if the pet's import graph reaches a command it isn't allowed, or if any sensitive command is allowed for the pet.
+- **Frontend:** the settings screen mirrors the Rust policy. First run migrates the stored preference into Rust; afterwards Rust wins. The approval flow uses the policy returned with each request.
+- **Approval channel:** voice approval of app launches stays allowed (`local-reversible`). No send-capable capability exists yet; the click-only rule applies when one is added (Slice 6).
+- **Deviation from the plan (mechanism only):** no `rustPolicy` feature flag. An "off" switch for enforcement would itself be a bypass, so rollback is `git revert` of this stage. The stored preference stays in localStorage, so reverting loses nothing.
+- **Tests:**
+  - os-broker 13 pass (new: token size/uniqueness/single use, wrong context burns the token, changed target refused, policy enforced, policy change revokes, expiry, serialization);
+  - unit 108 pass (+4 ACL);
+  - the 7 approval/launch E2E tests pass, including 2 from the baseline failure list (flaky on full runs);
+  - type check passes.
+- Not covered by automated tests: the real WebView's ACL denial at runtime. Tauri's build validated every permission identifier; a manual smoke run is in the final checks.

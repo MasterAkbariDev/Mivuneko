@@ -48,7 +48,7 @@ import {
 import { publishPet } from "./session";
 import { CharacterStudio } from "./CharacterStudio";
 import { usePreferences, updatePreferences } from "./preferences";
-import { broker, isNative } from "./broker";
+import { broker, getLaunchPolicy, isNative, setLaunchPolicy } from "./broker";
 import { voiceDecision } from "../../../packages/shared-schemas/voice-decision.ts";
 
 const tabs = [
@@ -110,6 +110,35 @@ export function App() {
   const enabled = preferences.appLaunching;
   const setEnabled = (value: boolean) =>
     updatePreferences({ appLaunching: value });
+  // The native broker enforces the launch policy; these preferences only mirror it.
+  // First run migrates the stored preference into Rust, afterwards Rust wins.
+  const policySynced = useRef(false);
+  useEffect(() => {
+    void getLaunchPolicy()
+      .then((native) => {
+        if (native?.stored)
+          updatePreferences({
+            appLaunching: native.enabled,
+            approvalMode: native.mode,
+          });
+        else if (native)
+          return setLaunchPolicy({
+            enabled: preferences.appLaunching,
+            mode: preferences.approvalMode,
+          });
+      })
+      .catch(() => {})
+      .finally(() => {
+        policySynced.current = true;
+      });
+  }, []);
+  useEffect(() => {
+    if (!policySynced.current) return;
+    void setLaunchPolicy({
+      enabled: preferences.appLaunching,
+      mode: preferences.approvalMode,
+    }).catch((e) => setError(String(e)));
+  }, [preferences.appLaunching, preferences.approvalMode]);
   const controller = useRef<AbortController | null>(null);
   const turnActive = useRef(false);
   const messageList = useRef<HTMLDivElement>(null);
@@ -259,14 +288,15 @@ export function App() {
     setMessages((m) => [...m, { role: "assistant", text }]);
   const log = logActivity;
   async function applyApproval(request: LaunchRequest) {
-    if (preferences.approvalMode === "ask") {
+    const policy = request.policy ?? preferences.approvalMode;
+    if (policy === "ask") {
       setApprovalError("");
       setPending(request);
       setMood("concerned");
       log(`Approval requested: ${request.app.name}`);
       return;
     }
-    const allow = preferences.approvalMode === "auto";
+    const allow = policy === "auto";
     const result = await broker.resolveLaunch(request.id, allow);
     add(result.message);
     log(

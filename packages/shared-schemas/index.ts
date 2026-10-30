@@ -28,9 +28,17 @@ export interface AppInfo {
   id: string;
   name: string;
 }
+export type ApprovalMode = "ask" | "auto" | "deny";
 export interface LaunchRequest {
+  /** One-time approval token issued by the native broker. */
   id: string;
   app: AppInfo;
+  /** The native policy that decides this request (absent in browser preview). */
+  policy?: ApprovalMode;
+}
+export interface LaunchPolicy {
+  enabled: boolean;
+  mode: ApprovalMode;
 }
 export interface LaunchResult {
   ok: boolean;
