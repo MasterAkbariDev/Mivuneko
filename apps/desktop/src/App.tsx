@@ -907,9 +907,9 @@ export function App() {
             <span className="dot" />{" "}
             {preferences.backend === "auto"
               ? "Gemini + Groq"
-              : preferences.backend === "gemini"
+              : preferences.backend === "gemini-only"
                 ? "Gemini"
-                : preferences.backend === "groq"
+                : preferences.backend === "groq-only"
                   ? "Groq"
                   : preferences.backend === "hermes"
                     ? "Hermes local"

@@ -30,9 +30,22 @@ export function abortable<T>(
 }
 let nextCloud = 0;
 export function agentFor(
-  backend: "offline" | "hermes" | "auto" | "gemini" | "groq",
+  choice:
+    | "offline"
+    | "hermes"
+    | "auto"
+    | "gemini"
+    | "groq"
+    | "gemini-only"
+    | "groq-only",
   identity?: string,
 ): Agent {
+  const backend =
+    choice === "gemini-only"
+      ? "gemini"
+      : choice === "groq-only"
+        ? "groq"
+        : choice;
   return {
     async reply(text, mode, signal, history = [], onProgress) {
       // Explicit user launch requests use the same constrained local intent path in every backend.

@@ -81,7 +81,7 @@ export interface Preferences {
   companionName: string;
   micIndicator: boolean;
   petAlwaysOnTop: boolean;
-  backend: "offline" | "hermes" | "auto" | "gemini" | "groq";
+  backend: "offline" | "hermes" | "auto" | "gemini-only" | "groq-only";
   voiceProvider: "local" | "gemini" | "system";
   localVoiceStyle: LocalVoiceStyle;
   localVoiceLanguage: LocalVoiceLanguage;
@@ -278,12 +278,15 @@ export function parsePreferences(raw: unknown): Preferences {
         ? Math.max(0.25, p.petScale)
         : 1,
     petAlwaysOnTop: p.petAlwaysOnTop !== false,
+    // Legacy "gemini"/"groq" values migrate to auto; the "-only" values pin one provider.
     backend:
-      p.backend === "gemini" || p.backend === "groq" || p.backend === "auto"
-        ? "auto"
-        : p.backend === "hermes"
-          ? "hermes"
-          : "offline",
+      p.backend === "gemini-only" || p.backend === "groq-only"
+        ? p.backend
+        : ["gemini", "groq", "auto"].includes(p.backend as string)
+          ? "auto"
+          : p.backend === "hermes"
+            ? "hermes"
+            : "offline",
     voiceProvider:
       p.voiceProvider === "gemini" || p.voiceProvider === "system"
         ? p.voiceProvider

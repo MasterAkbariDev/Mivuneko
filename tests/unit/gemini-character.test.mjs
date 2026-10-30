@@ -12,6 +12,13 @@ test("Gemini preferences retain no supplied credentials and check-ins remain opt
     proxy: "socks5h://secret",
   });
   assert.equal(prefs.backend, "auto");
+  assert.equal(parsePreferences({ backend: "groq" }).backend, "auto");
+  assert.equal(
+    parsePreferences({ backend: "gemini-only" }).backend,
+    "gemini-only",
+  );
+  assert.equal(parsePreferences({ backend: "groq-only" }).backend, "groq-only");
+  assert.equal(parsePreferences({ backend: "nonsense" }).backend, "offline");
   assert.equal(prefs.voiceProvider, "gemini");
   assert.equal(prefs.voice, "off");
   assert.equal(prefs.proactive, false);

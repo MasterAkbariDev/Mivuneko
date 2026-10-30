@@ -1,9 +1,7 @@
 {
   "identifier": "pet-window",
   "description": "The desktop pet: its own state, placement and voice playback only. Cannot launch apps, approve requests, change permissions or read history.",
-  "windows": [
-    "pet"
-  ],
+  "windows": ["pet"],
   "permissions": [
     "core:default",
     "core:window:allow-show",

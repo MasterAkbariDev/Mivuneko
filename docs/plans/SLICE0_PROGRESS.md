@@ -16,7 +16,7 @@
 | Hermes `/v1/toolsets` accepts both response shapes, fails closed otherwise | done (stage 1) |
 | D5 — Gemini `propertyOrdering` (text no longer generated last) + golden prompt/schema tests | done (stages 2a, 2b) |
 | D13 — Groq `reasoning_effort` | done (stage 6) |
-| D11 — allow pinning Gemini or Groq | pending |
+| D11 — allow pinning Gemini or Groq | done (stage 7) |
 | D3 — Kokoro blend cache garbage collection | done (stage 4) |
 | D4 — native fullscreen detection for check-ins | pending |
 | D1 / PoC 2 — Kokoro worker for app-installed users | done (stage 5) — PoC 2 **go** |
@@ -198,3 +198,11 @@ First visible character, p50 ms, by prompt kind:
 - **D13 applied:** Groq requests to `openai/gpt-oss*` send `reasoning_effort: "low"`. In today's format that is 977 → 717 ms to first char and 1061 → 839 ms to finish. Other models omit the parameter. gemini-client 25 pass.
 - **Not measured here:** time to first audio. It needs the Slice-1 streaming speech; the spans for it ship in a later Slice-0 stage.
 - **Slice 1 input:** adopt variant B with the reviewer's three rules (`@actions` only as the last line outside fences after a clean finish; hold back `@`-lines until newline; truncated finish → no actions), plus Groq low reasoning.
+
+### Stage 7 — D11: pin a single provider
+- New backend choices **Gemini only** and **Groq only** (`gemini-only` / `groq-only`): every turn uses that provider with no fallback, for consistent timing and style. This also lets latency be measured per provider in the app.
+- The legacy stored values `gemini` / `groq` still migrate to Automatic, as before, so no existing user is silently pinned. That is why the new values are distinct.
+- `agentFor` maps the pinned values to the existing provider paths. Settings and status labels are updated.
+- Also: `capabilities/*.json` (stage 3) reformatted with Prettier; CI checks it.
+- Tests: unit 108 (preference migration and pinning cases added to `gemini-character.test.mjs`); type check passes; backend and routing E2E 4/4 pass.
+- Not changed here: Automatic still alternates per turn. Choosing by rolling p50 is review item M1, planned for Slice 1b.

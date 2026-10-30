@@ -20,6 +20,12 @@ export function BackendSettings() {
           <option value="auto" disabled={!isNative}>
             Automatic · Gemini + Groq
           </option>
+          <option value="gemini-only" disabled={!isNative}>
+            Gemini only
+          </option>
+          <option value="groq-only" disabled={!isNative}>
+            Groq only
+          </option>
           <option value="offline">Offline utilities</option>
           <option value="hermes" disabled={!isNative}>
             Local Hermes Agent
@@ -31,6 +37,12 @@ export function BackendSettings() {
           Configured Gemini and Groq providers alternate between turns. If one
           fails, the other is tried; no duplicate simultaneous requests.
           Conversation text is sent to the selected provider.
+        </p>
+      )}
+      {(p.backend === "gemini-only" || p.backend === "groq-only") && (
+        <p className="hint">
+          Every turn uses {p.backend === "gemini-only" ? "Gemini" : "Groq"} with
+          no fallback, which keeps response timing and style consistent.
         </p>
       )}
       {p.backend === "hermes" && (

@@ -1,9 +1,7 @@
 {
   "identifier": "main-window",
   "description": "Conversations, settings and approvals. The only window that can launch apps, change permissions or touch history. No shell or filesystem plugins.",
-  "windows": [
-    "main"
-  ],
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "core:window:allow-show",
