@@ -19,7 +19,7 @@
 | D11 — allow pinning Gemini or Groq | pending |
 | D3 — Kokoro blend cache garbage collection | done (stage 4) |
 | D4 — native fullscreen detection for check-ins | pending |
-| D1 / PoC 2 — Kokoro worker for app-installed users | pending |
+| D1 / PoC 2 — Kokoro worker for app-installed users | done (stage 5) — PoC 2 **go** |
 | D9 — app crate tests in CI | pending |
 | D10 — stale docs | pending |
 | Latency spans + local metrics + idle probe | pending |
@@ -121,3 +121,30 @@ Entries are added as each stage is committed.
 - Delete errors (a file still open by the worker on Windows) are ignored; the next write retries.
 - The test was extended: the superseded file is gone, the current one exists, and another character's blend survives. App crate: 8 pass.
 - Deferred to the voice slices: blending in memory inside the worker, so nothing is written at all.
+
+### Stage 5 — D1 / PoC 2: resident Kokoro worker for every user
+- **Problem:** the in-app installer never builds `luna-tts`, so app-installed users ran `sherpa-onnx-offline-tts` per phrase, reloading the 321 MB model each time.
+- **Fix (mechanism differs from the plan, scope unchanged):**
+  - The worker is compiled **into the app** instead of shipped as a separately signed `externalBin`.
+  - `build.rs` compiles `tools/luna-tts/luna-tts.c` with `LUNA_TTS_EMBEDDED`; in that mode it loads the installed sherpa-onnx C API library at runtime (`dlopen` / `LoadLibraryExW`).
+  - The app re-runs itself as `<app> --luna-tts <library> <model> <threads> [voices]`, dispatched at the top of `main()` before Tauri starts.
+  - No compiler on user machines, no extra binary to sign (it inherits the app's signature later), no per-target sidecar files for dev builds.
+  - The pinned v2.0.1 `c-api.h` is vendored (Apache-2.0, attribution in `tools/luna-tts/include/README.md`).
+  - The standalone developer build (`scripts/build-luna-tts.sh`) is unchanged and still preferred when present. The CLI path remains the last fallback.
+- **Measured on the dev Mac** (Intel i9, 5 phrases, warm):
+
+| Path | Per phrase | Cold load |
+|---|---|---|
+| Per-phrase CLI (what app installs got) | **7.4–16.3 s** | — (every phrase) |
+| Standalone `luna-tts` (dev only) | 2.0–3.1 s | 5.6–7.5 s |
+| **Embedded worker (new, all users)** | **2.0–3.2 s** | 6.6–9.5 s |
+
+  Standalone vs embedded is within noise (back-to-back runs); a streaming benchmark ran concurrently.
+- A bad library path reports `ERR cannot load the sherpa-onnx library`, and the Rust side treats it as a failed load.
+- **Not verified here:**
+  - the Windows build of the C file (`windows.h` path) and the Windows DLL name `sherpa-onnx-c-api.dll` — needs CI or a Windows machine;
+  - an end-to-end run from the in-app installer layout (`speech/kokoro/runtime/...`). Path discovery reuses the existing `search()` used for the CLI.
+- **Found, not fixed (voice slices):**
+  - sherpa-onnx v2.0.1 Kokoro with the lexicon config logs `OOV word skipped: 'apps'` — words missing from the lexicon are silently dropped. This is a likely cause of "incorrect pronunciation" reports.
+  - A character switch still restarts the worker (new voices table).
+- Tests: desktop-core 7, app crate 8, CI-equivalent clippy and fmt clean.

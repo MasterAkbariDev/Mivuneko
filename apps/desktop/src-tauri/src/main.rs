@@ -441,10 +441,24 @@ fn tts_config(app: &tauri::AppHandle) -> Option<desktop_core::TtsConfig> {
         }
         None
     }
-    let worker = if root.join("luna-tts").is_file() {
-        root.join("luna-tts")
+    // Prefer a resident worker: a developer-built luna-tts, else this executable loading the
+    // installed sherpa-onnx library. The per-phrase CLI reloads the model every phrase.
+    let library_name = if cfg!(windows) {
+        "sherpa-onnx-c-api.dll"
+    } else if cfg!(target_os = "macos") {
+        "libsherpa-onnx-c-api.dylib"
     } else {
-        search(
+        "libsherpa-onnx-c-api.so"
+    };
+    let (worker, library) = if root.join("luna-tts").is_file() {
+        (root.join("luna-tts"), None)
+    } else if let (Some(library), Ok(exe)) = (
+        search(&root.join("runtime"), library_name, 6),
+        std::env::current_exe(),
+    ) {
+        (exe, Some(library))
+    } else {
+        let cli = search(
             &root.join("runtime"),
             if cfg!(windows) {
                 "sherpa-onnx-offline-tts.exe"
@@ -452,13 +466,39 @@ fn tts_config(app: &tauri::AppHandle) -> Option<desktop_core::TtsConfig> {
                 "sherpa-onnx-offline-tts"
             },
             6,
-        )?
+        )?;
+        (cli, None)
     };
     worker.is_file().then_some(desktop_core::TtsConfig {
         worker,
         model_dir,
         voices: None,
+        library,
     })
+}
+extern "C" {
+    fn luna_tts_main(
+        argc: std::os::raw::c_int,
+        argv: *mut *mut std::os::raw::c_char,
+    ) -> std::os::raw::c_int;
+}
+/// Serves the resident Kokoro worker protocol on stdin/stdout (tools/luna-tts/luna-tts.c).
+fn run_tts_worker(args: Vec<std::ffi::OsString>) -> i32 {
+    let owned: Vec<std::ffi::CString> = args
+        .iter()
+        .map(|a| {
+            #[cfg(unix)]
+            let bytes = std::os::unix::ffi::OsStrExt::as_bytes(a.as_os_str()).to_vec();
+            // The worker converts UTF-8 paths to wide strings on Windows.
+            #[cfg(not(unix))]
+            let bytes = a.to_string_lossy().into_owned().into_bytes();
+            std::ffi::CString::new(bytes).unwrap_or_default()
+        })
+        .collect();
+    let mut argv: Vec<*mut std::os::raw::c_char> =
+        owned.iter().map(|c| c.as_ptr() as *mut _).collect();
+    // SAFETY: argv points at NUL-terminated strings that outlive the call.
+    unsafe { luna_tts_main(argv.len() as _, argv.as_mut_ptr()) }
 }
 /// The voice pack for a character, or null when it uses the system voice (or the
 /// Kokoro engine is not installed).
@@ -856,6 +896,11 @@ fn install_tray(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 fn main() {
+    let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    if args.get(1).is_some_and(|a| a == "--luna-tts") {
+        // Worker mode: never start Tauri or touch windows.
+        std::process::exit(run_tts_worker(args[1..].to_vec()));
+    }
     project_env::load();
     let gemini = gemini_client::Service::default();
     if let Some(config) = gemini_client::Config::from_env() {

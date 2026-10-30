@@ -49,6 +49,17 @@ const COMMANDS: &[&str] = &[
     "clear_history",
 ];
 fn main() {
+    // The resident Kokoro worker, run as `<app> --luna-tts ...` (see tools/luna-tts).
+    cc::Build::new()
+        .file("../../../tools/luna-tts/luna-tts.c")
+        .include("../../../tools/luna-tts/include")
+        .define("LUNA_TTS_EMBEDDED", None)
+        .warnings(false)
+        .compile("luna_tts");
+    println!("cargo:rerun-if-changed=../../../tools/luna-tts/luna-tts.c");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        println!("cargo:rustc-link-lib=dl");
+    }
     tauri_build::try_build(
         tauri_build::Attributes::new()
             .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)),

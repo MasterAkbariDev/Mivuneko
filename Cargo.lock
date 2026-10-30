@@ -2063,6 +2063,7 @@ version = "0.3.2"
 dependencies = [
  "agent-client",
  "bzip2",
+ "cc",
  "desktop-core",
  "gemini-client",
  "os-broker",

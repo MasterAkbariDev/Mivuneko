@@ -38,6 +38,9 @@ pub struct TtsConfig {
     pub model_dir: PathBuf,
     /// Character voice table (blended moods); the stock voices.bin when None.
     pub voices: Option<PathBuf>,
+    /// When set, `worker` is the app itself run as `--luna-tts <library>`, which loads this
+    /// installed sherpa-onnx C API library instead of needing a separately built worker.
+    pub library: Option<PathBuf>,
 }
 struct TtsResident {
     child: Child,
@@ -151,6 +154,9 @@ impl VoiceWorker {
                 .map(|n| (n.get() / 2).clamp(2, 6))
                 .unwrap_or(4);
             let mut command = Command::new(&config.worker);
+            if let Some(library) = &config.library {
+                command.arg("--luna-tts").arg(library);
+            }
             command.arg(&config.model_dir).arg(threads.to_string());
             if let Some(voices) = &config.voices {
                 command.arg(voices);

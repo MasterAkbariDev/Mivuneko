@@ -9,6 +9,7 @@ fn main() {
         worker: PathBuf::from(&args[1]),
         model_dir: PathBuf::from(&args[2]),
         voices: None,
+        library: None,
     };
     let worker = desktop_core::VoiceWorker::default();
     for text in [
