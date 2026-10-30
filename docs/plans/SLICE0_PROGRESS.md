@@ -20,8 +20,8 @@
 | D3 — Kokoro blend cache garbage collection | done (stage 4) |
 | D4 — native fullscreen detection for check-ins | done (stage 8) |
 | D1 / PoC 2 — Kokoro worker for app-installed users | done (stage 5) — PoC 2 **go** |
-| D9 — app crate tests in CI | pending |
-| D10 — stale docs | pending |
+| D9 — app crate tests in CI | done (stage 10) |
+| D10 — stale docs | done (stage 10) |
 | Latency spans + local metrics + idle probe | done (stage 9) |
 | PoC 1 / PoC 13 — streaming-format A/B | done (stage 6) — format B wins; PoC 13 no measurable effect |
 | Device probe | cut line → Slice 3 (per plan) |
@@ -238,3 +238,13 @@ First visible character, p50 ms, by prompt kind:
   - Idle-probe limitation: on macOS the WebKit content processes can't be attributed with `ps`, so it reports the app process only. On Windows it includes WebView2 children.
 - These spans give Slice 1 in-app before/after numbers. Today `turn.first_audio` comes after `turn.reply_done` by construction (speech waits for the full reply).
 - Tests: desktop-core 8 (span validation, no text, cap); unit 108 (ACL test kept strict); app crate 10; type check; Prettier clean.
+
+### Stage 10 — D9 CI and D10 docs
+- **CI:** the macOS (both targets) and Windows jobs now run `cargo test -p mivuneko-desktop`.
+  - macOS needs `TAURI_CONFIG={"app":{"macOSPrivateApi":false}}` for tauri-build's feature check.
+  - The Windows job is also the first build of the embedded Kokoro worker's `windows.h` path.
+  - Checked locally that the tests compile without the built frontend (`dist` moved aside), so CI step order is safe.
+- **Docs:**
+  - `ARCHITECTURE.md`: approval tokens, Rust policy, command ACL, current STT/TTS engines, open-mic limits, barge-in, latency spans (replaces "29 seconds" and "`say`").
+  - `GAPS.md`: barge-in and text streaming exist; what remains is speaking while streaming, streaming ASR and full-duplex. The ACL item is resolved; links to the plan.
+- CI itself has not run: the branch is not pushed.

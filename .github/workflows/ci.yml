@@ -43,6 +43,10 @@ jobs:
           targets: ${{ matrix.target }}
       - run: npm ci
       - run: cargo test -p os-broker -p agent-client -p desktop-core -p gemini-client --locked
+      # tauri-build rejects the macOS private-API config outside the tauri CLI; tests don't need it.
+      - run: cargo test -p mivuneko-desktop --locked
+        env:
+          TAURI_CONFIG: '{"app":{"macOSPrivateApi":false}}'
       - run: npm run tauri -w @mivuneko/desktop -- build --target ${{ matrix.target }} --bundles app
       - run: ditto -c -k --sequesterRsrc --keepParent "target/${{ matrix.target }}/release/bundle/macos/Mivuneko.app" "Mivuneko-${{ matrix.target }}.zip"
       - uses: actions/upload-artifact@v4
@@ -60,6 +64,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
       - run: cargo test -p os-broker -p agent-client -p desktop-core -p gemini-client --locked
+      - run: cargo test -p mivuneko-desktop --locked
       - run: npm run tauri -w @mivuneko/desktop -- build --no-bundle
       - uses: actions/upload-artifact@v4
         with:
