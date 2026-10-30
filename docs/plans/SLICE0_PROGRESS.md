@@ -24,7 +24,7 @@
 | D10 — stale docs | done (stage 10) |
 | Latency spans + local metrics + idle probe | done (stage 9) |
 | PoC 1 / PoC 13 — streaming-format A/B | done (stage 6) — format B wins; PoC 13 no measurable effect |
-| Device probe | cut line → Slice 3 (per plan) |
+| Device probe | **deferred** — cut line → Slice 3 (per plan) |
 
 ## Environment notes (dev machine: Intel i9-8950HK Mac, macOS 15.4)
 
@@ -268,3 +268,47 @@ Review: `REVIEW_SLICE0.md`, Opus session. Verdict: "mergeable for dev use". Stag
 | S0-12 Low | `InlineChat.tsx` is dead code | Deferred to Slice 1a (shared `runTurn`); the ACL test guards against re-mounting it in the pet |
 
 Tests after the fixes: unit 108; desktop-core 9; app crate 11; os-broker 13; clippy and fmt clean; both C variants compile; voice E2E 16/17 (the one failure is pre-existing `settings-redesign.spec.ts:714`).
+
+## Final verification (branch head)
+
+**Full suite** (same runner and environment as the baseline):
+
+| Suite | Baseline | Slice 0 |
+|---|---|---|
+| Unit | 104/104 | **108/108** (+4 ACL) |
+| Type check / Prettier / `cargo fmt` | pass | pass |
+| Cargo tests, 4 crates | 38 | **48** |
+| App crate tests | 8 | **11** |
+| Clippy, 4 crates `-D warnings` | pass | pass |
+| Vite build | pass | pass |
+| Playwright E2E | 44 pass / 16 fail | **53 pass / 7 fail — all 7 on the baseline list; 0 new failures** |
+
+**Real app** (release bundle, macOS Intel):
+- **Launch:** the app starts and stays up.
+- **Policy migration:** the first-run migration wrote `launch-policy.json` = `{"enabled":true,"mode":"auto"}`, preserving the owner's existing "automatically approve" choice. This proves the main window's `get/set_launch_policy` pass the new command ACL at runtime.
+- **Pet rendering:** not visually confirmed. The terminal lacks Screen Recording permission, so screenshots omit app windows. The owner should confirm the pet animates, speaks, and that the chat and app-launch approval work.
+- **Idle, 120 s** (`scripts/bench/idle-probe.mjs`, app process only; WebKit content processes excluded on macOS):
+
+| Build | CPU (% of one core) | RSS |
+|---|---|---|
+| Baseline `a3131b0` | 11.9 | 68–82 MB |
+| Slice 0 | 12.9 | 67–90 MB |
+
+  One sample each; within run-to-run noise. Slice 0 touches no idle path. The **~12% idle CPU is pre-existing** and far above the plan's < 1% target. Investigate early in Slice 1 (WebView throttling flags, animation loops; review item M10).
+- **Build note:** `tauri build` rewrites the `tauri` features in `Cargo.toml` on every build (pre-existing CLI behaviour). The change was discarded, not committed.
+
+## Readiness for Slice 1
+
+**Ready**, with these inputs from Slice 0:
+1. **Streaming format:** adopt variant B (tagged text) with the reviewer's three rules; keep Groq low reasoning.
+2. **Spans:** use the `turn.*` spans for before/after; `turn.first_audio` is the headline metric.
+3. **Audio owner:** single audio owner and shared `runTurn` (also removes the dead `InlineChat.tsx`).
+4. **Idle CPU:** investigate the ~12% idle CPU.
+
+**Open items carried forward:**
+- **S0-4** Windows compile and non-ASCII paths: push the branch so CI runs.
+- **Signing slice:** bundle signed sherpa/onnxruntime libraries.
+- **Voice slices:**
+  - Kokoro OOV words silently dropped;
+  - worker restart on character switch;
+  - worker read timeouts.
