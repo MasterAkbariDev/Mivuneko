@@ -396,8 +396,25 @@ fn character_voices(
         let temp = target.with_extension("part");
         std::fs::write(&temp, table).map_err(|_| "Cannot write the character voice")?;
         std::fs::rename(&temp, &target).map_err(|_| "Cannot save the character voice")?;
+        remove_stale_voices(&root.join("voices"), character, &target);
     }
     Ok(Some(target))
+}
+/// Each blend is a full 28 MB voices.bin copy; keep only the current one per character.
+fn remove_stale_voices(dir: &std::path::Path, character: &str, keep: &std::path::Path) {
+    if character.is_empty() || !character.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return;
+    }
+    let prefix = format!("{character}-");
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if path != keep && name.starts_with(&prefix) && name.ends_with(".bin") {
+            // A worker may still hold the old table open (Windows); the next write retries.
+            let _ = std::fs::remove_file(&path);
+        }
+    }
 }
 // The resident Kokoro worker and model sit next to the voice models (.local/tts).
 fn tts_config(app: &tauri::AppHandle) -> Option<desktop_core::TtsConfig> {
@@ -984,6 +1001,19 @@ mod voice_pack_tests {
             .unwrap()
             .unwrap();
         assert_ne!(first, other, "a changed blend gets its own file");
+        assert!(!first.exists(), "the superseded blend is removed");
+        assert!(other.is_file());
+        std::fs::write(dir.path().join("voices/mochi-0000000000000000.bin"), b"x").unwrap();
+        let back = character_voices(dir.path(), &model, "luna", &recipes)
+            .unwrap()
+            .unwrap();
+        assert!(back.is_file() && !other.exists());
+        assert!(
+            dir.path()
+                .join("voices/mochi-0000000000000000.bin")
+                .is_file(),
+            "other characters' blends are untouched"
+        );
     }
     #[test]
     fn only_known_characters_have_embedded_packs() {

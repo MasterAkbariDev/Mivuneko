@@ -17,7 +17,7 @@
 | D5 — Gemini `propertyOrdering` (text no longer generated last) + golden prompt/schema tests | done (stages 2a, 2b) |
 | D13 — Groq `reasoning_effort` | pending (decided by benchmark) |
 | D11 — allow pinning Gemini or Groq | pending |
-| D3 — Kokoro blend cache garbage collection | pending |
+| D3 — Kokoro blend cache garbage collection | done (stage 4) |
 | D4 — native fullscreen detection for check-ins | pending |
 | D1 / PoC 2 — Kokoro worker for app-installed users | pending |
 | D9 — app crate tests in CI | pending |
@@ -114,3 +114,10 @@ Entries are added as each stage is committed.
   - the 7 approval/launch E2E tests pass, including 2 from the baseline failure list (flaky on full runs);
   - type check passes.
 - Not covered by automated tests: the real WebView's ACL denial at runtime. Tauri's build validated every permission identifier; a manual smoke run is in the final checks.
+
+### Stage 4 — D3: Kokoro blend cache cleanup
+- Writing a new `{character}-{hash}.bin` blend (a full 28.2 MB `voices.bin` copy) now deletes that character's older blends, so each character keeps at most one file.
+- The prefix guard requires an alphanumeric id; other characters' files are never touched.
+- Delete errors (a file still open by the worker on Windows) are ignored; the next write retries.
+- The test was extended: the superseded file is gone, the current one exists, and another character's blend survives. App crate: 8 pass.
+- Deferred to the voice slices: blending in memory inside the worker, so nothing is written at all.
