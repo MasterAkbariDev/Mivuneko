@@ -23,7 +23,7 @@ Owner priorities, in order:
 |---|---|
 | Baseline: in-app streaming-voice benchmark (E2E) | done (stage 0) |
 | Tagged reply format (variant B) in Rust for Gemini and Groq; safe emotion fallback; Groq receives the app list; flag `replyFormat` | done (stage 1, Rust side) |
-| Frontend tagged streaming parser (holds back `@` lines), early mood from the header | pending |
+| Frontend tagged streaming parser (holds back `@` lines), early mood from the header | done (stage 2) |
 | Early speech: streaming `speakable`, streaming playback in `useVoice`, no failover after audio starts, stop on app-launch replies; flag `earlySpeech` | pending |
 | Mic: restart open mic after each submitted phrase (smoke-test S1); "thinking" during final transcription (S2) | pending |
 | Cancellation: separate speech and transcription cancel counters (review D2) | pending |
@@ -68,3 +68,35 @@ The test asserts that speech starts ≥ 500 ms before the reply completes. It **
 - New golden snapshots `gemini-chat-tagged.json` and `groq-prompts-tagged.json`; the existing JSON snapshots are unchanged.
 - The snapshot caught an escaping bug before commit: the example trailer reached the model as `{\"companionActions\"…}`. Fixed.
 - gemini-client 33 pass; app crate 11 pass; clippy clean.
+
+### Stage 2 — Tagged streaming in the frontend, early mood, rollback switches
+
+**Parser** — `packages/shared-schemas/tagged.ts` `taggedProgress(raw)` reveals only the body while streaming:
+- the header and any line starting with `@` are held until complete, then dropped;
+- lines inside code fences are kept as text;
+- a missing or invalid header passes the text through with no emotion.
+
+**Agent:**
+- Requests `format: "tagged"` from Gemini/Groq.
+- Passes `{emotion}` with each progress update, and the pet shows the header's emotion before the first word.
+- Automatic fallback to the other provider is now allowed only while `canRetry()` holds (used by stage 3 once speech starts).
+
+**Safety:** `parseAgentReply` now drops an invalid action plan instead of throwing, so a bad action no longer discards the whole reply (review M2).
+
+**Rollback switches** (Settings → Connections, both on by default):
+- "Stream replies as plain text": `replyFormat` = `tagged` | `json`;
+- "Speak each sentence as it arrives": `earlySpeech`, used in stage 3.
+
+**Live check** (`scripts/bench/tagged-live.mjs`; the shipped prompts from the golden files; Assist mode; catalog `["Calculator"]`; 2 runs × 8 prompts × 2 providers = 32 requests):
+
+| | Gemini | Groq |
+|---|---|---|
+| Header present | 16/16 | 16/16 |
+| Valid emotion | 16/16 | **16/16** (was 55% in the Slice 0 benchmark) |
+| Tag leaked into visible text | 0 | 0 |
+| Movement actions in the trailer (action prompts) | 4/4 | 4/4 |
+| `appQuery` = Calculator (launch prompts, incl. "Can you please open the calculator for me?") | 4/4 | **4/4** (Groq could not propose launches before) |
+
+**Tests:**
+- Unit 115 (+7 `tagged.test.mjs`, including character-by-character "never reveals a tag" and "invalid actions dropped"); type check passes.
+- `desktop.spec.ts`: 25/27 pass. Failures across two runs were `:90`, `:260`, `:327` (all on the baseline list) and `:178` (history), which passed 4/4 alone, so it is load-dependent and noted in `KNOWN_ISSUES.md`.

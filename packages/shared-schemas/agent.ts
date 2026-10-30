@@ -1,5 +1,12 @@
 import { parseCompanionActions } from "./pet-actions.ts";
 import type { AgentReply, Mood } from "./index.ts";
+function safeActions(value: unknown) {
+  try {
+    return parseCompanionActions(value);
+  } catch {
+    return [];
+  }
+}
 export function parseAgentReply(raw: string): AgentReply {
   let json: any;
   try {
@@ -41,9 +48,10 @@ export function parseAgentReply(raw: string): AgentReply {
       text: json.text,
       ...(json.companionActions !== undefined
         ? {
+            // An invalid action plan drops the actions, never the reply itself.
             companionActions: json.appQuery
               ? []
-              : parseCompanionActions(json.companionActions),
+              : safeActions(json.companionActions),
           }
         : {}),
       ...(typeof json.appQuery === "string" &&

@@ -71,6 +71,26 @@ export function BackendSettings() {
       )}
       <GeminiSettings />
       <label className="setting">
+        Stream replies as plain text (faster; turn off to use the older format)
+        <input
+          type="checkbox"
+          checked={p.replyFormat === "tagged"}
+          onChange={(e) =>
+            updatePreferences({
+              replyFormat: e.target.checked ? "tagged" : "json",
+            })
+          }
+        />
+      </label>
+      <label className="setting">
+        Speak each sentence as it arrives
+        <input
+          type="checkbox"
+          checked={p.earlySpeech}
+          onChange={(e) => updatePreferences({ earlySpeech: e.target.checked })}
+        />
+      </label>
+      <label className="setting">
         Remember conversations on this device
         <input
           type="checkbox"

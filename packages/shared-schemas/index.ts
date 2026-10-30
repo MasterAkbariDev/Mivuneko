@@ -64,7 +64,13 @@ export interface Agent {
     mode: Mode,
     signal: AbortSignal,
     history?: { role: string; text: string }[],
-    onProgress?: (text: string) => void,
+    onProgress?: (text: string, meta?: { emotion?: Mood }) => void,
+    options?: {
+      /** Reply format requested from Gemini/Groq ("tagged" streams plain text). */
+      format?: "tagged" | "json";
+      /** Automatic provider fallback is allowed only while this returns true. */
+      canRetry?: () => boolean;
+    },
   ): Promise<AgentReply>;
 }
 export interface Speech {

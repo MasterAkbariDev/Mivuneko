@@ -108,6 +108,10 @@ export interface Preferences {
   turnTaking: "automatic" | "manual";
   turnTakingVersion: 2;
   bargeIn: boolean;
+  /** Gemini/Groq reply format: tagged plain text (Slice 1) or the legacy JSON object. */
+  replyFormat: "tagged" | "json";
+  /** Speak each sentence as soon as it streams in, instead of after the full reply. */
+  earlySpeech: boolean;
   sttContext: boolean;
   reduced: boolean;
   monitor: string;
@@ -173,6 +177,8 @@ export const defaults: Preferences = {
   turnTaking: "automatic",
   turnTakingVersion: 2,
   bargeIn: true,
+  replyFormat: "tagged",
+  earlySpeech: true,
   sttContext: true,
   reduced: false,
   monitor: "current",
@@ -362,6 +368,8 @@ export function parsePreferences(raw: unknown): Preferences {
     turnTaking: p.turnTaking === "manual" ? "manual" : "automatic",
     turnTakingVersion: 2,
     bargeIn: p.bargeIn !== false,
+    replyFormat: p.replyFormat === "json" ? "json" : "tagged",
+    earlySpeech: p.earlySpeech !== false,
     sttContext: p.sttContext !== false,
     reduced: p.reduced === true,
     monitor:

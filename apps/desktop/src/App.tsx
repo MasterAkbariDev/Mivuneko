@@ -455,16 +455,23 @@ export function App() {
         return;
       }
       startTurn(preferences.backend);
+      let streamedMood = false;
       const reply = await agentFor(preferences.backend, name).reply(
         text,
         mode,
         c.signal,
         messages,
-        (partial) => {
+        (partial, meta) => {
           if (c.signal.aborted) return;
+          // The tagged header names the emotion before any text: show it right away.
+          if (meta?.emotion && !streamedMood) {
+            streamedMood = true;
+            setMood(meta.emotion);
+          }
           if (partial.trim()) markTurn("turn.first_text");
           setStreaming(partial);
         },
+        { format: preferences.replyFormat },
       );
       c.signal.throwIfAborted();
       markTurn("turn.first_text");

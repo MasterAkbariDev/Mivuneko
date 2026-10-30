@@ -7,6 +7,7 @@ import type { Agent } from "../../../packages/shared-schemas/index.ts";
 import { mockHermes } from "../../../services/agent-adapter/mock.ts";
 import { isNative } from "./broker";
 import { partialText } from "./partialText";
+import { taggedProgress } from "../../../packages/shared-schemas/tagged.ts";
 export function abortable<T>(
   promise: Promise<T>,
   signal: AbortSignal,
@@ -47,7 +48,7 @@ export function agentFor(
         ? "groq"
         : choice;
   return {
-    async reply(text, mode, signal, history = [], onProgress) {
+    async reply(text, mode, signal, history = [], onProgress, options = {}) {
       // Explicit user launch requests use the same constrained local intent path in every backend.
       const local = desktopIntent(text);
       if (local?.kind === "open")
@@ -85,9 +86,12 @@ export function agentFor(
               signal,
               history,
               onProgress,
+              options,
             );
           } catch (error) {
             signal.throwIfAborted();
+            // Once speech has started, another provider's different reply must not follow.
+            if (options.canRetry && !options.canRetry()) throw error;
             errors.push(`${provider}: ${String(error)}`);
             onProgress?.("");
           }
@@ -120,6 +124,9 @@ export function agentFor(
       signal.addEventListener("abort", cancel, { once: true });
       let answer: string;
       let raw = "";
+      const tagged =
+        options.format === "tagged" &&
+        (backend === "gemini" || backend === "groq");
       const { listen } = await import("@tauri-apps/api/event");
       const unlisten =
         backend === "gemini" || backend === "groq"
@@ -129,11 +136,15 @@ export function agentFor(
                 if (event.payload.requestId !== requestId || signal.aborted)
                   return;
                 raw += event.payload.delta;
-                onProgress?.(
-                  backend === "gemini" || /^\s*[{`]/.test(raw)
-                    ? partialText(raw)
-                    : raw,
-                );
+                if (tagged) {
+                  const progress = taggedProgress(raw);
+                  onProgress?.(progress.visible, { emotion: progress.emotion });
+                } else
+                  onProgress?.(
+                    backend === "gemini" || /^\s*[{`]/.test(raw)
+                      ? partialText(raw)
+                      : raw,
+                  );
               },
             )
           : () => {};
@@ -149,6 +160,7 @@ export function agentFor(
               messages,
               mode,
               requestId,
+              ...(tagged ? { format: "tagged" } : {}),
             },
           ),
           signal,

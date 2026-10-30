@@ -17,6 +17,7 @@ Tracked so they get fixed, not ignored. Each entry gives its status and where it
 | K5 | `settings-redesign.spec.ts:643` pet hover dock opens a compact composer and edit mode starts locked | fail / fail | pass | Local-only |
 | K6 | `settings-redesign.spec.ts:714` microphone dot is quiet, active-only, stable across animation and optional | fail / fail | pass | Local-only |
 | K7 | `settings-redesign.spec.ts:803` zoom grows beyond the display while the dock and its actions stay visible | fail / fail | fail | Consistent |
+| K9 | `desktop.spec.ts:178` opt-in history survives reload and disabling it deletes storage | pass / pass (failed once under load in Slice 1 stage 2, 4/4 alone) | pass | Load-dependent; watch |
 | K8 | `settings-redesign.spec.ts:867` canvas follows its frame through repeated grow and shrink operations | pass / pass | fail | CI-only |
 
 **Next step:**
