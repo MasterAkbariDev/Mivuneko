@@ -25,13 +25,18 @@ function sample() {
         rssMb: bytes / 2 ** 20,
       }));
   }
-  const out = execFileSync("ps", ["-axo", "pid=,%cpu=,rss=,args="]).toString();
+  // Match the executable (comm), not command lines that merely mention the app.
+  const out = execFileSync("ps", ["-axo", "pid=,%cpu=,rss=,comm="]).toString();
   return out
     .split("\n")
-    .filter(
-      (l) => /mivuneko-desktop(\s|$)/.test(l) && !l.includes("--luna-tts"),
-    )
     .map((l) => l.trim().split(/\s+/))
+    .filter(([, , , comm]) => /(^|\/)mivuneko-desktop$/.test(comm ?? ""))
+    .filter(
+      ([pid]) =>
+        !execFileSync("ps", ["-o", "args=", "-p", pid])
+          .toString()
+          .includes("--luna-tts"),
+    )
     .map(([pid, cpu, rss]) => ({ pid: +pid, cpu: +cpu, rssMb: +rss / 1024 }));
 }
 const samples = [];
