@@ -184,11 +184,15 @@ export function desktopIntent(input: string): DesktopIntent | null {
         destination,
       };
   }
+  // Only opens a preview; nothing leaves the device until the user presses Share.
   if (
-    /\b(?:screen|display)\b/i.test(text) &&
-    /^(?:what(?:'s| is)|help me|look|see|read|describe|explain|check|tell me)/i.test(
-      text,
-    )
+    (/\b(?:screen|display|(?:my|the|this) monitor)\b/i.test(text) &&
+      /^(?:what(?:'s| is| do you see)|help me|look|see|read|describe|explain|check|tell me)/i.test(
+        text,
+      )) ||
+    /^what(?:'s| is| am i)\b.*\b(?:looking at|seeing)\b/i.test(text) ||
+    (/صفحه/.test(text) &&
+      /(?:ببین|نگاه|بخوان|بخون|توضیح|چیه|چی هست)/.test(text))
   )
     return { kind: "screen" };
   return null;

@@ -124,3 +124,15 @@ test("Persian launch requests resolve to installed apps", () => {
   assert.deepEqual(matchApps("ماشین حساب", apps), [{ name: "Calculator" }]);
   assert.deepEqual(matchApps("كروم", apps), [{ name: "Google Chrome" }]);
 });
+test("natural ways to ask Luna to look at the screen open the preview", () => {
+  for (const text of [
+    "what's on my monitor?",
+    "What am I looking at?",
+    "what do you see on my screen",
+    "روی صفحه چیه؟",
+    "صفحه من رو ببین",
+  ])
+    assert.equal(desktopIntent(text)?.kind, "screen", text);
+  assert.equal(desktopIntent("what is a monitor lizard"), null);
+  assert.equal(desktopIntent("I am looking at a cat"), null);
+});
