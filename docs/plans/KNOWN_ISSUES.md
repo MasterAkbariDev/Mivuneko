@@ -6,6 +6,8 @@ Tracked so they get fixed, not ignored. Each entry gives its status and where it
 
 **Local run** (Intel Mac, Playwright 1.62.1): 16 failures on unmodified `main`. After Slice 0, 7 failures, all on the baseline list; the other 9 passed on re-run, so they are timing-sensitive on this machine.
 
+**Update 2026-10-31 (`a47144c`):** all 64 E2E tests pass locally. The failures were timeouts from software WebGL and large artwork decodes. `playwright.config.ts` now allows 90 s per test and 20 s per check, `companions:163` allows 240 s, `settings-redesign:175` waits 60 s for the VRM model, and `:803` zooms to 4× (10× stalls software rendering). Not yet confirmed on GitHub CI.
+
 **GitHub CI:** `main` (`a3131b0`, run 40931385272) and `slice-0-foundations` (`ad7977f`, run 40985496966) fail the **same 4** — `companions:3`, `settings-redesign:175`, `803`, `867` — and pass the other 56.
 
 | # | Test | Local (main / Slice 0) | CI `main` | Notes |

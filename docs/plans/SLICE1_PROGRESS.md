@@ -28,7 +28,8 @@ Owner priorities, in order:
 | Mic: restart open mic after each submitted phrase (smoke-test S1); "thinking" during final transcription (S2) | done (stage 4) |
 | Cancellation: separate speech and transcription cancel counters (review D2) | done (stage 4) |
 | One chat path: remove dead `InlineChat.tsx`; more tolerant launch phrasing, EN + FA (smoke-test S3) | done (stage 5) |
-| After-measurements, full suite, CI, review | pending |
+| After-measurements, full suite | done locally (see "After Slice 1") |
+| CI run on GitHub, independent review | pending |
 
 ## Baseline (before Slice 1)
 
@@ -41,6 +42,21 @@ Owner priorities, in order:
 | Send → first speech synthesis request | **1671 ms** (after the full reply, 1592 ms) |
 
 The test asserts that speech starts ≥ 500 ms before the reply completes. It **fails on the baseline by design** and must pass after Slice 1.
+
+## After Slice 1 (2026-10-31, Intel Mac, `slice-1-streaming` at `6924eeb`)
+
+| Metric | Before | After |
+|---|---|---|
+| Send → first speech synthesis request (mocked 1.6 s stream) | 1671 ms, after the full reply | **730 ms**, 826 ms before the reply finished (1556 ms) |
+| `streaming-voice.spec.ts` | failed by design | 3/3 pass (the two rollback switches also pass) |
+
+Full local suite:
+- Unit tests 124/124; `tsc` clean; prettier clean.
+- Rust (`os-broker`, `agent-client`, `desktop-core`, `gemini-client`): 62 tests pass; `cargo fmt --check` clean; clippy with the CI flags (`-D warnings`, no `--all-targets`) clean.
+- `npm run build` passes. E2E 64/64 pass with the longer timeouts in `playwright.config.ts` (the 13 earlier failures were slow software WebGL and artwork decoding, not logic).
+- `clippy --all-targets` fails on the older `examples/speech_smoke.rs` (`chunks_exact_to_as_chunks`, newer Rust lint). CI does not lint examples.
+
+Not done: a GitHub CI run and an independent review. The streaming number uses a mocked provider and mocked audio, so real first-audio latency still needs a live measurement.
 
 ## Stage log
 
