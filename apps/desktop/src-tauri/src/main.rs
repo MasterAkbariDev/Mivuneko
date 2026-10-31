@@ -548,7 +548,7 @@ async fn synthesize_phrase(
                 .and_then(desktop_core::kokoro::speaker_id))
             .unwrap_or(3) as u32;
         let speed = speed.clamp(0.5, 1.6);
-        let wav = match worker.synthesize_phrase(&config, &text, speaker, speed) {
+        let wav = match worker.synthesize_phrase(&config, &text, speaker, speed, ticket) {
             Err(e) if config.library.is_some() && desktop_core::is_engine_load_failure(&e) => {
                 EMBEDDED_TTS_UNUSABLE.store(true, Ordering::Relaxed);
                 eprintln!("Kokoro worker could not load sherpa-onnx ({e}); using the CLI");
@@ -556,7 +556,7 @@ async fn synthesize_phrase(
                     voices: config.voices.clone(),
                     ..tts_config(&app).ok_or(e)?
                 };
-                worker.synthesize_phrase(&fallback, &text, speaker, speed)?
+                worker.synthesize_phrase(&fallback, &text, speaker, speed, ticket)?
             }
             result => result?,
         };

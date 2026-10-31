@@ -89,15 +89,19 @@ impl VoiceWorker {
     pub fn speech_ticket(&self) -> u64 {
         self.speech_generation.load(Ordering::SeqCst)
     }
-    /// Stops the resident whisper-server (app exit).
+    /// Stops both resident servers (app exit).
     pub fn shutdown(&self) {
+        self.shutdown_stt();
+        self.shutdown_tts();
+    }
+    /// Stops only the resident recognition server (whisper or Parakeet).
+    pub fn shutdown_stt(&self) {
         if let Ok(mut slot) = self.resident.lock() {
             if let Some(mut r) = slot.take() {
                 let _ = r.child.kill();
                 let _ = r.child.wait();
             }
         }
-        self.shutdown_tts();
     }
     /// Stops only the Kokoro worker.
     pub fn shutdown_tts(&self) {
@@ -116,6 +120,7 @@ impl VoiceWorker {
         text: &str,
         speaker: u32,
         speed: f32,
+        ticket: u64,
     ) -> Result<Vec<u8>, String> {
         let text = text.trim();
         if text.is_empty() || text.len() > 1500 {
@@ -166,6 +171,10 @@ impl VoiceWorker {
             return std::fs::read(output).map_err(|_| "Character voice returned no audio".into());
         }
         let mut slot = self.tts.lock().map_err(|_| "Voice engine state poisoned")?;
+        // Phrases queued behind the lock must not run after the user interrupted.
+        if self.speech_ticket() != ticket {
+            return Err("Voice operation was cancelled".into());
+        }
         if let Some(t) = slot.as_mut() {
             if t.model != config.model_dir
                 || t.voices != config.voices
@@ -693,7 +702,7 @@ impl VoiceWorker {
                 Err(e) if self.ticket() != ticket => return Err(e),
                 // Parakeet unavailable: free it and fall back to the configured whisper model.
                 Err(error) => {
-                    self.shutdown();
+                    self.shutdown_stt();
                     if !binary.is_file() || !model.is_file() {
                         return Err(format!("Parakeet could not transcribe: {error}. Retry or reinstall it in Settings → Voice & input."));
                     }
@@ -711,7 +720,7 @@ impl VoiceWorker {
                 Ok(text) => return Ok(text),
                 Err(e) if self.ticket() != ticket => return Err(e),
                 // Server unavailable: drop it so the next call retries, and use the CLI.
-                Err(_) => self.shutdown(),
+                Err(_) => self.shutdown_stt(),
             }
         }
         let temp = tempfile::tempdir().map_err(|_| "Cannot create private audio workspace")?;
@@ -1153,7 +1162,7 @@ mod worker_load_tests {
             library: Some("/nonexistent/libsherpa-onnx-c-api.dylib".into()),
         };
         let error = VoiceWorker::default()
-            .synthesize_phrase(&config, "Hello", 3, 1.0)
+            .synthesize_phrase(&config, "Hello", 3, 1.0, 0)
             .unwrap_err();
         assert!(is_engine_load_failure(&error), "{error}");
         assert!(!is_engine_load_failure(

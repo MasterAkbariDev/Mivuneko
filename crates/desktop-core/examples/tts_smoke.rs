@@ -19,7 +19,7 @@ fn main() {
     ] {
         let t = Instant::now();
         let wav = worker
-            .synthesize_phrase(&config, text, 3, 0.86)
+            .synthesize_phrase(&config, text, 3, 0.86, worker.speech_ticket())
             .expect("speech");
         println!(
             "{:>6.0} ms  {} bytes  {:?}",

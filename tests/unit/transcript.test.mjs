@@ -20,15 +20,16 @@ test("non-speech tags are removed", () => {
 });
 test("stock hallucinations are dropped only when they are the whole result", () => {
   for (const text of [
-    "Thank you.",
     "Thanks for watching!",
     "Thank you for watching.",
     "Subtitles by the Amara.org community",
     "you",
     ".",
-    "Bye.",
   ])
     assert.equal(cleanTranscript(text), "");
+  // Closing a chat is real speech, not a silence hallucination.
+  for (const text of ["Thanks.", "Thank you.", "Bye."])
+    assert.equal(cleanTranscript(text), text);
   assert.equal(
     cleanTranscript("Thank you for the help with this"),
     "Thank you for the help with this",

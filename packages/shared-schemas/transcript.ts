@@ -1,12 +1,8 @@
 const HALLUCINATIONS = new Set([
-  "thank you",
-  "thanks",
   "thanks for watching",
   "thank you for watching",
   "thank you so much for watching",
   "you",
-  "bye",
-  "bye bye",
 ]);
 const key = (text: string) =>
   text
