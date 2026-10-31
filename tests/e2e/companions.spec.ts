@@ -163,7 +163,7 @@ test("Luna previews unique expression and movement frames", async ({
 test("every illustrated character loads distinct nonempty emotions and directional motion artwork", async ({
   page,
 }) => {
-  test.setTimeout(60000);
+  test.setTimeout(240000);
   await page.goto("/?view=chat&tab=Characters");
   const results = await page.evaluate(async () => {
     const modelsPath = "/src/lunaModel.ts",

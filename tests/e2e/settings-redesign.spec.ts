@@ -219,7 +219,7 @@ test("bundled and imported VRM models render and selection reaches the desktop p
   await pet.goto("/");
   await expect(
     pet.locator('.character-scene[data-model-ready="true"]'),
-  ).toBeVisible({ timeout: 20000 });
+  ).toBeVisible({ timeout: 60000 });
   await page
     .getByLabel("Import VRM file")
     .setInputFiles(resolve("apps/desktop/public/models/haru.vrm"));
@@ -835,7 +835,8 @@ test("zoom grows beyond the display while the dock and its actions stay visible"
   await page.evaluate(async () => {
     const path = "/src/preferences.ts",
       p = await import(path);
-    p.updatePreferences({ petScale: 10 });
+    // Large enough to pass the display height; software WebGL stalls the page at 10x.
+    p.updatePreferences({ petScale: 4 });
   });
   await expect
     .poll(() =>

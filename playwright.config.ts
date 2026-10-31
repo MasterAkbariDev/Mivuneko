@@ -1,7 +1,9 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "tests/e2e",
-  timeout: 30000,
+  // Headless software WebGL and big artwork decodes take 10-60 s on a laptop CPU.
+  timeout: 90000,
+  expect: { timeout: 20000 },
   workers: 1,
   reporter: "list",
   outputDir: "test-results",
