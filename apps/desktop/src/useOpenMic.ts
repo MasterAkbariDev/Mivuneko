@@ -5,7 +5,11 @@ import {
   resampleTo16k,
 } from "../../../packages/shared-schemas/audio.ts";
 import { createVad, type Vad } from "../../../packages/shared-schemas/vad.ts";
-import { getSpeechContext } from "./speechContext";
+import {
+  BARGE_IN_MS,
+  echoOfSpoken,
+} from "../../../packages/shared-schemas/turn.ts";
+import { getSpeechContext, getSpokenText } from "./speechContext";
 import { usePreferences } from "./preferences";
 import { cleanTranscript } from "../../../packages/shared-schemas/transcript.ts";
 import { microphoneConstraints } from "./microphone";
@@ -54,7 +58,9 @@ export function useOpenMic(
     let chunks: Float32Array[] = [],
       total = 0,
       lastSnapshot = 0,
-      started = false;
+      started = false,
+      overCharacter = false,
+      interrupted = false;
     let vad: Vad | undefined;
     let pending: Promise<void> = Promise.resolve();
     let transcript = "";
@@ -103,8 +109,16 @@ export function useOpenMic(
       finishing = true;
       const rate = context.sampleRate,
         frames = chunks,
-        size = total;
+        size = total,
+        // Speech over the character that never lasted long enough to interrupt her.
+        blip = overCharacter && !interrupted;
       cleanup();
+      if (blip) {
+        callbacks.current.onPartial("");
+        setHearing(false);
+        setRestart((n) => n + 1);
+        return;
+      }
       setHearing(false);
       setWorking(true);
       void (async () => {
@@ -114,7 +128,10 @@ export function useOpenMic(
           const final = (await snapshot(frames, size, rate, "final")).trim();
           if (stopped) return;
           callbacks.current.onPartial("");
-          if (!submit) {
+          // Her own voice leaking back through the microphone is not the user.
+          if (overCharacter && echoOfSpoken(final, getSpokenText())) {
+            setRestart((n) => n + 1);
+          } else if (!submit) {
             callbacks.current.onDraft(final);
             callbacks.current.onError(
               "Recording limit reached. Your words are saved in the draft; review and send when ready.",
@@ -178,8 +195,7 @@ export function useOpenMic(
             started = true;
             setHearing(true);
             lastSnapshot = now;
-            // Talking over the character interrupts her.
-            if (talking.current) callbacks.current.onInterrupt();
+            overCharacter = talking.current;
             // Prepend the pre-roll so the first word is not clipped.
             for (const early of vad!.takePreRoll()) {
               chunks.push(early);
@@ -188,6 +204,15 @@ export function useOpenMic(
           } else {
             chunks.push(frame);
             total += frame.length;
+          }
+          // Talking over the character interrupts her once it is more than a blip.
+          if (
+            overCharacter &&
+            !interrupted &&
+            total >= (context.sampleRate * BARGE_IN_MS) / 1000
+          ) {
+            interrupted = true;
+            callbacks.current.onInterrupt();
           }
           if (!transcribing && now - lastSnapshot >= 6000) {
             lastSnapshot = now;
