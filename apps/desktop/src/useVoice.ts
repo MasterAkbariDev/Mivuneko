@@ -13,6 +13,7 @@ import {
 import {
   deliveryFor,
   splitSpeech,
+  voiceMood,
   type Phrase,
   type VoicePack,
 } from "../../../packages/shared-schemas/voice-style.ts";
@@ -280,7 +281,7 @@ export function useVoice(
           language: preferences.localVoiceLanguage,
           text,
           character,
-          mood: emotion,
+          mood: voiceMood(emotion),
           speed: delivery.speed,
         },
       ).then((bytes) => audio.decodeAudioData(new Uint8Array(bytes).buffer));

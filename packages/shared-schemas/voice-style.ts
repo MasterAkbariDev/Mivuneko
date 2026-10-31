@@ -33,7 +33,23 @@ const MOODS: Record<string, Required<MoodStyle>> = {
 };
 const clamp = (n: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, n));
-export function deliveryFor(mood: Mood | string, pack: VoicePack): Delivery {
+// Packs define eight moods; the other reply emotions borrow the closest one.
+const MOOD_FOR: Record<string, string> = {
+  excited: "celebrating",
+  love: "happy",
+  teasing: "happy",
+  joking: "happy",
+  wink: "happy",
+  proud: "happy",
+  shy: "concerned",
+  crying: "sad",
+  sleeping: "sad",
+  thinking: "curious",
+};
+export const voiceMood = (emotion: Mood | string): string =>
+  MOOD_FOR[emotion] ?? emotion;
+export function deliveryFor(emotion: Mood | string, pack: VoicePack): Delivery {
+  const mood = voiceMood(emotion);
   const fallback = MOODS[mood] ?? MOODS.idle;
   const own = pack.moods?.[mood] ?? {};
   return {

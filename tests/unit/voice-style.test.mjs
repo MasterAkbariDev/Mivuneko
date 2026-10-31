@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   deliveryFor,
   splitSpeech,
+  voiceMood,
 } from "../../packages/shared-schemas/voice-style.ts";
 const pack = {
   engine: "kokoro",
@@ -53,4 +54,13 @@ test("delivery stays inside safe bounds", () => {
   const d = deliveryFor("celebrating", { ...pack, speed: 9, gain: 9 });
   assert.ok(d.speed <= 1.6 && d.gain <= 1.5);
   assert.ok(deliveryFor("sad", { ...pack, speed: 0.01 }).speed >= 0.5);
+});
+test("emotions without their own mood borrow the closest one", () => {
+  assert.equal(voiceMood("excited"), "celebrating");
+  assert.equal(voiceMood("crying"), "sad");
+  assert.equal(voiceMood("angry"), "angry");
+  assert.deepEqual(deliveryFor("crying", pack), deliveryFor("sad", pack));
+  assert.ok(
+    deliveryFor("excited", pack).speed > deliveryFor("idle", pack).speed,
+  );
 });

@@ -782,15 +782,28 @@ fn character_speech_body(
     let style = match emotion {
         "angry" => "playfully indignant",
         "sad" => "soft and gentle",
-        "happy" | "celebrating" => "warm and cheerful",
+        "crying" => "tearful, soft and breaking slightly, never melodramatic",
+        "happy" => "warm and cheerful, with a smile in the voice",
+        "celebrating" | "excited" => "bright and excited, quicker and livelier",
         "surprised" => "pleasantly surprised",
+        "curious" | "thinking" => "curious and thoughtful, with rising interest",
+        "confused" => "puzzled and hesitant, with small pauses",
+        "concerned" => "caring and concerned, slower and gentler",
+        "shy" => "shy and soft, a little hesitant and quiet",
+        "love" => "tender and affectionate, warm and close",
+        "teasing" | "joking" | "wink" => "playful and teasing, with a grin",
+        "proud" => "proud and confident, steady and warm",
+        "determined" => "determined and firm, calm and focused",
+        "sleeping" => "sleepy and drowsy, slow and quiet",
         _ => "warm and conversational",
     };
     let mut config = source.clone();
     config.voice = match character {
-        "luna" | "haru" | "mochi" => "Leda",
+        "luna" => "Leda",
+        "haru" => "Sulafat",
+        "mochi" => "Achernar",
         "miku" => "Aoede",
-        "kitsune" => "Leda",
+        "kitsune" => "Pulcherrima",
         "stella" => "Puck",
         "teto" => "Zephyr",
         "neru" => "Autonoe",
@@ -801,12 +814,25 @@ fn character_speech_body(
         _ => "Kore",
     }
     .into();
-    let style = if character == "luna" {
-        format!("Light, warm, conversational; {style}.")
-    } else if character == "mochi" {
-        format!("Soft, light, clear and gently playful; {style}.")
-    } else {
+    let persona = match character {
+        "luna" => "Light, warm, conversational",
+        "mochi" => "Soft, light, clear and gently playful",
+        "haru" => "Calm, kind and steady",
+        "miku" => "Bright, energetic and sweet",
+        "kitsune" => "Mischievous, quick and cheeky",
+        "stella" => "Poised, clear and a little formal",
+        "teto" => "Lively, bouncy and confident",
+        "neru" => "Dry, cool and understated",
+        "snow" => "Quiet, gentle and dreamy",
+        "silver" => "Elegant, smooth and composed",
+        "azure" => "Upbeat, open and friendly",
+        "goth" => "Low-key, wry and moody",
+        _ => "",
+    };
+    let style = if persona.is_empty() {
         style.to_string()
+    } else {
+        format!("{persona}; {style}.")
     };
     Ok(speech_body(&config, text, &style))
 }
@@ -1468,6 +1494,58 @@ mod tests {
             target.accept().unwrap_err().kind(),
             std::io::ErrorKind::WouldBlock
         );
+    }
+    #[test]
+    fn every_companion_has_its_own_cloud_voice_and_every_emotion_its_own_direction() {
+        let characters = [
+            "luna", "haru", "mochi", "miku", "kitsune", "stella", "teto", "neru", "snow", "silver",
+            "azure", "goth",
+        ];
+        let voice = |c: &str| {
+            let body = character_speech_body(&config(), "Hi", "idle", c).unwrap();
+            let voices = &body["generationConfig"]["speechConfig"]["voiceConfig"];
+            voices["voice"]
+                .as_str()
+                .or(voices["prebuiltVoiceConfig"]["voiceName"].as_str())
+                .unwrap()
+                .to_string()
+        };
+        let mut used = std::collections::HashSet::new();
+        for c in characters {
+            assert!(
+                used.insert(voice(c)),
+                "{c} shares its voice with another companion"
+            );
+        }
+        let direction = |e: &str| {
+            character_speech_body(&config(), "Hi", e, "unknown")
+                .unwrap()
+                .to_string()
+        };
+        let plain = direction("idle");
+        for e in [
+            "angry",
+            "sad",
+            "crying",
+            "happy",
+            "celebrating",
+            "excited",
+            "surprised",
+            "curious",
+            "thinking",
+            "confused",
+            "concerned",
+            "shy",
+            "love",
+            "teasing",
+            "joking",
+            "wink",
+            "proud",
+            "determined",
+            "sleeping",
+        ] {
+            assert_ne!(direction(e), plain, "{e} has no delivery direction");
+        }
     }
     #[test]
     fn modern_tts_keeps_style_out_of_transcript_and_preserves_wav() {

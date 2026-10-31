@@ -179,6 +179,12 @@ Tips: if it is too fast, lower `speed` (0.80–0.88 is a good range). If a mood 
 2. Add a line for it in `embedded_pack()` in `apps/desktop/src-tauri/src/main.rs`.
 3. Rebuild the app. Characters without a local pack can use Gemini, or the explicitly selected macOS system voice.
 
+All twelve companions already have a pack, and each has its own Gemini voice (`character_speech_body` in `crates/gemini-client/src/lib.rs`).
+
+### Emotions beyond the eight moods
+
+A pack defines eight moods (happy, celebrating, surprised, curious, confused, concerned, sad, angry). Replies use more emotions, and each borrows the closest mood: excited → celebrating; love, teasing, joking, wink, proud → happy; shy → concerned; crying, sleeping → sad; thinking → curious (`voiceMood` in `packages/shared-schemas/voice-style.ts`). Gemini speech gets a direction for every emotion plus a short personality line per character. None of this was judged by ear yet; edit the table if a mapping sounds wrong.
+
 ### How the blends work (for developers)
 
 `voices.bin` holds 54 voices, each 510 × 256 float32 style vectors. The app averages the vectors you list
