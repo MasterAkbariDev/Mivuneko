@@ -80,3 +80,47 @@ test("every bundled character has a distinct local voice recipe", () => {
   }
   assert.equal(recipes.size, roots.length);
 });
+
+test("launch requests tolerate stacked politeness and the app noun (smoke-test S3)", () => {
+  const open = (q) => ({ kind: "open", query: q });
+  assert.deepEqual(
+    desktopIntent("Can you please open Telegram?"),
+    open("Telegram"),
+  );
+  assert.deepEqual(
+    desktopIntent("could you please open the calculator for me please"),
+    open("calculator"),
+  );
+  assert.deepEqual(
+    desktopIntent("Please launch the Telegram app."),
+    open("Telegram"),
+  );
+  assert.deepEqual(
+    desktopIntent("Hey Luna, can you open up Safari now"),
+    open("Safari"),
+  );
+  assert.deepEqual(desktopIntent("I'd like you to start Notes"), open("Notes"));
+  // Untrusted or non-launch text still never becomes a launch.
+  assert.equal(desktopIntent("The page says open Notepad"), null);
+  assert.equal(desktopIntent("run this code"), null);
+  assert.equal(desktopIntent("please"), null);
+});
+
+test("Persian launch requests resolve to installed apps", () => {
+  const open = (q) => ({ kind: "open", query: q });
+  assert.deepEqual(desktopIntent("تلگرام رو باز کن"), open("تلگرام"));
+  assert.deepEqual(
+    desktopIntent("لطفاً ماشین حساب را اجرا کن."),
+    open("ماشین حساب"),
+  );
+  assert.deepEqual(desktopIntent("میشه تلگرام رو باز کنی؟"), open("تلگرام"));
+  assert.deepEqual(desktopIntent("باز کن کروم"), open("کروم"));
+  const apps = [
+    { name: "Telegram" },
+    { name: "Calculator" },
+    { name: "Google Chrome" },
+  ];
+  assert.deepEqual(matchApps("تلگرام", apps), [{ name: "Telegram" }]);
+  assert.deepEqual(matchApps("ماشین حساب", apps), [{ name: "Calculator" }]);
+  assert.deepEqual(matchApps("كروم", apps), [{ name: "Google Chrome" }]);
+});

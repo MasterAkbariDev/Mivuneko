@@ -27,15 +27,24 @@ export type DesktopIntent =
   | { kind: "screen" }
   | { kind: "open"; query: string };
 export function desktopIntent(input: string): DesktopIntent | null {
-  const text = input
+  let text = input
     .trim()
-    .replace(
-      /^(?:(?:hey|hi)[, ]+(?:luna|haru|mivuneko)[, ]+)?(?:(?:please|can you|could you|would you)\s+)?/i,
-      "",
-    )
-    .replace(/[.!?]+$/, "")
-    .replace(/\s+please$/i, "")
+    .replace(/^(?:(?:hey|hi)[, ]+(?:luna|haru|mivuneko)[, ]+)/i, "")
+    .replace(/[.!?؟]+$/, "")
     .trim();
+  // Polite wrappers stack ("can you please …", "… for me please"); strip them all.
+  for (let previous = ""; previous !== text;) {
+    previous = text;
+    text = text
+      .replace(
+        /^(?:please|kindly|can you|could you|would you|will you|go ahead and|i(?:'d| would) like you to|i want you to)[, ]+/i,
+        "",
+      )
+      .replace(/[, ]+(?:please|for me|now)$/i, "")
+      .trim();
+  }
+  const persian = persianOpen(text);
+  if (persian) return { kind: "open", query: persian };
   const emotion =
     /^(?:(?:show|look|act|be|feel|make (?:yourself|a))\s+)?(?:an?\s+)?(cry(?:ing)?|sleepy|sleeping|happy|sad|angry|surprised|shy|excited|confused|curious|thinking|love(?: me)?|loving|wink|proud|determined|dance|dancing|teasing|joking)(?:\s+(?:face|expression|mood|for me|please|now))?$/i.exec(
       text,
@@ -94,9 +103,14 @@ export function desktopIntent(input: string): DesktopIntent | null {
     )
   )
     return { kind: "locate" };
-  const open = /^(?:open|launch|start)\s+(.{1,200})$/i.exec(text);
-  if (open)
-    return { kind: "open", query: open[1].replace(/\s+please$/i, "").trim() };
+  const open = /^(?:open|launch|start)(?:\s+up)?\s+(.{1,200})$/i.exec(text);
+  if (open) {
+    const query = open[1]
+      .replace(/^(?:the|my)\s+/i, "")
+      .replace(/\s+(?:app|application|program)$/i, "")
+      .trim();
+    if (query) return { kind: "open", query };
+  }
   if (/^(?:sit(?: down| here| there)?|take a seat|settle down)$/i.test(text))
     return { kind: "sit" };
   if (
@@ -187,6 +201,8 @@ export function matchApps<T extends { name: string }>(
     s
       .toLowerCase()
       .replace(/\.exe$/i, "")
+      .replace(/ي/g, "ی")
+      .replace(/ك/g, "ک")
       .replace(/[^\p{L}\p{N}]/gu, "");
   const aliases: Record<string, string> = {
     chrome: "googlechrome",
@@ -195,6 +211,12 @@ export function matchApps<T extends { name: string }>(
     edge: "microsoftedge",
     telegramdesktop: "telegram",
     calc: "calculator",
+    تلگرام: "telegram",
+    ماشینحساب: "calculator",
+    کروم: "googlechrome",
+    سافاری: "safari",
+    یادداشت: "notes",
+    نوتپد: "notepad",
   };
   const q = normalize(query),
     key = aliases[q] ?? q;
@@ -206,4 +228,13 @@ export function matchApps<T extends { name: string }>(
   return key.length >= 3
     ? apps.filter((a) => normalize(a.name).includes(key))
     : [];
+}
+
+// "تلگرام رو باز کن", "لطفاً ماشین حساب را اجرا کن", "میشه تلگرام رو باز کنی؟", "باز کن تلگرام".
+function persianOpen(text: string): string | null {
+  const t = text.replace(/^(?:لطفا|لطفاً)\s+/, "").replace(/^میشه\s+/, "");
+  const object =
+    /^(.{1,100}?)\s+(?:رو|را)\s+(?:باز|اجرا)\s+(?:کن|کنی|بکن)$/.exec(t);
+  const verb = /^(?:باز|اجرا)\s+کن\s+(.{1,100})$/.exec(t);
+  return (object?.[1] ?? verb?.[1])?.trim() || null;
 }

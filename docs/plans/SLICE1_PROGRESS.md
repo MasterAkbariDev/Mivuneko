@@ -27,7 +27,7 @@ Owner priorities, in order:
 | Early speech: streaming `speakable`, streaming playback in `useVoice`, no failover after audio starts, stop on app-launch replies; flag `earlySpeech` | done (stage 3) |
 | Mic: restart open mic after each submitted phrase (smoke-test S1); "thinking" during final transcription (S2) | done (stage 4) |
 | Cancellation: separate speech and transcription cancel counters (review D2) | done (stage 4) |
-| One chat path: remove dead `InlineChat.tsx`; more tolerant launch phrasing, EN + FA (smoke-test S3) | pending |
+| One chat path: remove dead `InlineChat.tsx`; more tolerant launch phrasing, EN + FA (smoke-test S3) | done (stage 5) |
 | After-measurements, full suite, CI, review | pending |
 
 ## Baseline (before Slice 1)
