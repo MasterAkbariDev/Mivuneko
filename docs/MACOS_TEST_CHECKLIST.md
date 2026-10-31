@@ -12,5 +12,14 @@ Minimum configured macOS version: 12. Record `sw_vers`, `uname -m`, WebKit/syste
 
 Distribution gate: sign/notarize before public release. Transparency uses a private API feature incompatible with Mac App Store submission. A licensed production character rig and real hardware checks are still required before calling this production-ready.
 
+## v0.3 Local voice (open mic, engines, Luna's voice)
+Setup: `npm run setup:voice` and `npm run setup:sherpa` (see docs/VOICE.md); both need network and about 1.4 GB. Models and the `luna-tts` worker live in git-ignored `.local/`, so repeat setup on each machine.
+- Open mic: the mic button shows listening, hearing, understanding and thinking. Speak a short phrase and a long one with a pause; neither is clipped or runs on for seconds. Say "thanks" alone; it must reach chat. Silence or a keyboard tap must not send anything.
+- Engines (Settings → Speech recognition): each installed engine can be selected and tested with the Start/Stop panel; uninstalled ones show their install command. Parakeet falls back to Whisper if its server is missing or stopped. Check RAM after switching (Parakeet server about 1 GB, Kokoro worker about 0.6 GB).
+- Speak over Luna: she stops and your phrase is heard. Cut her off mid-reply, then ask again; the next answer should start without a long wait.
+- Luna's voice: moods preview in Settings → Voice; phrases have pauses, "OK" is read as "okay", code in a reply is summarised as "I put the code in the chat." The first phrase after launch is slow while the model loads.
+- Chat: Markdown renders (lists, code blocks, links as plain text, no raw HTML). Scroll wheel over the pet resizes it between 50% and 180% and survives restart; wheel over the speech bubble does not resize.
+- Run on Apple Silicon too: all timings in docs/VOICE.md were measured on one throttled Intel Mac.
+
 ## v0.3 Gemini / inline pet
 Verify Gemini chat + microphone transcription + speech through a configured proxy and multiple keys. Check microphone permissions in the packaged app, actual speaker playback, Stop during each stage and no direct fallback when the proxy is unavailable. Verify pet double-click opens Conversations, right-click opens Settings, and dragging works on Retina/multiple monitors. Gemini voice needs no whisper.cpp installation; local voice is a separate selectable provider. Validate opt-in spoken check-ins against do-not-disturb and quiet hours.
