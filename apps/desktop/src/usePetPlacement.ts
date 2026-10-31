@@ -195,11 +195,14 @@ export function usePetPlacement(options: Options) {
         }
         if (now - refresh > 800 || force.current) {
           const { availableMonitors } = await import("@tauri-apps/api/window");
-          all = await availableMonitors();
+          // Sleeping, locked or reconfiguring displays report none: keep the last list.
+          const fresh = await availableMonitors();
+          if (fresh.length) all = fresh;
           position = await w.outerPosition();
           size = await w.outerSize();
           refresh = now;
         }
+        if (!all.length) return;
         await fit();
         viewport();
         if (wasDragging) {
@@ -438,7 +441,7 @@ export function usePetPlacement(options: Options) {
         relocate: false,
       });
       if (disposed) return;
-      await fit(true);
+      if (all.length) await fit(true);
 
       if (disposed) return;
       await invoke("show_pet");
