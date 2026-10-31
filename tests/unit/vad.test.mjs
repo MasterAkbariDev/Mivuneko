@@ -128,3 +128,19 @@ test("manual endpointing never sends on silence", () => {
   for (const f of frames(900, 0.002, 0.2)) vad.push(f);
   for (const f of frames(15000, 0.002)) assert.notEqual(vad.push(f), "end");
 });
+test("a floor learned earlier lets speech be heard right after a restart", () => {
+  const first = createVad({ sampleRate: rate });
+  for (const f of frames(1500, 0.004)) first.push(f);
+  assert.ok(first.floor > 0 && first.floor < 0.02);
+  const states = [],
+    restarted = createVad({ sampleRate: rate, initialFloor: first.floor });
+  for (const f of frames(600, 0.004, 0.2)) states.push(restarted.push(f));
+  assert.ok(
+    states.includes("speech"),
+    "speech in the first 600 ms is not lost",
+  );
+  const fresh = createVad({ sampleRate: rate }),
+    lost = [];
+  for (const f of frames(600, 0.004, 0.2)) lost.push(fresh.push(f));
+  assert.ok(!lost.includes("speech"), "a cold start still calibrates first");
+});

@@ -68,7 +68,8 @@ Microphone options (same panel):
 - **Microphone sensitivity**: Low / Normal / High. How loud you must be relative to the room.
 - **End-of-speech pause**: 1.5–10 seconds of quiet before a phrase is sent, default 3.5 seconds. Older short-pause preferences migrate once to the new default.
 - **Send my voice message**: choose automatic pause detection or **Only when I press Done speaking** for unlimited thinking pauses within a two-minute recording. **Done speaking** also works in automatic mode. The old 20-second automatic submission is removed. At two minutes, open mic stops and places the transcript in the composer as a draft instead of sending it mid-sentence.
-- **Interrupt Luna by speaking**: keep listening while she talks; stricter threshold so her own voice is not mistaken for you.
+- **Reply quickly after a finished sentence** (off by default): after 0.7 s of quiet the phrase is transcribed. If the text reads as finished (final punctuation, or the last word is not a connective like "and", "to", "و", "که") it is sent at once. Otherwise the phrase is held, shown as a draft, and joined with whatever you say next; if nothing follows, it is sent once the full end-of-speech pause has passed. The text decides, so a pause after a complete-sounding sentence can still cut you off. Has no effect in manual mode or when the end-of-speech pause is 0.7 s or less.
+- **Interrupt Luna by speaking**: keep listening while she talks; stricter threshold so her own voice is not mistaken for you. You must speak over her for 0.4 s before she stops; shorter bursts (a cough, a click) are ignored, and a transcript that mostly repeats her own reply is dropped as an echo.
 - **Use conversation context**: gives Whisper her last reply and the names Mivuneko and Luna (Parakeet ignores it).
 
 ### Config files

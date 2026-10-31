@@ -16,6 +16,8 @@ export interface Vad {
   strict: boolean;
   // Latest frame level and the current speech threshold, for a UI meter.
   readonly meter: { level: number; threshold: number };
+  // The learned noise floor, to start the next detector without recalibrating.
+  readonly floor: number;
 }
 const MIN_END = 0.004,
   MAX_FLOOR = 0.05;
@@ -32,22 +34,25 @@ export function createVad({
   minSpeechMs = 150,
   endSilenceMs = 600,
   sensitivity = "normal",
+  initialFloor,
 }: {
   sampleRate: number;
   preRollMs?: number;
   minSpeechMs?: number;
   endSilenceMs?: number;
   sensitivity?: Sensitivity;
+  // A floor learned earlier in the same room; skips the start-up calibration.
+  initialFloor?: number;
 }): Vad {
   const perMs = sampleRate / 1000,
     minSpeech = minSpeechMs * perMs,
     endSilence = endSilenceMs * perMs,
     keep = (preRollMs + minSpeechMs) * perMs;
-  let floor = 0.003,
+  let floor = initialFloor ?? 0.003,
     speaking = false,
     voicedRun = 0,
     quietRun = 0,
-    heard = 0,
+    heard = initialFloor === undefined ? 0 : 600 * perMs,
     speechLevel = 0,
     ring: Float32Array[] = [],
     ringSize = 0;
@@ -55,6 +60,9 @@ export function createVad({
   const meter = { level: 0, threshold: minSpeechLevel };
   return {
     meter,
+    get floor() {
+      return floor;
+    },
     strict: false,
     push(frame) {
       const rms = level(frame),

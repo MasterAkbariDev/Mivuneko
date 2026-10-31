@@ -7,7 +7,9 @@ import {
 import { createVad, type Vad } from "../../../packages/shared-schemas/vad.ts";
 import {
   BARGE_IN_MS,
+  QUICK_SILENCE_MS,
   echoOfSpoken,
+  looksFinished,
 } from "../../../packages/shared-schemas/turn.ts";
 import { getSpeechContext, getSpokenText } from "./speechContext";
 import { usePreferences } from "./preferences";
@@ -47,8 +49,26 @@ export function useOpenMic(
   const [working, setWorking] = useState(false);
   const [hearing, setHearing] = useState(false);
   const [restart, setRestart] = useState(0);
+  // Quick replies: an utterance that ended mid-thought waits here for more speech. It
+  // outlives the capture effect, which restarts after every pause.
+  const floorMemory = useRef<number | undefined>(undefined);
+  const carry = useRef<{
+    frames: Float32Array[];
+    size: number;
+    rate: number;
+    text: string;
+    at: number;
+    wait: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!enabled || paused) carry.current = null;
+  }, [enabled, paused]);
   useEffect(() => {
     if (!enabled || paused) return;
+    const quick =
+      prefs.current.quickReply &&
+      prefs.current.turnTaking === "automatic" &&
+      prefs.current.endPauseMs > QUICK_SILENCE_MS;
     let stopped = false,
       finishing = false,
       transcribing = false;
@@ -112,6 +132,7 @@ export function useOpenMic(
         size = total,
         // Speech over the character that never lasted long enough to interrupt her.
         blip = overCharacter && !interrupted;
+      floorMemory.current = vad?.floor;
       cleanup();
       if (blip) {
         callbacks.current.onPartial("");
@@ -136,6 +157,17 @@ export function useOpenMic(
             callbacks.current.onError(
               "Recording limit reached. Your words are saved in the draft; review and send when ready.",
             );
+          } else if (final && quick && !looksFinished(final)) {
+            carry.current = {
+              frames,
+              size,
+              rate,
+              text: final,
+              at: performance.now(),
+              wait: prefs.current.endPauseMs - QUICK_SILENCE_MS,
+            };
+            callbacks.current.onPartial(final);
+            setRestart((n) => n + 1);
           } else if (final) {
             callbacks.current.onFinal(final);
             // Keep listening for the next phrase. Without this the mic stayed off after
@@ -169,10 +201,15 @@ export function useOpenMic(
         vad = createVad({
           sampleRate: context.sampleRate,
           sensitivity: prefs.current.micSensitivity,
+          // Same mic and room as the last phrase: do not lose the first words to a
+          // fresh calibration after a restart.
+          initialFloor: floorMemory.current,
           endSilenceMs:
             prefs.current.turnTaking === "manual"
               ? Infinity
-              : prefs.current.endPauseMs,
+              : quick
+                ? QUICK_SILENCE_MS
+                : prefs.current.endPauseMs,
         });
         finishCurrent.current = () => {
           if (started) finish();
@@ -181,9 +218,17 @@ export function useOpenMic(
         muted.gain.value = 0;
         const onFrame = (frame: Float32Array) => {
           if (stopped || finishing || !context) return;
+          const now = performance.now();
+          // No more speech arrived after an unfinished sentence: send what was said.
+          const waiting = carry.current;
+          if (waiting && !started && now - waiting.at >= waiting.wait) {
+            carry.current = null;
+            callbacks.current.onPartial("");
+            callbacks.current.onFinal(waiting.text);
+            return;
+          }
           // With interrupting off, her own speech is not listened to at all.
           if (talking.current && !started && !prefs.current.bargeIn) return;
-          const now = performance.now();
           vad!.strict = talking.current && !started;
           const state = vad!.push(frame);
           micMeter.level = Math.min(
@@ -196,6 +241,15 @@ export function useOpenMic(
             setHearing(true);
             lastSnapshot = now;
             overCharacter = talking.current;
+            // Speech resumed after an unfinished sentence: it is the same utterance.
+            if (carry.current) {
+              const earlier = carry.current;
+              carry.current = null;
+              if (earlier.rate === context.sampleRate) {
+                chunks = earlier.frames.slice();
+                total = earlier.size;
+              } else callbacks.current.onFinal(earlier.text);
+            }
             // Prepend the pre-roll so the first word is not clipped.
             for (const early of vad!.takePreRoll()) {
               chunks.push(early);
@@ -274,6 +328,7 @@ export function useOpenMic(
     restart,
     preferences.micSensitivity,
     preferences.endPauseMs,
+    preferences.quickReply,
     preferences.turnTaking,
     preferences.microphoneId,
     preferences.echoCancellation,

@@ -108,6 +108,8 @@ export interface Preferences {
   turnTaking: "automatic" | "manual";
   turnTakingVersion: 2;
   bargeIn: boolean;
+  /** Send after a short pause when the sentence reads as finished (off: wait endPauseMs). */
+  quickReply: boolean;
   /** Gemini/Groq reply format: tagged plain text (Slice 1) or the legacy JSON object. */
   replyFormat: "tagged" | "json";
   /** Speak each sentence as soon as it streams in, instead of after the full reply. */
@@ -177,6 +179,7 @@ export const defaults: Preferences = {
   turnTaking: "automatic",
   turnTakingVersion: 2,
   bargeIn: true,
+  quickReply: false,
   replyFormat: "tagged",
   earlySpeech: true,
   sttContext: true,
@@ -368,6 +371,7 @@ export function parsePreferences(raw: unknown): Preferences {
     turnTaking: p.turnTaking === "manual" ? "manual" : "automatic",
     turnTakingVersion: 2,
     bargeIn: p.bargeIn !== false,
+    quickReply: p.quickReply === true,
     replyFormat: p.replyFormat === "json" ? "json" : "tagged",
     earlySpeech: p.earlySpeech !== false,
     sttContext: p.sttContext !== false,

@@ -1192,3 +1192,117 @@ test("open mic keeps listening across consecutive turns without being toggled", 
     page.getByRole("log").locator(".message.user:not([aria-live])"),
   ).toHaveCount(2);
 });
+
+async function quickMic(page: any, answers: string[]) {
+  await fakeNative(page, true);
+  await page.addInitScript((said: string[]) => {
+    const w = window as any;
+    let now = 0,
+      calls = 0;
+    w.__processors = 0;
+    Object.defineProperty(performance, "now", { value: () => now });
+    // Silence for `quiet` frames, then speech for `loud` frames, then silence again.
+    w.__say = (quiet: number, loud: number, after: number) => {
+      const frame = (value: number) => {
+        now += 256;
+        w.__processor?.onaudioprocess?.({
+          inputBuffer: {
+            getChannelData: () => new Float32Array(4096).fill(value),
+          },
+        });
+      };
+      for (let i = 0; i < quiet; i++) frame(0);
+      for (let i = 0; i < loud; i++) frame(0.1);
+      for (let i = 0; i < after; i++) frame(0);
+    };
+    const track = { stop: () => {} };
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: async () => ({ getTracks: () => [track] }) },
+    });
+    w.AudioContext = class {
+      sampleRate = 16000;
+      destination = {};
+      resume() {
+        return Promise.resolve();
+      }
+      close() {
+        return Promise.resolve();
+      }
+      createMediaStreamSource() {
+        return { connect() {} };
+      }
+      createScriptProcessor() {
+        w.__processors++;
+        return (w.__processor = {
+          connect() {},
+          disconnect() {},
+          onaudioprocess: null,
+        });
+      }
+      createGain() {
+        return { gain: { value: 0 }, connect() {} };
+      }
+      decodeAudioData() {
+        return Promise.reject(Error("test has no playback"));
+      }
+    };
+    const previous = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) =>
+      command === "transcribe_audio"
+        ? said[Math.min(calls++, said.length - 1)]
+        : previous(command, args);
+  }, answers);
+  await chat(page);
+  await settings(page);
+  await page.getByLabel("Voice mode").selectOption("open-mic");
+  await page.getByLabel("Reply quickly after a finished sentence").check();
+  await page
+    .getByRole("button", { name: "Conversations", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Start open mic" }).click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__processors))
+    .toBe(1);
+}
+const userMessages = (page: any) =>
+  page.getByRole("log").locator(".message.user:not([aria-live])");
+
+test("quick reply sends a finished sentence after a short pause", async ({
+  page,
+}) => {
+  await quickMic(page, ["Tell me a joke."]);
+  // One second of quiet is far below the 3.5 s default wait.
+  await page.evaluate(() => (window as any).__say(4, 8, 4));
+  await expect(userMessages(page)).toHaveCount(1);
+  await expect(page.getByRole("log")).toContainText("Tell me a joke.");
+});
+
+test("quick reply keeps waiting when the sentence is unfinished and joins what follows", async ({
+  page,
+}) => {
+  await quickMic(page, ["I want to", "I want to open Safari."]);
+  await page.evaluate(() => (window as any).__say(4, 8, 4));
+  // Capture restarts, holding "I want to" instead of sending it.
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__processors))
+    .toBe(2);
+  await expect(userMessages(page)).toHaveCount(0);
+  await page.evaluate(() => (window as any).__say(0, 8, 4));
+  await expect(page.getByRole("log")).toContainText("I want to open Safari.");
+  await expect(userMessages(page)).toHaveCount(1);
+});
+
+test("quick reply sends an unfinished sentence once the full wait has passed", async ({
+  page,
+}) => {
+  await quickMic(page, ["I want to"]);
+  await page.evaluate(() => (window as any).__say(4, 8, 4));
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__processors))
+    .toBe(2);
+  await expect(userMessages(page)).toHaveCount(0);
+  // 3.5 s total silence, minus the 0.7 s already waited, and then some.
+  await page.evaluate(() => (window as any).__say(0, 0, 14));
+  await expect(page.getByRole("log")).toContainText("I want to");
+  await expect(userMessages(page)).toHaveCount(1);
+});

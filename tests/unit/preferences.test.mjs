@@ -83,6 +83,7 @@ test("speech recognition options are validated and bounded", () => {
   assert.equal(defaults.micSensitivity, "normal");
   assert.equal(defaults.endPauseMs, 3500);
   assert.equal(defaults.bargeIn, true);
+  assert.equal(defaults.quickReply, false);
   assert.equal(defaults.sttContext, true);
   assert.equal(
     parsePreferences({ sttEngine: "parakeet:tdt-0.6b-v2" }).sttEngine,
@@ -131,4 +132,6 @@ test("speech recognition options are validated and bounded", () => {
     "system",
   );
   assert.equal(parsePreferences({ bargeIn: false }).bargeIn, false);
+  assert.equal(parsePreferences({ quickReply: true }).quickReply, true);
+  assert.equal(parsePreferences({ quickReply: "yes" }).quickReply, false);
 });

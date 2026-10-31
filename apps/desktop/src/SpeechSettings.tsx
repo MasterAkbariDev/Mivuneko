@@ -296,6 +296,22 @@ export function SpeechSettings() {
           limited to two minutes; at that limit, text is kept as a draft.
         </p>
         <label className="setting">
+          Reply quickly after a finished sentence
+          <input
+            type="checkbox"
+            checked={p.quickReply}
+            onChange={(e) =>
+              updatePreferences({ quickReply: e.target.checked })
+            }
+          />
+        </label>
+        <p className="hint">
+          Sends after a short pause when what you said reads as complete, and
+          keeps waiting only when it ends mid-thought ("and…", "I want to…").
+          The text decides, so a pause after a finished-sounding sentence can
+          cut you off; leave this off if that bothers you.
+        </p>
+        <label className="setting">
           Interrupt your companion by speaking
           <input
             type="checkbox"
