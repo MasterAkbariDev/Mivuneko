@@ -452,14 +452,17 @@ export function Pet() {
       } else setAutomaticBody("sit");
     },
     onSupportLost: () => {
+      setError("");
       if (prefs.petMode === "auto") {
         setAutomaticBody("idle");
         cancelCompanionTask();
-      } else updatePreferences({ petMode: "stand" });
-      publishPet(
-        "idle",
-        "I'll stand here until there's a supported place to sit.",
-      );
+      } else {
+        updatePreferences({ petMode: "stand" });
+        publishPet(
+          "idle",
+          "I'll stay standing until there's a suitable place to sit.",
+        );
+      }
     },
     onError: setError,
   });

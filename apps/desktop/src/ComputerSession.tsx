@@ -58,14 +58,15 @@ export function ComputerSession({
         const desired = browserTask(initialTask);
         if (desired && !autoStarted.current) {
           autoStarted.current = true;
-          const found = v.windows.find(
-            (w: Target) =>
-              w.process ===
-              {
-                edge: "msedge.exe",
-                chrome: "chrome.exe",
-                firefox: "firefox.exe",
-              }[desired.browser],
+          const found = v.windows.find((w: Target) =>
+            desired.useDefault
+              ? ["msedge.exe", "chrome.exe", "firefox.exe"].includes(w.process)
+              : w.process ===
+                {
+                  edge: "msedge.exe",
+                  chrome: "chrome.exe",
+                  firefox: "firefox.exe",
+                }[desired.browser],
           );
           if (found) {
             setTarget(found.id);
@@ -155,12 +156,14 @@ export function ComputerSession({
       const found = list.windows.find(
         (w: Target) =>
           desired &&
-          w.process ===
-            {
-              edge: "msedge.exe",
-              chrome: "chrome.exe",
-              firefox: "firefox.exe",
-            }[desired.browser],
+          (desired.useDefault
+            ? ["msedge.exe", "chrome.exe", "firefox.exe"].includes(w.process)
+            : w.process ===
+              {
+                edge: "msedge.exe",
+                chrome: "chrome.exe",
+                firefox: "firefox.exe",
+              }[desired.browser]),
       );
       setWindows(list.windows);
       if (found) {
@@ -195,7 +198,9 @@ export function ComputerSession({
       const s = await call<{ sessionId: string }>("computer_start", {
         windowId: selectedTarget,
         workspace,
-        task,
+        task: browserTask(task)?.url
+          ? `Open a new browser tab and navigate to ${browserTask(task)!.url}. User request: ${task}. Keep existing tabs open. Verify the requested website has loaded.`
+          : task,
         model: p.ollamaModel,
       });
       if (ticket !== generation.current) {

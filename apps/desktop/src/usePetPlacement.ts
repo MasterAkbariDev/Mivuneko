@@ -318,10 +318,17 @@ export function usePetPlacement(options: Options) {
                 areaOf(monitor),
                 seatOffset(),
               );
-              if (!chosen)
-                throw Error(
-                  "There is no visible window edge or desktop icon with enough room to sit safely.",
+              if (!chosen) {
+                finished = taskAt;
+                o.onError("");
+                await status(
+                  taskAt,
+                  "failed",
+                  "I'll stay standing; there isn't a suitable place to sit here.",
                 );
+                o.onSupportLost();
+                return;
+              }
               support = chosen.surface;
               target = chosen.point;
               supportAt = now;

@@ -214,3 +214,32 @@ test("an Edge search starts an inline task without a separate mode or start butt
   expect(calls.some((v: any) => v.command === "ollama_chat")).toBe(false);
   expect(calls.some((v: any) => v.command === "computer_act")).toBe(false);
 });
+
+test("Wikipedia requests use an existing browser and carry the website URL", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page.evaluate(() => {
+    (window as any).__browserWindow = true;
+  });
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("open wikipedia page for me on my browser");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Computer task", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Click the visible test button", { exact: true }),
+  ).toBeVisible();
+  const calls = await page.evaluate(() => (window as any).__calls);
+  const task = calls.find((v: any) => v.command === "computer_start").args;
+  expect(task.windowId).toBe("qa-window");
+  expect(task.task).toContain("https://www.wikipedia.org/");
+  expect(task.task).toContain("Keep existing tabs open");
+  expect(
+    calls.some(
+      (v: any) => v.command === "request_launch" || v.command === "ollama_chat",
+    ),
+  ).toBe(false);
+});

@@ -66,3 +66,33 @@ test("character voice overrides are independent and bounded", () => {
   assert.equal(p.characterVoices.haru.speaker, "Serena");
   assert.equal(p.characterVoices.luna.speaker, "Vivian");
 });
+
+test("website navigation is never mistaken for opening an installed app", () => {
+  for (const text of [
+    "open wikipedia page for me on web",
+    "open wikipedia page for me on my browser",
+    "please open the Wikipedia website in my default browser",
+    "open wikipedia on web for me",
+  ]) {
+    const task = browserTask(text);
+    assert.equal(computerIntent(text), true, text);
+    assert.equal(task.url, "https://www.wikipedia.org/", text);
+    assert.equal(task.useDefault, true);
+  }
+  assert.equal(
+    browserTask("open example.org/docs").url,
+    "https://example.org/docs",
+  );
+  assert.equal(browserTask("open wikipedia in Chrome").browser, "chrome");
+  assert.equal(
+    browserTask("open some community website in my browser").query,
+    "some community",
+  );
+  for (const text of [
+    "open Notepad",
+    "go to the right",
+    "open javascript:alert(1)",
+    "open file:///secret.txt",
+  ])
+    assert.equal(browserTask(text), null, text);
+});
