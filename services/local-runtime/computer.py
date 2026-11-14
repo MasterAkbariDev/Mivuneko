@@ -37,12 +37,12 @@ def windows():
         except Exception: continue
     return {"windows": result[:80], "nonce": secrets.token_hex(32)}
 
-def target(handle):
+def target(handle, focus=True):
     from pywinauto import Desktop
     found = next((w for w in windows()["windows"] if w["id"] == str(handle)), None)
     if not found: raise ValueError("The selected window closed or is protected. Select another window.")
     w = Desktop(backend="uia").window(handle=int(handle)).wrapper_object()
-    w.set_focus()
+    if focus: w.set_focus()
     return w
 
 def element_id(e):
@@ -50,10 +50,10 @@ def element_id(e):
 
 def observe(req):
     from PIL import ImageGrab
-    w = target(req["window"])
+    w = target(req["window"], focus=not req.get("background", False))
     time.sleep(0.15)
     r = w.rectangle()
-    image = ImageGrab.grab(bbox=(r.left, r.top, r.right, r.bottom), all_screens=True)
+    image = ImageGrab.grab(window=w.handle)
     image.thumbnail((1280, 1000))
     output = io.BytesIO(); image.convert("RGB").save(output, format="JPEG", quality=80)
     items = []
@@ -66,7 +66,7 @@ def observe(req):
             if rect.width() <= 0 or rect.height() <= 0: continue
             items.append({"id": element_id(e), "role": info.control_type, "name": "Protected input" if protected else info.name[:260], "protected": protected, "enabled": e.is_enabled(), "bounds": [rect.left-r.left, rect.top-r.top, rect.right-r.left, rect.bottom-r.top]})
         except Exception: continue
-    return {"window": str(w.handle), "title": w.window_text()[:200], "width": r.width(), "height": r.height(), "imageWidth": image.width, "imageHeight": image.height, "image": base64.b64encode(output.getvalue()).decode(), "elements": items[:100], "windows":windows()["windows"], "observation": secrets.token_hex(16)}
+    return {"window": str(w.handle), "processId": w.process_id(), "title": w.window_text()[:200], "width": r.width(), "height": r.height(), "imageWidth": image.width, "imageHeight": image.height, "image": base64.b64encode(output.getvalue()).decode(), "elements": items[:100], "windows":windows()["windows"], "observation": secrets.token_hex(16)}
 
 def file_path(root, value):
     if not root: raise ValueError("This session has no folder access")
@@ -116,20 +116,22 @@ def file_action(req, action):
 def act(req):
     a = req["action"]
     kind = a["kind"]
+    background = req.get("background", False)
     if kind == "switch_window":
-        w=target(a["window"])
+        w=target(a["window"], focus=not background)
         return {"switched":str(w.handle)}
     if kind == "system_info":
         import psutil
         return {"cpuPercent":psutil.cpu_percent(interval=.2),"memory":dict(psutil.virtual_memory()._asdict()),"disks":[{"drive":p.mountpoint,"free":shutil.disk_usage(p.mountpoint).free,"total":shutil.disk_usage(p.mountpoint).total} for p in psutil.disk_partitions() if "fixed" in p.opts]}
     if kind in {"read_file", "write_file", "list_files", "move_file", "trash_file"}: return file_action(req, a)
-    w = target(req["window"])
+    w = target(req["window"], focus=not background)
     expected=req.get("expected")
     if expected:
+        if expected.get("processId") and w.process_id()!=expected["processId"]:raise ValueError("The window changed after observation. Observe it again before acting.")
         current=w.rectangle()
-        if current.width()!=expected.get("width") or current.height()!=expected.get("height") or w.window_text()[:200]!=expected.get("title"):
+        if not a.get("element") and (current.width()!=expected.get("width") or current.height()!=expected.get("height")):
             raise ValueError("The window changed after observation. Observe it again before acting.")
-    if kind == "focus": return {"focused": True}
+    if kind == "focus": return {"focused":not background, "background":background}
     if kind == "window":
         operation=a.get("operation")
         if operation == "maximize":w.maximize()
@@ -140,6 +142,7 @@ def act(req):
         return {"windowOperation":operation}
     if kind == "wait": time.sleep(min(3, max(.1, float(a.get("seconds", 1))))); return {"waited": True}
     r = w.rectangle()
+    element = None
     if a.get("element"):
         element = next((e for e in w.descendants()[:600] if element_id(e) == a["element"]), None)
         if element is None: raise ValueError("The UI element changed. Observe the window again.")
@@ -149,6 +152,34 @@ def act(req):
     else:
         x = round(float(a.get("x", 500))/1000*r.width()); y = round(float(a.get("y", 500))/1000*r.height())
     if not 0 <= x < r.width() or not 0 <= y < r.height(): raise ValueError("Input must stay inside the selected window")
+    if background:
+        try:
+            if kind == "click" and element is not None:
+                if element.element_info.control_type in {"Edit", "Document"}:
+                    return {"selected":a["element"],"background":True}
+                if element.element_info.control_type == "CheckBox":element.iface_toggle.Toggle()
+                else:element.iface_invoke.Invoke()
+            elif kind == "type" and element is not None:
+                text=a.get("text", "")
+                if len(text)>12000:raise ValueError("Type up to 12000 characters at a time")
+                if text.lower().lstrip().startswith(("javascript:","powershell:","ms-settings:","cmd.exe")):raise ValueError("System command and settings protocols are unavailable")
+                if element.handle and element.element_info.control_type == "Edit":
+                    # Native edit messages avoid providers that focus their window
+                    # as a side effect of UIA ValuePattern.SetValue.
+                    buffer=ctypes.create_unicode_buffer(text);result=ctypes.c_size_t()
+                    send=ctypes.windll.user32.SendMessageTimeoutW
+                    send.argtypes=[ctypes.c_void_p,ctypes.c_uint,ctypes.c_size_t,ctypes.c_void_p,ctypes.c_uint,ctypes.c_uint,ctypes.POINTER(ctypes.c_size_t)]
+                    if not send(ctypes.c_void_p(element.handle),0x000C,0,ctypes.cast(buffer,ctypes.c_void_p),2,2000,ctypes.byref(result)):raise RuntimeError("Edit control did not respond")
+                else:element.iface_value.SetValue(text)
+            elif kind == "scroll":
+                amount=float(a.get("amount",3))
+                (element or w).iface_scroll.Scroll(2,3 if amount>0 else 1)
+            else:
+                raise RuntimeError("No background control pattern")
+            return {"performed":kind,"background":True}
+        except ValueError:raise
+        except Exception:
+            raise ValueError("FOREGROUND_REQUIRED: This control needs visible mouse or keyboard interaction.")
     if kind in {"click", "double_click", "right_click"}:
         w.click_input(button="right" if kind == "right_click" else "left", coords=(x,y), double=kind == "double_click")
     elif kind == "drag":
@@ -166,6 +197,9 @@ def act(req):
         escaped="".join("{"+c+"}" if c in "+^%~{}()" else c for c in text)
         keyboard.send_keys(escaped, with_spaces=True, with_newlines=True, with_tabs=True, pause=.002)
     elif kind == "key":
+        from pywinauto.uia_defines import IUIA
+        focused=IUIA().iuia.GetFocusedElement()
+        if focused.CurrentIsPassword or focused.CurrentProcessId != w.process_id():raise ValueError("Focus moved or the input is protected; observe the window again")
         from pywinauto import keyboard
         parts=a.get("key", "").upper().split("+")
         if set(parts)=={"CTRL","ALT","DELETE"}:raise ValueError("Secure-desktop shortcuts require manual interaction")
@@ -188,6 +222,28 @@ def run(req):
     if sys.platform != "win32": raise ValueError("Computer control currently requires Windows")
     try: ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
     except Exception: pass
+    if req["op"] == "browser":
+        from urllib.parse import urlparse
+        url=req["url"];parsed=urlparse(url)
+        if parsed.scheme not in {"http","https"} or not parsed.hostname or parsed.username or parsed.password:raise ValueError("Invalid website address")
+        browser=req.get("browser","default")
+        if browser=="default":os.startfile(url)
+        else:
+            import winreg,subprocess
+            executable={"edge":"msedge.exe","chrome":"chrome.exe","firefox":"firefox.exe"}.get(browser)
+            if not executable:raise ValueError("Unsupported browser")
+            path=None
+            for hive in [winreg.HKEY_CURRENT_USER,winreg.HKEY_LOCAL_MACHINE]:
+                for view in [winreg.KEY_WOW64_64KEY,winreg.KEY_WOW64_32KEY]:
+                    try:
+                        with winreg.OpenKey(hive,r"Software\Microsoft\Windows\CurrentVersion\App Paths"+chr(92)+executable,0,winreg.KEY_READ|view) as key:path=winreg.QueryValue(key,None).strip('"')
+                    except OSError:continue
+                    if path:break
+                if path:break
+            if not path or not Path(path).is_file():raise ValueError("The requested browser is not installed")
+            startup=subprocess.STARTUPINFO();startup.dwFlags|=subprocess.STARTF_USESHOWWINDOW;startup.wShowWindow=4
+            subprocess.Popen([path,url],startupinfo=startup,creationflags=subprocess.CREATE_NO_WINDOW)
+        return {"opened":True,"url":url,"background":True}
     if req["op"] == "windows": return windows()
     if req["op"] == "surfaces":
         from pywinauto import Desktop

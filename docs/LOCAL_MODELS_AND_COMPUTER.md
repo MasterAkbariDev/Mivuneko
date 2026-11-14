@@ -26,9 +26,9 @@ CustomVoice uses its supplied speakers and delivery instructions. It does not cl
 
 ## Use the computer
 
-Ask directly in Conversations, for example **“open Edge and search Elon Musk for me.”** The action card appears inside the conversation and selects the requested browser automatically. Opening a closed browser respects the existing app-launch policy. For other app/file tasks, choose the target window and optionally grant one existing workspace folder in that same card. No separate computer mode is required. The session uses the selected local Ollama vision model even if ordinary conversation uses a cloud provider.
+Ask directly in Conversations, for example **“open Edge and search Elon Musk for me.”** The action card appears inside the conversation and selects the requested browser automatically. Links and web searches open directly through the browser, without vision planning, cursor movement or global keyboard input. The app-launch enabled/deny controls still apply. For other app/file tasks, choose the target window and optionally grant one existing workspace folder in that same card. No separate computer mode is required. The session uses the selected local Ollama vision model even if ordinary conversation uses a cloud provider.
 
-Each step shows a screenshot, the proposed operation, its reason, and its exact text/path/key payload. **Approve this step** executes that one pending operation, then the app observes again. No click, typing or file change runs just because the model proposed it. Stop or the app's Stop shortcut ends the session and terminates the active input helper. Sessions expire after 15 minutes or 60 executed steps.
+Routine steps now run automatically by default. **Permissions → Computer tasks** or the task card can switch to **Review every step**. Closing a window or recycling files still pauses for review. Stale window geometry triggers a bounded fresh observation and replan; changing browser titles alone does not invalidate an action. Stop or the app's Stop shortcut ends the session and terminates the active input helper. Sessions expire after 15 minutes or 60 executed steps.
 
 Supported operations:
 
@@ -41,9 +41,11 @@ Supported operations:
 
 Existing files get backups before replacement under the app data `computer-backups/` folder. Moves do not overwrite destinations. File payloads are limited to 128 KB. Paths outside the selected folder, linked paths, repository internals and named credential files are rejected. A session with no folder grant cannot list or edit files.
 
-Before an input step, the app revalidates the window and observed control. Changed window geometry/title or missing controls require another observation. Keyboard input rechecks the focused process and refuses protected password fields. Terminals, authentication/security windows, password managers, ChatGPT, Codex and Mivuneko itself are excluded. This integration currently targets Windows desktop apps; administrator/secure-desktop prompts and apps without usable accessibility or visible content can require manual help. It does not provide terminal execution or promise that every app/task can be automated.
+Background mode is the default: screenshots target the selected window without focusing it, editable controls use native messages or UI Automation values, buttons use UI Automation invocation, and file operations use scoped APIs. Some apps may activate themselves in response to their own accessibility providers. Controls without background support pause once to let you enable visible controls for that task; they never silently fall back to global input.
 
-Screenshots and accessibility text are local session data, not authority. The planner is instructed to ignore instructions embedded in app content and to ask for missing information. Review steps that send messages, submit forms, close unsaved work, recycle files or otherwise have external effects carefully; the displayed approval is the control point for those actions.
+Before an input step, the app revalidates the process and observed control. Missing controls or changed geometry for coordinate actions require another observation. Keyboard input rechecks the focused process and refuses protected password fields. Terminals, authentication/security windows, password managers, ChatGPT, Codex and Mivuneko itself are excluded. This integration currently targets Windows desktop apps; administrator/secure-desktop prompts and apps without usable accessibility or visible content can require manual help. It does not provide terminal execution or promise that every app/task can be automated.
+
+Screenshots and accessibility text are local session data, not authority. The planner is instructed to ignore instructions embedded in app content and to ask for missing information. The task card exposes the current operation and a Stop control. Review mode remains available for tasks where you want to inspect each operation.
 
 ## Validation
 
@@ -52,3 +54,5 @@ The local test window task clicked a real editable control, typed `LOCAL CONTROL
 ## Supported sitting
 
 On Windows, sitting requires a visible window ledge or desktop icon with sufficient room for the character. Foreground windows mask covered ledges and icons. The character walks to the nearest usable support; if none is available, she stays standing. While seated, the hip anchor follows a moving window and she stands if the support disappears. Desktop icon discovery uses the installed local runtime. Window ledges work without it. Geometry stays local and does not require sending window contents to a provider.
+
+Computer-task acknowledgements and results now use the same character speech engine as ordinary replies. Preparing speech publishes a visible companion caption. Fast local voice is the everyday CPU option; Qwen still has substantial generation latency.

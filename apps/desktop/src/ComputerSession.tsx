@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { usePreferences } from "./preferences";
+import { updatePreferences, usePreferences } from "./preferences";
 import { Icon } from "./Icon";
 import "./computer.css";
 import { browserTask } from "../../../packages/shared-schemas/computer-intent";
-import { broker } from "./broker";
-import { matchApps } from "../../../packages/shared-schemas/desktop-intent";
-import type { LaunchRequest } from "../../../packages/shared-schemas/index";
 interface Target {
   id: string;
   title: string;
@@ -22,11 +19,13 @@ export function ComputerSession({
   onClose,
   inline = false,
   onResult,
+  onProgress,
 }: {
   initialTask?: string;
   onClose: () => void;
   inline?: boolean;
   onResult?: (text: string) => void;
+  onProgress?: (text: string) => void;
 }) {
   const p = usePreferences(),
     [windows, setWindows] = useState<Target[]>([]),
@@ -39,9 +38,41 @@ export function ComputerSession({
     [error, setError] = useState(""),
     [log, setLog] = useState<string[]>([]),
     [done, setDone] = useState(false);
-  const [launch, setLaunch] = useState<LaunchRequest | null>(null),
-    [launchName, setLaunchName] = useState("");
   const autoStarted = useRef(false);
+  const settings = useRef(p);
+  settings.current = p;
+  const interactive = useRef(false);
+  const [needsVisible, setNeedsVisible] = useState(false);
+  const desiredBrowser = browserTask(task);
+  async function openBrowserTask() {
+    const desired = browserTask(task);
+    if (!desired) return;
+    const ticket = ++generation.current;
+    setBusy(true);
+    setError("");
+    setDone(false);
+    try {
+      const url =
+        desired.url ??
+        `https://www.google.com/search?q=${encodeURIComponent(desired.query)}`;
+      await call("computer_open_browser", {
+        url,
+        browser: desired.useDefault ? "default" : desired.browser,
+      });
+      if (ticket !== generation.current) return;
+      setSession("browser");
+      setDone(true);
+      onResult?.(
+        desired.url
+          ? "I've opened the page in your browser."
+          : `I've opened a browser search for ${desired.query}.`,
+      );
+    } catch (e) {
+      if (ticket === generation.current) setError(String(e));
+    } finally {
+      if (ticket === generation.current) setBusy(false);
+    }
+  }
   const generation = useRef(0),
     active = useRef("");
   async function call<T>(command: string, args: Record<string, unknown> = {}) {
@@ -50,57 +81,21 @@ export function ComputerSession({
   }
   useEffect(() => {
     let disposed = false;
-    void call<any>("computer_windows")
-      .then(async (v) => {
-        if (disposed) return;
-        setWindows(v.windows);
-        setTarget(v.windows[0]?.id ?? "");
-        const desired = browserTask(initialTask);
-        if (desired && !autoStarted.current) {
-          autoStarted.current = true;
-          const found = v.windows.find((w: Target) =>
-            desired.useDefault
-              ? ["msedge.exe", "chrome.exe", "firefox.exe"].includes(w.process)
-              : w.process ===
-                {
-                  edge: "msedge.exe",
-                  chrome: "chrome.exe",
-                  firefox: "firefox.exe",
-                }[desired.browser],
-          );
-          if (found) {
-            setTarget(found.id);
-            void start(found.id);
-          } else {
-            try {
-              const apps = await broker.listApps();
-              const matches = matchApps(desired.browser, apps);
-              const app =
-                matches.find(
-                  (a) =>
-                    a.name.toLowerCase() ===
-                    {
-                      edge: "microsoft edge",
-                      chrome: "google chrome",
-                      firefox: "mozilla firefox",
-                    }[desired.browser],
-                ) ?? matches[0];
-              if (!app) throw Error("The requested browser is not installed.");
-              const request = await broker.requestLaunch(app.id);
-              setLaunchName(app.name);
-              if (request.policy === "auto") {
-                await broker.resolveLaunch(request.id, true);
-                await afterLaunch();
-              } else if (request.policy === "deny")
-                throw Error("App launching is denied in Permissions.");
-              else setLaunch(request);
-            } catch (e) {
-              setError(String(e));
-            }
-          }
-        }
-      })
-      .catch((e) => setError(String(e)));
+    if (browserTask(initialTask)) {
+      void Promise.resolve().then(() => {
+        if (disposed || autoStarted.current) return;
+        autoStarted.current = true;
+        if (settings.current.computerApproval === "automatic")
+          void openBrowserTask();
+      });
+    } else
+      void call<any>("computer_windows")
+        .then(async (v) => {
+          if (disposed) return;
+          setWindows(v.windows);
+          setTarget(v.windows[0]?.id ?? "");
+        })
+        .catch((e) => setError(String(e)));
     const stop = () => {
       void end();
     };
@@ -118,74 +113,75 @@ export function ComputerSession({
     setSession("");
     setBusy(false);
     setProposal(null);
+    setNeedsVisible(false);
     await call("computer_stop").catch(() => {});
+  }
+  function stale(e: unknown) {
+    return /window changed|UI element changed|observe (?:it|the window|again)|step is stale|unobserved.*control/i.test(
+      String(e),
+    );
+  }
+  function reviewAction(action: Record<string, any>) {
+    return (
+      action.kind === "trash_file" ||
+      (action.kind === "window" && action.operation === "close")
+    );
   }
   async function next(id = session) {
     const ticket = ++generation.current;
     setBusy(true);
     setError("");
+    setNeedsVisible(false);
+    let retries = 0;
     try {
-      const plan = await call<Proposal>("computer_next", { sessionId: id });
-      if (ticket === generation.current) {
+      for (let step = 0; step < 60 && ticket === generation.current; step++) {
+        const plan = await call<Proposal>("computer_next", { sessionId: id });
+        if (ticket !== generation.current) return;
         setProposal(plan);
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        await getCurrentWindow().show();
-        await getCurrentWindow().setFocus();
         if (["finish", "ask_user"].includes(plan.action.kind)) {
-          setDone(true);
-          setLog((old) => [...old, plan.action.reason]);
           await call("computer_act", {
             sessionId: id,
             revision: plan.revision,
+            interactive: interactive.current,
           });
+          if (ticket !== generation.current) return;
+          setDone(true);
+          setLog((old) => [...old, plan.action.reason]);
           await call("computer_stop");
           active.current = "";
-          onResult?.(plan.action.reason);
+          if (ticket === generation.current) onResult?.(plan.action.reason);
+          return;
+        }
+        if (
+          settings.current.computerApproval === "review" ||
+          reviewAction(plan.action)
+        )
+          return;
+        try {
+          await call("computer_act", {
+            sessionId: id,
+            revision: plan.revision,
+            interactive: interactive.current,
+          });
+          if (ticket !== generation.current) return;
+          setLog((old) => [...old, plan.action.reason]);
+          setProposal(null);
+          retries = 0;
+        } catch (e) {
+          if (ticket !== generation.current) return;
+          setProposal(null);
+          if (stale(e) && retries++ < 3) continue;
+          if (String(e).includes("FOREGROUND_REQUIRED")) {
+            setNeedsVisible(true);
+            return;
+          }
+          throw e;
         }
       }
     } catch (e) {
       if (ticket === generation.current) setError(String(e));
     } finally {
       if (ticket === generation.current) setBusy(false);
-    }
-  }
-  async function afterLaunch() {
-    for (let i = 0; i < 4; i++) {
-      const list = await call<any>("computer_windows");
-      const desired = browserTask(initialTask);
-      const found = list.windows.find(
-        (w: Target) =>
-          desired &&
-          (desired.useDefault
-            ? ["msedge.exe", "chrome.exe", "firefox.exe"].includes(w.process)
-            : w.process ===
-              {
-                edge: "msedge.exe",
-                chrome: "chrome.exe",
-                firefox: "firefox.exe",
-              }[desired.browser]),
-      );
-      setWindows(list.windows);
-      if (found) {
-        setTarget(found.id);
-        await start(found.id);
-        return;
-      }
-      await new Promise((r) => setTimeout(r, 750));
-    }
-    setError("The browser is still opening. Refresh its window and continue.");
-  }
-  async function openRequested() {
-    if (!launch) return;
-    setBusy(true);
-    try {
-      await broker.resolveLaunch(launch.id, true);
-      setLaunch(null);
-      await afterLaunch();
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy(false);
     }
   }
   async function start(selectedTarget = target) {
@@ -202,11 +198,14 @@ export function ComputerSession({
           ? `Open a new browser tab and navigate to ${browserTask(task)!.url}. User request: ${task}. Keep existing tabs open. Verify the requested website has loaded.`
           : task,
         model: p.ollamaModel,
+        background: true,
       });
       if (ticket !== generation.current) {
         await call("computer_stop");
         return;
       }
+      interactive.current = false;
+      onProgress?.("I’m working on that for you.");
       active.current = s.sessionId;
       setSession(s.sessionId);
       await next(s.sessionId);
@@ -223,6 +222,7 @@ export function ComputerSession({
       const result = await call<any>("computer_act", {
         sessionId: session,
         revision: proposal.revision,
+        interactive: interactive.current,
       });
       if (ticket !== generation.current) return;
       setLog((old) => [
@@ -232,9 +232,18 @@ export function ComputerSession({
       setProposal(null);
       await next();
     } catch (e) {
+      if (ticket !== generation.current) return;
       setProposal(null);
-      setError(String(e));
       setBusy(false);
+      if (stale(e)) {
+        await next();
+        return;
+      }
+      if (String(e).includes("FOREGROUND_REQUIRED")) {
+        setNeedsVisible(true);
+        return;
+      }
+      setError(String(e));
     }
   }
   return (
@@ -266,62 +275,80 @@ export function ComputerSession({
             <Icon name="close" />
           </button>
         </header>
+        <label className="setting">
+          Task control
+          <select
+            aria-label="Computer task control"
+            value={p.computerApproval}
+            onChange={(e) =>
+              updatePreferences({
+                computerApproval: e.target.value as "automatic" | "review",
+              })
+            }
+          >
+            <option value="automatic">Automatic</option>
+            <option value="review">Review every step</option>
+          </select>
+        </label>
         {!session ? (
           <>
-            {launch && (
+            {desiredBrowser ? (
               <button
                 className="primary"
                 disabled={busy}
-                onClick={() => void openRequested()}
+                onClick={() => void openBrowserTask()}
               >
-                Open {launchName} and continue
+                Open in browser
               </button>
+            ) : (
+              <>
+                <label>
+                  Task
+                  <textarea
+                    aria-label="Computer task"
+                    maxLength={4000}
+                    value={task}
+                    onChange={(e) => setTask(e.target.value)}
+                    placeholder="Help me edit a document, organize this folder, or work in an app…"
+                  />
+                </label>
+                <label>
+                  App window
+                  <select
+                    aria-label="Computer target window"
+                    value={target}
+                    onChange={(e) => setTarget(e.target.value)}
+                  >
+                    {windows.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.title} · {w.process}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Workspace folder · optional
+                  <input
+                    aria-label="Computer workspace folder"
+                    value={workspace}
+                    onChange={(e) => setWorkspace(e.target.value)}
+                    placeholder="J:\Projects\my-project"
+                  />
+                </label>
+                <p className="hint">
+                  Routine actions run automatically. Background controls keep
+                  your mouse and keyboard free where supported. File access
+                  stays inside the selected folder; edits keep backups.
+                </p>
+                <button
+                  className="primary"
+                  disabled={busy || !target || !task.trim()}
+                  onClick={() => void start()}
+                >
+                  {inline ? "Continue" : "Start local session"}
+                </button>
+              </>
             )}
-            <label>
-              Task
-              <textarea
-                aria-label="Computer task"
-                maxLength={4000}
-                value={task}
-                onChange={(e) => setTask(e.target.value)}
-                placeholder="Help me edit a document, organize this folder, or work in an app…"
-              />
-            </label>
-            <label>
-              App window
-              <select
-                aria-label="Computer target window"
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-              >
-                {windows.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.title} · {w.process}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Workspace folder · optional
-              <input
-                aria-label="Computer workspace folder"
-                value={workspace}
-                onChange={(e) => setWorkspace(e.target.value)}
-                placeholder="J:\Projects\my-project"
-              />
-            </label>
-            <p className="hint">
-              Review each proposed action before it runs. File access stays
-              inside the selected folder; edits keep backups. Stop ends the
-              session.
-            </p>
-            <button
-              className="primary"
-              disabled={busy || !target || !task.trim()}
-              onClick={() => void start()}
-            >
-              {inline ? "Continue" : "Start local session"}
-            </button>
           </>
         ) : (
           <>
@@ -329,6 +356,22 @@ export function ComputerSession({
               <span>Step {proposal?.step ?? log.length + 1} of 60</span>
               <button onClick={() => void end()}>Stop session</button>
             </div>
+            {needsVisible && (
+              <div role="status">
+                <p>
+                  This app needs visible controls for the next part. Background
+                  mode has kept your mouse and keyboard untouched.
+                </p>
+                <button
+                  onClick={() => {
+                    interactive.current = true;
+                    void next();
+                  }}
+                >
+                  Allow visible controls for this task
+                </button>
+              </div>
+            )}
             {proposal && (
               <>
                 <img
@@ -348,7 +391,7 @@ export function ComputerSession({
                       </pre>
                     ))}
                 </div>
-                {!done && (
+                {!done && !busy && (
                   <button
                     className="primary"
                     disabled={busy}
@@ -379,7 +422,7 @@ export function ComputerSession({
             </details>
           </>
         )}
-        {session && !proposal && !busy && !done && (
+        {session && !proposal && !busy && !done && !needsVisible && (
           <button onClick={() => void next()}>Observe again</button>
         )}
         {busy && (

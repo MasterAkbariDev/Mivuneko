@@ -95,6 +95,7 @@ export interface Preferences {
   localVoiceLanguage: LocalVoiceLanguage;
   appLaunching: boolean;
   approvalMode: "ask" | "auto" | "deny";
+  computerApproval: "automatic" | "review";
   rememberHistory: boolean;
   character: CharacterId;
   movement: "stationary" | "roaming";
@@ -166,6 +167,7 @@ export const defaults: Preferences = {
   localVoiceLanguage: "en",
   appLaunching: true,
   approvalMode: "ask",
+  computerApproval: "automatic",
   rememberHistory: false,
   character: "luna",
   movement: "stationary",
@@ -383,6 +385,7 @@ export function parsePreferences(raw: unknown): Preferences {
       ? p.localVoiceLanguage!
       : "en",
     appLaunching: p.appLaunching !== false,
+    computerApproval: p.computerApproval === "review" ? "review" : "automatic",
     approvalMode:
       p.approvalMode === "auto" || p.approvalMode === "deny"
         ? p.approvalMode

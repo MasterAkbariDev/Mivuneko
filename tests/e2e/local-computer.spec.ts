@@ -46,6 +46,7 @@ test.beforeEach(async ({ page }) => {
               },
             ],
           };
+        if (command === "computer_open_browser") return { opened: true };
         if (command === "computer_start") return { sessionId: "session-1" };
         if (command === "computer_next") {
           if (w.__holdPlan)
@@ -98,6 +99,7 @@ test.beforeEach(async ({ page }) => {
       "mivuneko.preferences.v1",
       JSON.stringify({
         backend: "ollama",
+        computerApproval: "review",
         voice: "off",
         rememberHistory: false,
       }),
@@ -156,7 +158,11 @@ test("computer actions wait for approval and submit only the bound session revis
   const call = await page.evaluate(() =>
     (window as any).__calls.find((v: any) => v.command === "computer_act"),
   );
-  expect(call.args).toEqual({ sessionId: "session-1", revision: 0 });
+  expect(call.args).toEqual({
+    sessionId: "session-1",
+    revision: 0,
+    interactive: false,
+  });
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(page.getByRole("region", { name: "Computer task" })).toHaveCount(
     0,
@@ -190,56 +196,208 @@ test("Stop discards a late computer proposal without executing it", async ({
   ).toBe(0);
 });
 
-test("an Edge search starts an inline task without a separate mode or start button", async ({
+test("browser searches open directly without planning, mouse input or step approvals", async ({
   page,
 }) => {
   await page.goto("/?view=chat");
-  await page.evaluate(() => {
-    (window as any).__browserWindow = true;
-  });
   await page
     .getByLabel("Message Mivuneko", { exact: true })
     .fill("open Edge and search elon musk for me");
   await page.getByRole("button", { name: "Send", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Open in browser", exact: true })
+    .click();
   await expect(
-    page.getByRole("region", { name: "Computer task", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Click the visible test button", { exact: true }),
+    page.getByText("I've opened a browser search for elon musk.", {
+      exact: true,
+    }),
   ).toBeVisible();
   const calls = await page.evaluate(() => (window as any).__calls);
   expect(
-    calls.find((v: any) => v.command === "computer_start").args.task,
-  ).toContain("elon musk");
-  expect(calls.some((v: any) => v.command === "ollama_chat")).toBe(false);
-  expect(calls.some((v: any) => v.command === "computer_act")).toBe(false);
+    calls.find((v: any) => v.command === "computer_open_browser").args,
+  ).toEqual({
+    url: "https://www.google.com/search?q=elon%20musk",
+    browser: "edge",
+  });
+  expect(
+    calls.some((v: any) =>
+      [
+        "computer_start",
+        "computer_next",
+        "computer_act",
+        "ollama_chat",
+      ].includes(v.command),
+    ),
+  ).toBe(false);
 });
-
-test("Wikipedia requests use an existing browser and carry the website URL", async ({
+test("automatic Wikipedia requests use the default browser with no confirmation", async ({
   page,
 }) => {
   await page.goto("/?view=chat");
   await page.evaluate(() => {
-    (window as any).__browserWindow = true;
+    const key = "mivuneko.preferences.v1";
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...JSON.parse(localStorage.getItem(key) || "{}"),
+        computerApproval: "automatic",
+      }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key }));
   });
   await page
     .getByLabel("Message Mivuneko", { exact: true })
     .fill("open wikipedia page for me on my browser");
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect(
-    page.getByRole("region", { name: "Computer task", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Click the visible test button", { exact: true }),
+    page.getByText("I've opened the page in your browser.", { exact: true }),
   ).toBeVisible();
   const calls = await page.evaluate(() => (window as any).__calls);
-  const task = calls.find((v: any) => v.command === "computer_start").args;
-  expect(task.windowId).toBe("qa-window");
-  expect(task.task).toContain("https://www.wikipedia.org/");
-  expect(task.task).toContain("Keep existing tabs open");
   expect(
-    calls.some(
-      (v: any) => v.command === "request_launch" || v.command === "ollama_chat",
+    calls.find((v: any) => v.command === "computer_open_browser").args,
+  ).toEqual({ url: "https://www.wikipedia.org/", browser: "default" });
+  expect(
+    calls.some((v: any) =>
+      ["computer_start", "computer_next", "computer_act"].includes(v.command),
     ),
   ).toBe(false);
+  await expect(
+    page.getByRole("button", { name: "Approve this step" }),
+  ).toHaveCount(0);
+});
+test("routine app steps execute automatically and reobserve a stale window", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page.evaluate(() => {
+    const key = "mivuneko.preferences.v1";
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...JSON.parse(localStorage.getItem(key) || "{}"),
+        computerApproval: "automatic",
+      }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key }));
+    const api = (window as any).__TAURI_INTERNALS__;
+    const invoke = api.invoke;
+    let failed = false;
+    api.invoke = async (cmd: string, args: any) => {
+      if (cmd === "computer_act" && !failed) {
+        failed = true;
+        throw "The window changed after observation. Observe it again before acting.";
+      }
+      return invoke(cmd, args);
+    };
+    window.dispatchEvent(
+      new CustomEvent("mivuneko-open-computer", {
+        detail: "Use the local test app",
+      }),
+    );
+  });
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Done", exact: true }),
+  ).toBeVisible();
+  const calls = await page.evaluate(() => (window as any).__calls);
+  expect(calls.filter((v: any) => v.command === "computer_next")).toHaveLength(
+    3,
+  );
+  expect(calls.filter((v: any) => v.command === "computer_act")).toHaveLength(
+    2,
+  );
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Approve this step" }),
+  ).toHaveCount(0);
+});
+
+test("computer-task responses are spoken through the selected character voice", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any,
+      previous = w.__TAURI_INTERNALS__.invoke;
+    w.__played = 0;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+      if (command === "character_voice")
+        return { engine: "kokoro", speed: 1, gain: 1 };
+      if (command === "synthesize_phrase") {
+        w.__calls.push({ command, args });
+        return [0];
+      }
+      return previous(command, args);
+    };
+    w.AudioContext = class {
+      destination = {};
+      get currentTime() {
+        return performance.now() / 1000;
+      }
+      resume() {
+        return Promise.resolve();
+      }
+      close() {
+        return Promise.resolve();
+      }
+      decodeAudioData() {
+        return Promise.resolve({ duration: 0.01 });
+      }
+      createGain() {
+        return { gain: { value: 1 }, connect() {}, disconnect() {} };
+      }
+      createAnalyser() {
+        return {
+          fftSize: 32,
+          connect() {},
+          disconnect() {},
+          getFloatTimeDomainData(a: Float32Array) {
+            a.fill(0);
+          },
+        };
+      }
+      createBufferSource() {
+        return {
+          buffer: null,
+          onended: null as (() => void) | null,
+          connect() {},
+          disconnect() {},
+          start() {
+            w.__played++;
+            setTimeout(() => this.onended?.(), 10);
+          },
+          stop() {
+            this.onended?.();
+          },
+        };
+      }
+    };
+    const key = "mivuneko.preferences.v1";
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...JSON.parse(localStorage.getItem(key) || "{}"),
+        computerApproval: "automatic",
+        voice: "push-to-talk",
+        voiceProvider: "local",
+        renderer: "sample-vrm",
+      }),
+    );
+  });
+  await page.goto("/?view=chat");
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("open wikipedia page for me on my browser");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__played))
+    .toBeGreaterThan(0);
+  const phrases = await page.evaluate(() =>
+    (window as any).__calls.filter(
+      (v: any) => v.command === "synthesize_phrase",
+    ),
+  );
+  expect(phrases.map((v: any) => v.args.text).join(" ")).toContain(
+    "I've opened the page in your browser",
+  );
+  expect(phrases.every((v: any) => v.args.character === "haru")).toBe(true);
 });

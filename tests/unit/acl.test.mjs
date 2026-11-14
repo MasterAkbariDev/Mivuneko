@@ -29,6 +29,7 @@ const sensitive = [
   "ollama_chat",
   "ollama_analyze_screen",
   "install_local_runtime",
+  "computer_open_browser",
   "computer_windows",
   "computer_start",
   "computer_next",

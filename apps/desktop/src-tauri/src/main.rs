@@ -994,6 +994,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             local_ai::ollama_models,
+            computer::computer_open_browser,
             computer::computer_windows,
             rest_surfaces::pet_rest_surfaces,
             computer::computer_start,

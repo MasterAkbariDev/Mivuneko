@@ -481,6 +481,7 @@ export function useVoice(
     }
     const ticket = generation.current;
     setPreparing(true);
+    publishPet("thinking", text, 0);
     try {
       prepare();
       const { invoke } = await import("@tauri-apps/api/core");

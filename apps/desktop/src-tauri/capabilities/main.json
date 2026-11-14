@@ -12,6 +12,7 @@
     "allow-install-local-runtime",
     "allow-qwen-synthesize",
     "allow-cancel-local-voice",
+    "allow-computer-open-browser",
     "allow-computer-windows",
     "allow-computer-start",
     "allow-computer-next",

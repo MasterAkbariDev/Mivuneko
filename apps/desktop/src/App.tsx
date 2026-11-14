@@ -297,8 +297,11 @@ export function App() {
     };
   }, [onboard, pending, showApps]);
 
-  const add = (text: string) =>
+  const add = (text: string, spoken = true) => {
     setMessages((m) => [...m, { role: "assistant", text }]);
+    if (spoken && preferences.voice !== "off" && isNative)
+      void voice.speak(speakable({ text }), preferences.volume, "happy");
+  };
   const log = logActivity;
   async function applyApproval(request: LaunchRequest) {
     const policy = request.policy ?? preferences.approvalMode;
@@ -488,7 +491,7 @@ export function App() {
       c.signal.throwIfAborted();
       markTurn("turn.first_text");
       markTurn("turn.reply_done");
-      add(reply.text);
+      add(reply.text, false);
       if (reply.companionActions?.length) {
         if (!isNative)
           throw Error("Desktop actions require the installed app.");
@@ -1063,6 +1066,11 @@ export function App() {
                     inline
                     initialTask={computerTask}
                     onClose={() => setComputerTask(null)}
+                    onProgress={(answer) => {
+                      publishPet("thinking", answer);
+                      if (preferences.voice !== "off" && isNative)
+                        void voice.speak(answer, preferences.volume, "curious");
+                    }}
                     onResult={(answer) => add(answer)}
                   />
                 )}
@@ -1288,11 +1296,34 @@ export function App() {
                   Automatic approval opens recognized installed apps without
                   asking. Shell commands and arbitrary paths remain unavailable.
                 </p>
+                <label className="setting">
+                  Computer tasks
+                  <select
+                    aria-label="Computer task approval"
+                    value={preferences.computerApproval}
+                    onChange={(e) =>
+                      updatePreferences({
+                        computerApproval: e.target.value as
+                          "automatic" | "review",
+                      })
+                    }
+                  >
+                    <option value="automatic">
+                      Complete routine steps automatically
+                    </option>
+                    <option value="review">Review every step</option>
+                  </select>
+                </label>
+                <p>
+                  Computer tasks prefer background controls. Visible mouse and
+                  keyboard control is used only when you enable it for a task.
+                  Closing windows and recycling files still pause for review.
+                </p>
                 <p>
                   Microphone access starts when you use Record or Start open mic
-                  in the native app with system permission. Screenshots,
-                  accessibility, shell and arbitrary file access are
-                  unavailable.
+                  in the native app with system permission. Computer tasks can
+                  inspect the chosen app and edit files inside the workspace you
+                  select.
                 </p>
                 <button
                   onClick={async () => {
@@ -1330,7 +1361,7 @@ export function App() {
           prompt={screenRequest}
           onClose={() => setScreenRequest(null)}
           onAnswer={(answer) => {
-            add(answer);
+            add(answer, false);
             setScreenRequest(null);
             setMood("happy");
             if (preferences.voice !== "off" && isNative)

@@ -23,4 +23,30 @@ class WorkspaceTests(unittest.TestCase):
             computer.file_action(request,{"kind":"write_file","path":"other.py","text":"keep"})
             with self.assertRaises(ValueError):computer.file_action(request,{"kind":"move_file","path":"example.py","destination":"other.py"})
             self.assertEqual((Path(root)/"other.py").read_text(),"keep")
+
+
+class BackgroundTests(unittest.TestCase):
+    def test_background_controls_do_not_focus_or_use_global_keys(self):
+        from types import SimpleNamespace as NS
+        from unittest.mock import MagicMock,patch
+        rectangle=NS(left=0,top=0,width=lambda:200,height=lambda:100,mid_point=lambda:NS(x=50,y=50))
+        info=NS(runtime_id=[1,2],is_password=False,control_type="Edit")
+        element=NS(handle=0,element_info=info,rectangle=lambda:rectangle,is_visible=lambda:True,is_enabled=lambda:True,iface_value=MagicMock(),iface_invoke=MagicMock())
+        window=NS(rectangle=lambda:rectangle,descendants=lambda:[element],process_id=lambda:42)
+        request={"window":"1","background":True,"expected":{"width":100,"height":50,"title":"Old title","processId":42}}
+        with patch.object(computer,"target",return_value=window) as target:
+            computer.act({**request,"action":{"kind":"type","element":"1.2","text":"hello"}})
+            target.assert_called_with("1",focus=False)
+            element.iface_value.SetValue.assert_called_once_with("hello")
+            info.control_type="Button"
+            computer.act({**request,"action":{"kind":"click","element":"1.2"}})
+            element.iface_invoke.Invoke.assert_called_once()
+            with self.assertRaisesRegex(ValueError,"window changed"):
+                computer.act({**request,"action":{"kind":"click","x":50,"y":50}})
+            with self.assertRaisesRegex(ValueError,"FOREGROUND_REQUIRED"):
+                computer.act({**request,"expected":None,"action":{"kind":"key","key":"ENTER"}})
+            info.is_password=True
+            with self.assertRaisesRegex(ValueError,"Protected input"):
+                computer.act({**request,"action":{"kind":"type","element":"1.2","text":"secret"}})
+
 if __name__ == '__main__':unittest.main()

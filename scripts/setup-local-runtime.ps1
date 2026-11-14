@@ -10,7 +10,7 @@ Write-Output 'Creating the local runtime'
 if (!(Test-Path -LiteralPath $python)) { py -3.12 -m venv $venv; Check-Exit }
 Write-Output 'Installing local voice and computer libraries'
 & $python -m pip install --upgrade pip; Check-Exit
-& $python -m pip install qwen-tts==0.1.1 pywinauto==0.6.9 pillow send2trash sherpa-onnx; Check-Exit
+& $python -m pip install qwen-tts==0.1.1 pywinauto==0.6.9 "pillow>=11.2.1" send2trash sherpa-onnx; Check-Exit
 if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
   Write-Output 'Installing NVIDIA acceleration'
   & $python -m pip install --upgrade torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128; Check-Exit
