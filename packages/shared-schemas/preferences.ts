@@ -81,8 +81,16 @@ export interface Preferences {
   companionName: string;
   micIndicator: boolean;
   petAlwaysOnTop: boolean;
-  backend: "offline" | "hermes" | "auto" | "gemini-only" | "groq-only";
-  voiceProvider: "local" | "gemini" | "system";
+  backend:
+    "offline" | "hermes" | "auto" | "gemini-only" | "groq-only" | "ollama";
+  ollamaModel: string;
+  qwenSpeaker: string;
+  qwenInstruction: string;
+  characterVoices: Record<
+    string,
+    { speaker: string; instruction: string; pronunciations: string }
+  >;
+  voiceProvider: "local" | "gemini" | "system" | "qwen";
   localVoiceStyle: LocalVoiceStyle;
   localVoiceLanguage: LocalVoiceLanguage;
   appLaunching: boolean;
@@ -149,6 +157,11 @@ export const defaults: Preferences = {
   petAlwaysOnTop: true,
   backend: "offline",
   voiceProvider: "local",
+  ollamaModel: "qwen3.5:9b",
+  qwenSpeaker: "Vivian",
+  characterVoices: {},
+  qwenInstruction:
+    "A bright, gentle, youthful companion voice. Speak clearly and naturally.",
   localVoiceStyle: "natural",
   localVoiceLanguage: "en",
   appLaunching: true,
@@ -280,7 +293,9 @@ export function parsePreferences(raw: unknown): Preferences {
     petAlwaysOnTop: p.petAlwaysOnTop !== false,
     // Legacy "gemini"/"groq" values migrate to auto; the "-only" values pin one provider.
     backend:
-      p.backend === "gemini-only" || p.backend === "groq-only"
+      p.backend === "ollama" ||
+      p.backend === "gemini-only" ||
+      p.backend === "groq-only"
         ? p.backend
         : ["gemini", "groq", "auto"].includes(p.backend as string)
           ? "auto"
@@ -288,9 +303,76 @@ export function parsePreferences(raw: unknown): Preferences {
             ? "hermes"
             : "offline",
     voiceProvider:
-      p.voiceProvider === "gemini" || p.voiceProvider === "system"
+      p.voiceProvider === "qwen" ||
+      p.voiceProvider === "gemini" ||
+      p.voiceProvider === "system"
         ? p.voiceProvider
         : "local",
+    ollamaModel:
+      typeof p.ollamaModel === "string" &&
+      !p.ollamaModel.includes("://") &&
+      /^[\w./:-]{1,120}$/.test(p.ollamaModel)
+        ? p.ollamaModel
+        : "qwen3.5:9b",
+    qwenSpeaker: [
+      "Vivian",
+      "Serena",
+      "Ono_Anna",
+      "Sohee",
+      "Aiden",
+      "Ryan",
+      "Eric",
+      "Dylan",
+      "Uncle_Fu",
+    ].includes(p.qwenSpeaker ?? "")
+      ? p.qwenSpeaker!
+      : "Vivian",
+    qwenInstruction:
+      typeof p.qwenInstruction === "string"
+        ? p.qwenInstruction.slice(0, 1000)
+        : defaults.qwenInstruction,
+    characterVoices: Object.fromEntries(
+      Object.entries(
+        p.characterVoices && typeof p.characterVoices === "object"
+          ? p.characterVoices
+          : {},
+      )
+        .slice(0, 256)
+        .flatMap(([key, value]) => {
+          const v = value as Record<string, unknown>;
+          return v &&
+            typeof v === "object" &&
+            typeof v.speaker === "string" &&
+            [
+              "Vivian",
+              "Serena",
+              "Ono_Anna",
+              "Sohee",
+              "Aiden",
+              "Ryan",
+              "Eric",
+              "Dylan",
+              "Uncle_Fu",
+            ].includes(v.speaker)
+            ? [
+                [
+                  key.slice(0, 100),
+                  {
+                    speaker: v.speaker,
+                    instruction:
+                      typeof v.instruction === "string"
+                        ? v.instruction.slice(0, 1000)
+                        : "",
+                    pronunciations:
+                      typeof v.pronunciations === "string"
+                        ? v.pronunciations.slice(0, 2000)
+                        : "",
+                  },
+                ],
+              ]
+            : [];
+        }),
+    ),
     localVoiceStyle:
       p.localVoiceStyle === "bright" || p.localVoiceStyle === "multilingual"
         ? p.localVoiceStyle

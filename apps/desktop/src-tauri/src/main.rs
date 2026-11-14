@@ -1,8 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod computer;
 mod fullscreen;
 mod gemini;
 mod global_keys;
+mod local_ai;
+mod local_runtime;
 mod pet_displays;
+mod rest_surfaces;
 mod screen;
 use os_broker::{AppInfo, Broker, LaunchPolicy, LaunchRequest, LaunchResult};
 use serde::{Deserialize, Serialize};
@@ -527,8 +531,10 @@ async fn synthesize_phrase(
     mood: Option<String>,
     speed: f32,
     state: tauri::State<'_, Arc<desktop_core::VoiceWorker>>,
+    runtime: tauri::State<'_, Arc<local_runtime::Runtime>>,
 ) -> Result<Vec<u8>, String> {
     let worker = state.inner().clone();
+    let runtime = runtime.inner().clone();
     let ticket = worker.ticket();
     tauri::async_runtime::spawn_blocking(move || {
         let pack = voice_pack(&app, &character).ok_or("No voice pack for this character")?;
@@ -548,6 +554,15 @@ async fn synthesize_phrase(
                 .and_then(desktop_core::kokoro::speaker_id))
             .unwrap_or(3) as u32;
         let speed = speed.clamp(0.5, 1.6);
+        if local_runtime::config(&app).is_ok() {
+            let fast = runtime.fast(&app, &config, &text, speaker, speed);
+            if worker.ticket() != ticket {
+                return Err("Voice operation was cancelled".into());
+            }
+            if let Ok(wav) = fast {
+                return Ok(wav);
+            }
+        }
         let wav = match worker.synthesize_phrase(&config, &text, speaker, speed) {
             Err(e) if config.library.is_some() && desktop_core::is_engine_load_failure(&e) => {
                 EMBEDDED_TTS_UNUSABLE.store(true, Ordering::Relaxed);
@@ -951,6 +966,9 @@ fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(gemini)
         .manage(gemini_client::groq::GroqService::default())
+        .manage(local_ai::LocalAi::default())
+        .manage(computer::Computer::default())
+        .manage(Arc::new(local_runtime::Runtime::default()))
         .setup(|_app| {
             if let Some(policy) = stored_policy(_app.handle()) {
                 if let Ok(mut broker) = _app.state::<Arc<Mutex<Broker>>>().lock() {
@@ -975,6 +993,20 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            local_ai::ollama_models,
+            computer::computer_windows,
+            rest_surfaces::pet_rest_surfaces,
+            computer::computer_start,
+            computer::computer_next,
+            computer::computer_act,
+            computer::computer_stop,
+            local_ai::ollama_chat,
+            local_ai::cancel_ollama,
+            local_ai::ollama_analyze_screen,
+            local_runtime::local_runtime_status,
+            local_runtime::install_local_runtime,
+            local_runtime::qwen_synthesize,
+            local_runtime::cancel_local_voice,
             gemini::configure_gemini,
             gemini::gemini_status,
             gemini::clear_gemini,

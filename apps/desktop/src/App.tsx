@@ -1,4 +1,6 @@
 import { CharacterGuide } from "./CharacterGuide";
+import { ComputerSession } from "./ComputerSession";
+import { computerIntent } from "../../../packages/shared-schemas/computer-intent";
 import { wakeCompanion } from "../../../packages/shared-schemas/companion-wake";
 import { performCompanionActions } from "./performCompanionActions";
 import {
@@ -61,6 +63,15 @@ const tabs = [
 ] as const;
 export function App() {
   const [screenRequest, setScreenRequest] = useState<string | null>(null);
+  const [computerTask, setComputerTask] = useState<string | null>(null);
+  useEffect(() => {
+    const show = (e: Event) => {
+      setTab("Conversations");
+      setComputerTask((e as CustomEvent<string>).detail || "");
+    };
+    window.addEventListener("mivuneko-open-computer", show);
+    return () => window.removeEventListener("mivuneko-open-computer", show);
+  }, []);
   const preferences = usePreferences();
   const name = companionName(preferences);
   const chainActive = useRef(false);
@@ -346,6 +357,14 @@ export function App() {
         if (preferences.voice !== "off") voice.prepare();
         setMood("thinking");
       }
+      if (
+        (mode === "Assist" || mode === "Autonomous") &&
+        computerIntent(text)
+      ) {
+        setComputerTask(text);
+        setMood("idle");
+        return;
+      }
       const sequence = companionSequence(text);
       if (sequence) {
         if (sequence.error) throw Error(sequence.error);
@@ -611,6 +630,11 @@ export function App() {
     setMood("idle");
   }
   async function stop() {
+    window.dispatchEvent(new Event("mivuneko-computer-stop"));
+    if (isNative)
+      void import("@tauri-apps/api/core")
+        .then(({ invoke }) => invoke("computer_stop"))
+        .catch(() => {});
     controller.current?.abort();
     cancelCompanionTask();
     if (["walk", "run", "auto"].includes(preferences.petMode))
@@ -951,6 +975,14 @@ export function App() {
                       <Icon name="more" />
                     </summary>
                     <div className="conversation-options-panel">
+                      <button
+                        type="button"
+                        disabled={!isNative}
+                        onClick={() => setComputerTask("")}
+                      >
+                        <Icon name="window" />
+                        Start computer session
+                      </button>
                       <label>
                         Voice mode
                         <select
@@ -1025,6 +1057,15 @@ export function App() {
                     <span>Thinking…</span>
                   </p>
                 ) : null}
+                {computerTask !== null && (
+                  <ComputerSession
+                    key={computerTask}
+                    inline
+                    initialTask={computerTask}
+                    onClose={() => setComputerTask(null)}
+                    onResult={(answer) => add(answer)}
+                  />
+                )}
               </div>
               {error ? (
                 <p className="error" role="alert">
@@ -1135,9 +1176,14 @@ export function App() {
                       !voice.speaking &&
                       !voice.preparing &&
                       !voice.recording &&
+                      computerTask === null &&
                       !pending
                     }
-                    onClick={() => void (pending ? stop() : interrupt())}
+                    onClick={() =>
+                      void (pending || computerTask !== null
+                        ? stop()
+                        : interrupt())
+                    }
                   >
                     <Icon name="stop" />
                   </button>

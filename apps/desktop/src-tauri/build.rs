@@ -2,6 +2,20 @@
 // denies it to any window whose capability (capabilities/*.json) does not list it.
 // tests/unit/acl.test.mjs keeps this list, the handler list and the capabilities in sync.
 const COMMANDS: &[&str] = &[
+    "pet_rest_surfaces",
+    "ollama_models",
+    "ollama_chat",
+    "cancel_ollama",
+    "ollama_analyze_screen",
+    "local_runtime_status",
+    "install_local_runtime",
+    "qwen_synthesize",
+    "cancel_local_voice",
+    "computer_windows",
+    "computer_start",
+    "computer_next",
+    "computer_act",
+    "computer_stop",
     "configure_gemini",
     "gemini_status",
     "clear_gemini",

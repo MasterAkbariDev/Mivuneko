@@ -71,7 +71,18 @@ export async function performCompanionActions(
             : {}),
         });
       else {
-        cancelCompanionTask();
+        if (action.kind === "sit") {
+          const { invoke } = await import("@tauri-apps/api/core");
+          await invoke("recover_pet", { center: false });
+          await moveCompanion("seat", signal, () =>
+            updatePreferences({
+              petMode: "walk",
+              petEdit: false,
+              focus: false,
+            }),
+          );
+        }
+        if (action.kind !== "sit") cancelCompanionTask();
         updatePreferences({
           petMode:
             action.kind === "sit"

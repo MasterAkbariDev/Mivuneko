@@ -1,4 +1,5 @@
 export type Destination =
+  | "seat"
   | "up"
   | "down"
   | "monitor-other"

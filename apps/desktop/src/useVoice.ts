@@ -1,5 +1,6 @@
 import { markTurn, recordSpan } from "./metrics";
 import { packInfo } from "./characterPackStore";
+import { voiceIdentity, pronunciationEntries } from "./voiceIdentity";
 import { speechChunks } from "../../../packages/shared-schemas/speech";
 import { useEffect, useRef, useState } from "react";
 import { usePreferences } from "./preferences";
@@ -76,6 +77,7 @@ export function useVoice(
     if (isNative) {
       const { invoke } = await import("@tauri-apps/api/core");
       await Promise.all([
+        invoke("cancel_local_voice").catch(() => {}),
         invoke("cancel_voice"),
         ...Array.from(requests.current, (requestId) =>
           invoke("cancel_gemini", { requestId }),
@@ -192,21 +194,27 @@ export function useVoice(
     ticket: number,
   ): Promise<boolean> {
     const system = preferences.voiceProvider === "system";
+    const expressive = preferences.voiceProvider === "qwen";
+    const identity = voiceIdentity(preferences);
     const character =
       preferences.renderer === "sample-vrm" ? "haru" : preferences.character;
     const { invoke } = await import("@tauri-apps/api/core");
-    if (!system && !packs.current.get(character))
+    if (!system && !expressive && !packs.current.get(character))
       packs.current.set(
         character,
         await invoke<VoicePack | null>("character_voice", { character }).catch(
           () => null,
         ),
       );
-    const pack: VoicePack | null | undefined = system
-      ? { engine: "kokoro", speed: 1, gain: 1 }
-      : packs.current.get(character);
-    const parts = speechChunks(pronounce(text), 220).flatMap((part) =>
-      splitSpeech(part),
+    const pack: VoicePack | null | undefined =
+      system || expressive
+        ? { engine: "kokoro", speed: 1, gain: 1 }
+        : packs.current.get(character);
+    const parts = speechChunks(
+      pronounce(text, pronunciationEntries(identity.pronunciations)),
+      expressive ? 700 : 300,
+    ).flatMap((part) =>
+      expressive ? [{ text: part, pauseMs: 0 }] : splitSpeech(part),
     );
     if (!pack || !parts.length || ticket !== generation.current) return false;
     const delivery = deliveryFor(emotion, pack);
@@ -219,7 +227,11 @@ export function useVoice(
     out.connect(audio.destination);
     const make = (phrase: string) => {
       const request = invoke<number[]>(
-        system ? "synthesize_speech" : "synthesize_phrase",
+        expressive
+          ? "qwen_synthesize"
+          : system
+            ? "synthesize_speech"
+            : "synthesize_phrase",
         {
           style: preferences.localVoiceStyle,
           language: preferences.localVoiceLanguage,
@@ -227,16 +239,43 @@ export function useVoice(
           character,
           mood: emotion,
           speed: delivery.speed,
+          ...(expressive
+            ? {
+                speaker: identity.speaker,
+                language: (
+                  {
+                    en: "English",
+                    ja: "Japanese",
+                    fr: "French",
+                    es: "Spanish",
+                    de: "German",
+                  } as const
+                )[preferences.localVoiceLanguage],
+                instruction: packVoicePrompt.current ?? identity.instruction,
+                ollamaModel: preferences.ollamaModel,
+              }
+            : {}),
         },
       ).then((bytes) => audio.decodeAudioData(new Uint8Array(bytes).buffer));
       request.catch(() => {});
       return request;
     };
-    let pending = make(parts[0].text),
-      nextAt = 0,
+    // The expressive model generates slower than playback on consumer GPUs.
+    // Buffer the whole utterance so it cannot pause halfway through a sentence.
+    let nextAt = 0,
       started = false,
       lastEnded: Promise<void> | undefined;
     try {
+      const buffered: AudioBuffer[] = [];
+      if (expressive) {
+        for (const part of parts) {
+          if (ticket !== generation.current) return true;
+          buffered.push(await make(part.text));
+        }
+      }
+      let pending = expressive
+        ? Promise.resolve(buffered[0])
+        : make(parts[0].text);
       for (let i = 0; i < parts.length; i++) {
         let buffer: AudioBuffer;
         try {
@@ -246,7 +285,10 @@ export function useVoice(
           throw e;
         }
         if (ticket !== generation.current) return true;
-        if (i + 1 < parts.length) pending = make(parts[i + 1].text);
+        if (i + 1 < parts.length)
+          pending = expressive
+            ? Promise.resolve(buffered[i + 1])
+            : make(parts[i + 1].text);
         const node = audio.createBufferSource();
         node.buffer = buffer;
         node.connect(analyser);
@@ -425,7 +467,7 @@ export function useVoice(
         publishPet(emotion, text, 0);
         return;
       }
-      if (!cloud) {
+      if (!cloud && preferences.voiceProvider !== "qwen") {
         onError(
           "This character uses a server voice prompt. Choose Gemini in Voice & input.",
         );
@@ -445,6 +487,7 @@ export function useVoice(
       if (ticket !== generation.current) return;
       if (
         preferences.voiceProvider === "local" ||
+        preferences.voiceProvider === "qwen" ||
         preferences.voiceProvider === "system"
       ) {
         if (await speakCharacter(text, volume, emotion, ticket)) return;

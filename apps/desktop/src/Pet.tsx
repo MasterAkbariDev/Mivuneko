@@ -2,7 +2,11 @@ import { usePetPlacement } from "./usePetPlacement";
 import { wakeCompanion } from "../../../packages/shared-schemas/companion-wake";
 import { PetDock } from "./PetDock";
 import { hitsModel } from "./petHit";
-import { cancelCompanionTask, useCompanionTask } from "./companionTask";
+import {
+  cancelCompanionTask,
+  directCompanion,
+  useCompanionTask,
+} from "./companionTask";
 import { CompanionVisual } from "./CompanionVisual";
 import { useEffect, useRef, useState } from "react";
 import type { Mood } from "../../../packages/shared-schemas/index.ts";
@@ -77,6 +81,10 @@ export function Pet() {
   const prefs = usePreferences(),
     session = usePetSession();
   useEffect(() => {
+    if (isNative && prefs.petMode === "sit" && task?.destination !== "seat")
+      directCompanion("seat");
+  }, [prefs.petMode, task?.destination]);
+  useEffect(() => {
     if (
       ["walk", "run", "dance"].includes(prefs.petMode) &&
       (prefs.petExpression === "sleeping" ||
@@ -108,7 +116,10 @@ export function Pet() {
         setAutomaticBody("walk");
         next = Date.now() + 5000 + Math.random() * 5000;
       } else {
-        setAutomaticBody("sit");
+        if (isNative) {
+          directCompanion("seat");
+          setAutomaticBody("walk");
+        } else setAutomaticBody("sit");
         next = Date.now() + 35000 + Math.random() * 30000;
       }
       resting = !resting;
@@ -419,6 +430,7 @@ export function Pet() {
     prefs,
     task,
     moving: moving && !prefs.petEdit,
+    sitting: body === "sit" && !moving,
     running: body === "run",
     dragging,
     manualUntil,
@@ -426,8 +438,29 @@ export function Pet() {
     resizeAnchor: resize,
     onDirection: setFacing,
     onMotion: setTranslating,
-    onComplete: setCompleted,
-    onRest: () => setAutomaticBody("sit"),
+    onComplete: (at) => {
+      setCompleted(at);
+      if (task?.destination === "seat" && prefs.petMode === "auto") {
+        setAutomaticBody("sit");
+        cancelCompanionTask();
+      }
+    },
+    onRest: () => {
+      if (isNative) {
+        directCompanion("seat");
+        setAutomaticBody("walk");
+      } else setAutomaticBody("sit");
+    },
+    onSupportLost: () => {
+      if (prefs.petMode === "auto") {
+        setAutomaticBody("idle");
+        cancelCompanionTask();
+      } else updatePreferences({ petMode: "stand" });
+      publishPet(
+        "idle",
+        "I'll stand here until there's a supported place to sit.",
+      );
+    },
     onError: setError,
   });
   // Scroll over the pet to resize: instant local scale, preference (and window) debounced.

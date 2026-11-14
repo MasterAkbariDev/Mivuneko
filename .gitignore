@@ -9,6 +9,8 @@ test-results/
 playwright-report/
 
 .local/
+__pycache__/
+*.pyc
 
 handoff/
 apps/desktop/src-tauri/gen/

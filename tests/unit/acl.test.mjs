@@ -25,6 +25,15 @@ const allowed = (file) =>
 // Commands the pet window must never reach: launching, approvals, permissions,
 // history, credentials, installs, screen capture and model chat.
 const sensitive = [
+  "ollama_models",
+  "ollama_chat",
+  "ollama_analyze_screen",
+  "install_local_runtime",
+  "computer_windows",
+  "computer_start",
+  "computer_next",
+  "computer_act",
+  "computer_stop",
   "list_apps",
   "request_launch",
   "resolve_launch",

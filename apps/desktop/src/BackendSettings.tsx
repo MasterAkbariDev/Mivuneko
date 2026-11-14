@@ -1,4 +1,5 @@
 import { GeminiSettings } from "./GeminiSettings";
+import { LocalModels } from "./LocalModels";
 import { useState } from "react";
 import { usePreferences, updatePreferences } from "./preferences";
 import { isNative } from "./broker";
@@ -17,6 +18,9 @@ export function BackendSettings() {
             updatePreferences({ backend: e.target.value as typeof p.backend })
           }
         >
+          <option value="ollama" disabled={!isNative}>
+            Local · Ollama
+          </option>
           <option value="auto" disabled={!isNative}>
             Automatic · Gemini + Groq
           </option>
@@ -69,6 +73,7 @@ export function BackendSettings() {
           <p role="status">{status}</p>
         </>
       )}
+      <LocalModels />
       <GeminiSettings />
       <label className="setting">
         Remember conversations on this device

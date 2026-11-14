@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { isNative } from "./broker";
+import { usePreferences } from "./preferences";
 export function ScreenAssistant({
   prompt,
   onClose,
@@ -9,6 +10,8 @@ export function ScreenAssistant({
   onClose: () => void;
   onAnswer: (text: string) => void;
 }) {
+  const prefs = usePreferences();
+  const local = prefs.backend === "ollama";
   const [bytes, setBytes] = useState<number[] | null>(null),
     [preview, setPreview] = useState(""),
     [error, setError] = useState(""),
@@ -53,11 +56,15 @@ export function ScreenAssistant({
     request.current = id;
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      const answer = await invoke<string>("analyze_screen", {
-        requestId: id,
-        image: bytes,
-        prompt,
-      });
+      const answer = await invoke<string>(
+        local ? "ollama_analyze_screen" : "analyze_screen",
+        {
+          model: prefs.ollamaModel,
+          requestId: id,
+          image: bytes,
+          prompt,
+        },
+      );
       if (request.current === id) {
         request.current = null;
         onAnswer(answer);
@@ -102,8 +109,10 @@ export function ScreenAssistant({
       >
         <h2>Let me see what you’re looking at</h2>
         <p>
-          Review this screenshot before sharing it with Gemini. Only this image
-          is shared, and it is not saved in conversation history.
+          {local
+            ? "This screenshot is processed by Ollama on your device."
+            : "Review this screenshot before sharing it with Gemini. Only this image is shared."}{" "}
+          It is not saved in conversation history.
         </p>
         {preview ? (
           <img src={preview} alt="Screenshot to review before sharing" />
@@ -124,7 +133,11 @@ export function ScreenAssistant({
             disabled={!bytes || busy}
             onClick={() => void share()}
           >
-            {busy ? "Looking at your screen…" : "Share screenshot with Gemini"}
+            {busy
+              ? "Looking at your screen…"
+              : local
+                ? "Analyze locally"
+                : "Share screenshot with Gemini"}
           </button>
         </div>
       </section>

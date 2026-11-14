@@ -2063,6 +2063,7 @@ name = "mivuneko-desktop"
 version = "0.3.2"
 dependencies = [
  "agent-client",
+ "base64 0.22.1",
  "bzip2",
  "cc",
  "desktop-core",

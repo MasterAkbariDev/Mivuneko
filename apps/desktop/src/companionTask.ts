@@ -18,7 +18,7 @@ function receive(value: unknown) {
   if (
     p &&
     typeof p.at === "number" &&
-    /^(?:left|right|up|down|top-left|top-right|bottom-left|bottom-right|center|elsewhere|unobtrusive|monitor-(?:other|left|right|up|down|[1-9]\d*))$/.test(
+    /^(?:seat|left|right|up|down|top-left|top-right|bottom-left|bottom-right|center|elsewhere|unobtrusive|monitor-(?:other|left|right|up|down|[1-9]\d*))$/.test(
       p.destination,
     ) &&
     Date.now() - p.at < 120000

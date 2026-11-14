@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { isNative } from "./broker";
+import {
+  chooseRestSurface,
+  restPoint,
+  type RestSurface,
+} from "../../../packages/shared-schemas/rest-surface";
 import type { Preferences } from "./preferences";
 import type { CompanionTask } from "./companionTask";
 import {
@@ -22,6 +27,7 @@ interface Options {
   prefs: Preferences;
   task: CompanionTask | null;
   moving: boolean;
+  sitting: boolean;
   running: boolean;
   dragging: boolean;
   manualUntil: { current: number };
@@ -33,6 +39,7 @@ interface Options {
   onMotion: (moving: boolean) => void;
   onComplete: (at: number) => void;
   onRest: () => void;
+  onSupportLost: () => void;
   onError: (e: string) => void;
 }
 export function usePetPlacement(options: Options) {
@@ -86,6 +93,22 @@ export function usePetPlacement(options: Options) {
       lastRoaming = false,
       wasDragging = false,
       settleY: number | undefined;
+    let support: RestSurface | null = null,
+      supportAt = 0;
+    function seatOffset() {
+      const value = parseFloat(
+        document
+          .querySelector<HTMLElement>(".pet-root")
+          ?.style.getPropertyValue("--model-seat-y") || "",
+      );
+      return (
+        (Number.isFinite(value)
+          ? value
+          : PET_TOP +
+            (size.height / Math.max(1, devicePixelRatio) - PET_EXTRA) * 0.62) *
+        (size.width / Math.max(1, innerWidth))
+      );
+    }
     const offs: Array<() => void> = [];
     async function status(at: number, state: string, message: string) {
       const { emitTo } = await import("@tauri-apps/api/event");
@@ -190,6 +213,7 @@ export function usePetPlacement(options: Options) {
         const o = latest.current;
         if (!ready) return;
         if (o.dragging) {
+          support = null;
           wasDragging = true;
           return;
         }
@@ -202,6 +226,40 @@ export function usePetPlacement(options: Options) {
         }
         await fit();
         viewport();
+        if (o.sitting && (!o.task || finished === o.task.at)) {
+          if (!support) {
+            o.onSupportLost();
+            return;
+          }
+          if (now - supportAt > 1000) {
+            const { invoke } = await import("@tauri-apps/api/core");
+            const surfaces = await invoke<RestSurface[]>("pet_rest_surfaces");
+            support = surfaces.find((s) => s.id === support!.id) ?? null;
+            supportAt = now;
+            if (!support) {
+              o.onSupportLost();
+              return;
+            }
+          }
+          const target = restPoint(support, position, size, seatOffset());
+          const step = advance(
+            position,
+            target,
+            350 * (monitor.scaleFactor || 1),
+            dt,
+          );
+          if (Math.hypot(target.x - position.x, target.y - position.y) > 1) {
+            const { PhysicalPosition } = await import("@tauri-apps/api/dpi");
+            await w.setPosition(
+              new PhysicalPosition(
+                Math.round(step.point.x),
+                Math.round(step.point.y),
+              ),
+            );
+            position = await w.outerPosition();
+          }
+          return;
+        }
         if (wasDragging) {
           wasDragging = false;
           const a = areaOf(monitor),
@@ -250,6 +308,24 @@ export function usePetPlacement(options: Options) {
               const { invoke } = await import("@tauri-apps/api/core");
               target = await invoke<Point>("quiet_pet_position");
             }
+            if (o.task.destination === "seat") {
+              const { invoke } = await import("@tauri-apps/api/core");
+              const surfaces = await invoke<RestSurface[]>("pet_rest_surfaces");
+              const chosen = chooseRestSurface(
+                surfaces,
+                position,
+                size,
+                areaOf(monitor),
+                seatOffset(),
+              );
+              if (!chosen)
+                throw Error(
+                  "There is no visible window edge or desktop icon with enough room to sit safely.",
+                );
+              support = chosen.surface;
+              target = chosen.point;
+              supportAt = now;
+            } else support = null;
             route = routeBetween(
               position,
               target,
@@ -260,8 +336,8 @@ export function usePetPlacement(options: Options) {
             o.onError("");
             await status(taskAt, "started", "I'm moving to your chosen spot.");
           } catch (e) {
+            if (o.task?.destination === "seat") o.onSupportLost();
             finished = taskAt;
-            o.onComplete(taskAt);
             o.onError(String(e));
             await status(taskAt, "failed", String(e));
           }

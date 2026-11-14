@@ -1,4 +1,5 @@
 import { packInfo, type PackSummary } from "./characterPackStore";
+import { voiceIdentity, voiceKey } from "./voiceIdentity";
 import { useEffect, useState } from "react";
 import { isNative } from "./broker";
 import { characters } from "./lunaModel";
@@ -56,6 +57,14 @@ export function CharacterVoice({
   volume: number;
 }) {
   const preferences = usePreferences();
+  const identity = voiceIdentity(preferences);
+  const saveIdentity = (patch: Partial<typeof identity>) =>
+    updatePreferences({
+      characterVoices: {
+        ...preferences.characterVoices,
+        [voiceKey(preferences)]: { ...identity, ...patch },
+      },
+    });
   const [importedVoice, setImportedVoice] = useState<PackSummary | null>(null);
   useEffect(() => {
     let disposed = false;
@@ -157,7 +166,8 @@ export function CharacterVoice({
             })
           }
         >
-          <option value="local">Local character voice · Kokoro</option>
+          <option value="local">Fast local character voice · CPU</option>
+          <option value="qwen">Qwen3-TTS · experimental, high GPU use</option>
           <option value="gemini">Expressive character voice · Gemini</option>
           {(systemSpeech || preferences.voiceProvider === "system") && (
             <option value="system" disabled={!systemSpeech}>
@@ -166,25 +176,79 @@ export function CharacterVoice({
           )}
         </select>
       </label>
+      <label className="setting">
+        Pronunciation hints for {name}
+        <textarea
+          aria-label="Character pronunciation hints"
+          value={identity.pronunciations}
+          placeholder="word=how it should sound"
+          maxLength={2000}
+          onChange={(e) => saveIdentity({ pronunciations: e.target.value })}
+        />
+      </label>
+      {preferences.voiceProvider === "qwen" && (
+        <>
+          <p className="hint">
+            Runs locally with emotion and delivery instructions. The model
+            shares GPU memory with Ollama; the app unloads one before loading
+            the other.
+          </p>
+          <label className="setting">
+            Voice
+            <select
+              aria-label="Qwen voice"
+              value={identity.speaker}
+              onChange={(e) => saveIdentity({ speaker: e.target.value })}
+            >
+              {[
+                "Vivian",
+                "Serena",
+                "Ono_Anna",
+                "Sohee",
+                "Aiden",
+                "Ryan",
+                "Eric",
+                "Dylan",
+                "Uncle_Fu",
+              ].map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+          <label className="setting">
+            Delivery direction
+            <textarea
+              aria-label="Qwen delivery direction"
+              maxLength={1000}
+              value={identity.instruction}
+              onChange={(e) => saveIdentity({ instruction: e.target.value })}
+            />
+          </label>
+        </>
+      )}
       <p className="hint">
         Voice:{" "}
         <b>
-          {preferences.voiceProvider === "gemini"
-            ? `${name} · expressive cloud voice`
-            : preferences.voiceProvider === "system"
-              ? "System voice"
-              : own === null
-                ? "checking…"
-                : own
-                  ? `${name}'s own voice`
-                  : `character voice not installed`}
+          {preferences.voiceProvider === "qwen"
+            ? `${identity.speaker} · expressive local voice`
+            : preferences.voiceProvider === "gemini"
+              ? `${name} · expressive cloud voice`
+              : preferences.voiceProvider === "system"
+                ? "System voice"
+                : own === null
+                  ? "checking…"
+                  : own
+                    ? `${name}'s own voice`
+                    : `character voice not installed`}
         </b>
         .{" "}
-        {preferences.voiceProvider === "gemini"
-          ? "Expressive speech streams as it is generated. Reply text is sent to Gemini using your connection settings."
-          : preferences.voiceProvider === "system"
-            ? "Uses the voice service built into your device. Availability depends on your system."
-            : "Runs on your device when the character voice engine is installed. Choose Gemini for expressive streaming speech."}
+        {preferences.voiceProvider === "qwen"
+          ? "Emotions guide the local model's delivery; use the preview buttons to audition them."
+          : preferences.voiceProvider === "gemini"
+            ? "Expressive speech streams as it is generated. Reply text is sent to Gemini using your connection settings."
+            : preferences.voiceProvider === "system"
+              ? "Uses the voice service built into your device. Availability depends on your system."
+              : "Runs on your device when the character voice engine is installed. Choose Gemini for expressive streaming speech."}
       </p>
       {preferences.voiceProvider === "local" && own === false && (
         <div className="setup-callout">

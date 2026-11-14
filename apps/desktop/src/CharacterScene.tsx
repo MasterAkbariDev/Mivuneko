@@ -302,7 +302,12 @@ export function CharacterScene({
     };
     let metricsAt = 0;
     function animate(now: number) {
-      if (now - last < 1000 / 60 - 0.5) {
+      const active =
+        !["idle", "sleep", "sit"].includes(stateRef.current.body) ||
+        stateRef.current.mouth > 0.01 ||
+        dragRef.current;
+      const fps = reducedRef.current ? 12 : active ? 60 : 30;
+      if (now - last < 1000 / fps - 0.5) {
         frame = requestAnimationFrame(animate);
         return;
       }
@@ -525,6 +530,19 @@ export function CharacterScene({
           );
         });
         renderer.domElement.dataset.feetInFrame = String(visible);
+        const hips = vrm.humanoid.getNormalizedBoneNode("hips");
+        if (hips) {
+          const p = hips.getWorldPosition(new THREE.Vector3());
+          p.y -= modelHeight * 0.025;
+          p.project(camera);
+          const rect = renderer.domElement.getBoundingClientRect();
+          renderer.domElement
+            .closest<HTMLElement>(".pet-root")
+            ?.style.setProperty(
+              "--model-seat-y",
+              `${rect.top + ((1 - p.y) * rect.height) / 2}px`,
+            );
+        }
       }
       frame = requestAnimationFrame(animate);
     }

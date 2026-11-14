@@ -7,6 +7,7 @@ import type { Agent } from "../../../packages/shared-schemas/index.ts";
 import { mockHermes } from "../../../services/agent-adapter/mock.ts";
 import { isNative } from "./broker";
 import { partialText } from "./partialText";
+import { parsePreferences } from "./preferences";
 export function abortable<T>(
   promise: Promise<T>,
   signal: AbortSignal,
@@ -37,7 +38,9 @@ export function agentFor(
     | "gemini"
     | "groq"
     | "gemini-only"
-    | "groq-only",
+    | "groq-only"
+    | "ollama",
+
   identity?: string,
 ): Agent {
   const backend =
@@ -112,6 +115,7 @@ export function agentFor(
       signal.throwIfAborted();
       const requestId = crypto.randomUUID();
       const cancel = () => {
+        if (backend === "ollama") void invoke("cancel_ollama", { requestId });
         if (backend === "gemini" || backend === "groq")
           void invoke(backend === "gemini" ? "cancel_gemini" : "cancel_groq", {
             requestId,
@@ -122,7 +126,7 @@ export function agentFor(
       let raw = "";
       const { listen } = await import("@tauri-apps/api/event");
       const unlisten =
-        backend === "gemini" || backend === "groq"
+        backend === "gemini" || backend === "groq" || backend === "ollama"
           ? await listen<{ requestId: string; delta: string }>(
               "provider-stream",
               (event) => {
@@ -130,7 +134,9 @@ export function agentFor(
                   return;
                 raw += event.payload.delta;
                 onProgress?.(
-                  backend === "gemini" || /^\s*[{`]/.test(raw)
+                  backend === "gemini" ||
+                    backend === "ollama" ||
+                    /^\s*[{`]/.test(raw)
                     ? partialText(raw)
                     : raw,
                 );
@@ -142,13 +148,25 @@ export function agentFor(
           invoke<string>(
             backend === "gemini"
               ? "gemini_chat_stream"
-              : backend === "groq"
-                ? "groq_chat"
-                : "hermes_chat",
+              : backend === "ollama"
+                ? "ollama_chat"
+                : backend === "groq"
+                  ? "groq_chat"
+                  : "hermes_chat",
             {
               messages,
               mode,
               requestId,
+              ...(backend === "ollama"
+                ? {
+                    model: parsePreferences(
+                      JSON.parse(
+                        localStorage.getItem("mivuneko.preferences.v1") ||
+                          "null",
+                      ),
+                    ).ollamaModel,
+                  }
+                : {}),
             },
           ),
           signal,
