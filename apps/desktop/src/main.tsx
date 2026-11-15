@@ -7,6 +7,7 @@ import "./style.css";
 import "./redesign.css";
 import "./chat.css";
 import "./studio.css";
+import "./layout.css";
 const view = new URLSearchParams(location.search).get("view");
 const tray = view === "tray";
 const pet = !tray && view !== "chat";

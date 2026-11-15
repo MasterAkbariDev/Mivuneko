@@ -1282,7 +1282,13 @@ export function App() {
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    void send();
+                    if (
+                      !input.trim() &&
+                      openMicActive &&
+                      openMic.phase === "hearing"
+                    )
+                      openMic.finish();
+                    else void send();
                   }}
                 >
                   <label className="sr" htmlFor="message">
@@ -1301,12 +1307,18 @@ export function App() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
-                        void send();
+                        if (
+                          !input.trim() &&
+                          openMicActive &&
+                          openMic.phase === "hearing"
+                        )
+                          openMic.finish();
+                        else void send();
                       }
                     }}
                   />
                   <div className="composer-actions">
-                    <small className="composer-status" role="status">
+                    <small className="composer-status sr" role="status">
                       {openMicActive && openMic.working
                         ? "transcribing locally"
                         : openMicActive && !busy && !voice.speaking
@@ -1332,19 +1344,6 @@ export function App() {
                           setOpenMicActive((active) => !active);
                         }}
                       />
-                    )}
-                    {preferences.voice === "open-mic" && openMicActive && (
-                      <button
-                        type="button"
-                        aria-label="Done speaking"
-                        title="Finish speaking"
-                        disabled={
-                          openMic.phase !== "hearing" || busy || !!pending
-                        }
-                        onClick={() => openMic.finish()}
-                      >
-                        <Icon name="send" />
-                      </button>
                     )}
                     {preferences.voice !== "open-mic" && (
                       <button
@@ -1393,11 +1392,18 @@ export function App() {
                     <button
                       className="primary"
                       aria-label="Send"
-                      title="Send message"
+                      title={
+                        openMicActive &&
+                        openMic.phase === "hearing" &&
+                        !input.trim()
+                          ? "Finish speaking"
+                          : "Send message"
+                      }
                       disabled={
                         busy ||
                         !!pending ||
-                        !input.trim() ||
+                        (!input.trim() &&
+                          !(openMicActive && openMic.phase === "hearing")) ||
                         !historyReady ||
                         voice.recording
                       }
@@ -1526,28 +1532,39 @@ export function App() {
               </>
             ) : (
               <>
-                <SettingsHome />
-                <button type="button" onClick={() => setTab("Characters")}>
-                  Open character studio
-                </button>
-                <button
-                  onClick={() => {
-                    window.dispatchEvent(new Event("mivuneko-computer-stop"));
-                    controller.current?.abort();
-                    activeRun.current = 0;
-                    setComputerTask(null);
-                    setTaskRunning(false);
-                    setTaskQuestion(null);
-                    setTaskRuns([]);
-                    taskContext.current = "";
-                    setMessages([]);
-                    void clearHistory().catch((e) => setError(String(e)));
-                    setLogs([]);
-                    void stop();
-                  }}
-                >
-                  Delete session history
-                </button>
+                <SettingsHome
+                  footer={
+                    <div className="settings-footer">
+                      {" "}
+                      <button
+                        type="button"
+                        onClick={() => setTab("Characters")}
+                      >
+                        Open character studio
+                      </button>
+                      <button
+                        onClick={() => {
+                          window.dispatchEvent(
+                            new Event("mivuneko-computer-stop"),
+                          );
+                          controller.current?.abort();
+                          activeRun.current = 0;
+                          setComputerTask(null);
+                          setTaskRunning(false);
+                          setTaskQuestion(null);
+                          setTaskRuns([]);
+                          taskContext.current = "";
+                          setMessages([]);
+                          void clearHistory().catch((e) => setError(String(e)));
+                          setLogs([]);
+                          void stop();
+                        }}
+                      >
+                        Delete session history
+                      </button>
+                    </div>
+                  }
+                />
               </>
             )}
           </section>

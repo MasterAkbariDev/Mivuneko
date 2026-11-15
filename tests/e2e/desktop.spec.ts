@@ -844,7 +844,7 @@ for (const turnTaking of ["automatic", "manual"] as const) {
       for (let i = 0; i < 80; i++) (window as any).__advanceAudio(0.1, 256);
     });
     await expect(
-      page.getByRole("button", { name: "Done speaking" }),
+      page.getByRole("button", { name: "Send", exact: true }),
     ).toBeEnabled();
     await page.evaluate(() => {
       for (let i = 0; i < 16; i++) (window as any).__advanceAudio(0, 256);
@@ -853,7 +853,7 @@ for (const turnTaking of ["automatic", "manual"] as const) {
       await expect(
         page.getByRole("log").locator(".message.user:not([aria-live])"),
       ).toHaveCount(0);
-      await page.getByRole("button", { name: "Done speaking" }).click();
+      await page.getByRole("button", { name: "Send", exact: true }).click();
     }
     await expect(page.getByRole("log")).toContainText("finished words");
     await expect(
@@ -866,7 +866,7 @@ for (const turnTaking of ["automatic", "manual"] as const) {
     if (turnTaking === "manual") {
       await page.getByRole("button", { name: "Start open mic" }).click();
       await expect(
-        page.getByRole("button", { name: "Done speaking" }),
+        page.getByRole("button", { name: "Send", exact: true }),
       ).toBeDisabled();
       await page.evaluate(() => {
         for (let i = 0; i < 4; i++) (window as any).__advanceAudio(0, 256);

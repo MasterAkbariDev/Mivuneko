@@ -156,6 +156,7 @@ export function CharacterVoice({
     );
   return (
     <section className="settings-group" aria-label="Character voice">
+      <h3>Character voice</h3>
       <label className="setting">
         Speech engine
         <CustomSelect

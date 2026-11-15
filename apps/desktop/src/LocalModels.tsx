@@ -72,45 +72,37 @@ export function LocalModels() {
           ))}
         </CustomSelect>
       </label>
-      <button disabled={!isNative} onClick={() => void refresh()}>
-        Refresh local models
-      </button>
-      <button
-        disabled={!models.length}
-        onClick={() => updatePreferences({ backend: "ollama" })}
-      >
-        Use local conversation
-      </button>
-      {runtime?.voiceReady && (
-        <button onClick={() => updatePreferences({ voiceProvider: "local" })}>
-          Use fast character voice
+      <div className="local-model-actions">
+        <button disabled={!isNative} onClick={() => void refresh()}>
+          Refresh local models
         </button>
-      )}
-      {runtime?.voiceReady && (
-        <button onClick={() => updatePreferences({ voiceProvider: "qwen" })}>
-          Use experimental expressive voice
-        </button>
-      )}
-      {!runtime?.voiceReady && (
         <button
-          disabled={!isNative || installing}
-          onClick={() => void install()}
+          disabled={!models.length}
+          onClick={() => updatePreferences({ backend: "ollama" })}
         >
-          {installing
-            ? "Installing local runtime…"
-            : "Install expressive voice & computer runtime · about 8 GB"}
+          Use local conversation
         </button>
-      )}
-      <button
-        disabled={!runtime?.installed}
-        onClick={() =>
-          window.dispatchEvent(
-            new CustomEvent("mivuneko-open-computer", { detail: "" }),
-          )
-        }
-      >
-        Open computer session
-      </button>
+        {runtime?.voiceReady && (
+          <button onClick={() => updatePreferences({ voiceProvider: "local" })}>
+            Use fast character voice
+          </button>
+        )}
+        {runtime?.voiceReady && (
+          <button onClick={() => updatePreferences({ voiceProvider: "qwen" })}>
+            Use experimental expressive voice
+          </button>
+        )}
+        {!runtime?.voiceReady && (
+          <button
+            disabled={!isNative || installing}
+            onClick={() => void install()}
+          >
+            {installing
+              ? "Installing local runtime…"
+              : "Install expressive voice & computer runtime · about 8 GB"}
+          </button>
+        )}
+      </div>
       <p role="status">{status}</p>
     </section>
   );

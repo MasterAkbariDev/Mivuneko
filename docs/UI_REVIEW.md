@@ -28,3 +28,11 @@ Browser/IAB initialization failed in this session. Playwright Chromium was used 
 ## Second refinement
 
 The user's later feedback rejected the first custom tray, large/uneven corners and touching or overflowing controls. A focused tray/composer/activity concept (`exec-8123045b-1c79-47c2-9779-bf2ec6470e80.png`) was generated. The revision uses a brand-led tray header, fixed icon/text columns, grouped separators, smaller control corners, an add button outside the composer, and retained per-turn activity before the completion reply. Current-action labels and tab-independent task execution are covered by integration tests. Native file selection remains an operating-system dialog.
+
+## Screenshot regression repairs (2026-11-15)
+
+The user's 1280 × 890 captures at 110% text size revealed layout defects missed by earlier visual checks. Settings actions now belong to the settings content column; local-model actions have a wrapping row with explicit gaps; the Activity toolbar sizes the custom-select wrapper rather than its hidden native select. Characters now use an actual gallery/inspector grid with a sticky, bounded inspector, removing inherited absolute-position offsets and the unused 310px right padding. Format tabs choose a compatible character. Extra 3D expressions remain available in a disclosure so primary character controls fit.
+
+Voice settings use one separator per meaningful group with a Character voice heading. The composer is a flex row with aligned external plus and form hit targets. Microphone status remains accessible without visible text; the single send action finalizes an active spoken turn or sends typed text. Both manual and automatic voice endpointing are covered by tests. The obsolete empty computer-session launcher was removed from Local models; tasks begin through conversation.
+
+New layout regression tests cover button padding and gaps, settings ownership, Activity search width, compatible character previews and sticky inspector, and composer/microphone geometry at the user's viewport. Captures are generated in test-results/layout-*.png during verification.

@@ -1,7 +1,7 @@
 import { CustomSelect } from "./CustomSelect";
 import { PetSettings } from "./PetSettings";
 import { RangeSlider } from "./RangeSlider";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { BackendSettings } from "./BackendSettings";
 import { SpeechSettings } from "./SpeechSettings";
 import { CharacterVoice } from "./CharacterVoice";
@@ -12,7 +12,7 @@ let activeCategory = "Voice & input";
 export function openSettingsCategory(name: string) {
   activeCategory = name;
 }
-export function SettingsHome() {
+export function SettingsHome({ footer }: { footer?: ReactNode }) {
   const [tab, setTab] = useState(activeCategory);
   const [error, setError] = useState("");
   const p = usePreferences();
@@ -142,6 +142,7 @@ export function SettingsHome() {
             </p>
           </section>
         )}
+        {footer}
       </div>
     </div>
   );

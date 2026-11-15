@@ -26,22 +26,72 @@ export function CharacterStudio({
   );
   return (
     <section className="character-studio" aria-label="Character studio">
-      <div className="character-studio-head">
-        <button
-          className="primary"
-          onClick={() => {
-            document
-              .querySelector<HTMLInputElement>(
-                format === "3D"
-                  ? 'input[aria-label="Import VRM file"]'
-                  : '.pack-library input[type="file"]',
-              )
-              ?.click();
-          }}
+      <div className="character-browser-toolbar">
+        {" "}
+        <div
+          className="character-format-tabs"
+          role="tablist"
+          aria-label="Character dimensions"
         >
-          <Icon name="plus" />
-          Import character
-        </button>
+          {(["2D", "2.5D", "3D"] as const).map((value) => (
+            <button
+              key={value}
+              role="tab"
+              aria-selected={format === value}
+              aria-controls="character-models"
+              id={`format-${value}`}
+              onClick={() => {
+                setFormat(value);
+                if (value === "3D" && p.renderer === "2d")
+                  updatePreferences({
+                    renderer: "sample-vrm",
+                    activePackId: "",
+                    activePackName: "",
+                    petExpression: "auto",
+                  });
+                else if (
+                  value !== "3D" &&
+                  (p.renderer !== "2d" ||
+                    p.illustrationDepth !== (value === "2.5D"))
+                )
+                  updatePreferences({
+                    renderer: "2d",
+                    character: value === "2.5D" ? "mochi" : "luna",
+                    illustrationDepth: value === "2.5D",
+                    activePackId: "",
+                    activePackName: "",
+                    petExpression: "auto",
+                  });
+              }}
+            >
+              {value}
+              <small>
+                {value === "2D"
+                  ? "Illustrated poses"
+                  : value === "2.5D"
+                    ? "Illustrations with depth"
+                    : "Animated VRM"}
+              </small>
+            </button>
+          ))}
+        </div>
+        <div className="character-studio-head">
+          <button
+            className="primary"
+            onClick={() => {
+              document
+                .querySelector<HTMLInputElement>(
+                  format === "3D"
+                    ? 'input[aria-label="Import VRM file"]'
+                    : '.pack-library input[type="file"]',
+                )
+                ?.click();
+            }}
+          >
+            <Icon name="plus" />
+            Import character
+          </button>
+        </div>
       </div>
       <aside className="character-inspector">
         <h2>{companionName(p)}</h2>
@@ -57,58 +107,74 @@ export function CharacterStudio({
         </div>
         <h3>Expressions</h3>
         <div className="inspector-expressions">
-          {[
-            "happy",
-            "sad",
-            "sleeping",
-            "love",
-            "thinking",
-            "excited",
-            ...(p.renderer !== "2d"
-              ? ["bored", "nervous", "relieved", "embarrassed"]
-              : []),
-          ].map((expression) => (
-            <button
-              key={expression}
-              aria-pressed={p.petExpression === expression}
-              onClick={() =>
-                updatePreferences({
-                  petExpression: expression as typeof p.petExpression,
-                })
-              }
-            >
-              {p.renderer === "2d" && !p.activePackId ? (
-                <SpriteCanvas
-                  className="expression-tile-art"
-                  frame={spriteFrame(
-                    p.character,
-                    expression as any,
-                    "stand",
-                    0,
-                    0,
-                  )}
-                />
-              ) : p.renderer === "sample-vrm" &&
-                ["happy", "sad", "sleeping"].includes(expression) ? (
-                <img
-                  className="expression-tile-art"
-                  src={`/models/haru-${["happy", "sad", "sleeping"].includes(expression) ? expression : "happy"}.png`}
-                  alt=""
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                  }}
-                />
-              ) : (
-                <Icon name="sparkle" />
-              )}
-              <span>
-                {expression === "sleeping"
-                  ? "Sleepy"
-                  : expression.charAt(0).toUpperCase() + expression.slice(1)}
-              </span>
-            </button>
-          ))}
+          {["happy", "sad", "sleeping", "love", "thinking", "excited"].map(
+            (expression) => (
+              <button
+                key={expression}
+                data-expression={expression}
+                aria-pressed={p.petExpression === expression}
+                onClick={() =>
+                  updatePreferences({
+                    petExpression: expression as typeof p.petExpression,
+                  })
+                }
+              >
+                {p.renderer === "2d" && !p.activePackId ? (
+                  <SpriteCanvas
+                    className="expression-tile-art"
+                    frame={spriteFrame(
+                      p.character,
+                      expression as any,
+                      "stand",
+                      0,
+                      0,
+                    )}
+                  />
+                ) : p.renderer === "sample-vrm" &&
+                  ["happy", "sad", "sleeping"].includes(expression) ? (
+                  <img
+                    className="expression-tile-art"
+                    src={`/models/haru-${["happy", "sad", "sleeping"].includes(expression) ? expression : "happy"}.png`}
+                    alt=""
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <Icon name="sparkle" />
+                )}
+                <span>
+                  {expression === "sleeping"
+                    ? "Sleepy"
+                    : expression.charAt(0).toUpperCase() + expression.slice(1)}
+                </span>
+              </button>
+            ),
+          )}
         </div>
+        {p.renderer !== "2d" && (
+          <details className="extra-expressions">
+            <summary>More expressions</summary>
+            <div className="inspector-expressions">
+              {["bored", "nervous", "relieved", "embarrassed"].map(
+                (expression) => (
+                  <button
+                    key={expression}
+                    data-expression={expression}
+                    aria-pressed={p.petExpression === expression}
+                    onClick={() =>
+                      updatePreferences({
+                        petExpression: expression as typeof p.petExpression,
+                      })
+                    }
+                  >
+                    {expression.charAt(0).toUpperCase() + expression.slice(1)}
+                  </button>
+                ),
+              )}
+            </div>
+          </details>
+        )}
         {p.renderer !== "2d" && (
           <>
             <details className="gesture-options">
@@ -166,31 +232,6 @@ export function CharacterStudio({
         </button>
         <button onClick={onOpenGuide}>Character guide</button>
       </aside>
-      <div
-        className="character-format-tabs"
-        role="tablist"
-        aria-label="Character dimensions"
-      >
-        {(["2D", "2.5D", "3D"] as const).map((value) => (
-          <button
-            key={value}
-            role="tab"
-            aria-selected={format === value}
-            aria-controls="character-models"
-            id={`format-${value}`}
-            onClick={() => setFormat(value)}
-          >
-            {value}
-            <small>
-              {value === "2D"
-                ? "Illustrated poses"
-                : value === "2.5D"
-                  ? "Illustrations with depth"
-                  : "Animated VRM"}
-            </small>
-          </button>
-        ))}
-      </div>
       <div
         id="character-models"
         role="tabpanel"
