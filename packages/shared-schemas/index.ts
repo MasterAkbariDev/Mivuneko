@@ -51,6 +51,7 @@ export interface Broker {
   revoke(): Promise<void>;
 }
 export interface AgentReply {
+  computerTask?: string;
   companionActions?: import("./companion-actions.ts").CompanionAction[];
   mood?: Mood;
   text: string;

@@ -53,10 +53,14 @@ export function agentFor(
     async reply(text, mode, signal, history = [], onProgress) {
       // Explicit user launch requests use the same constrained local intent path in every backend.
       const local = desktopIntent(text);
-      if (local?.kind === "open")
+      if (
+        local?.kind === "open" &&
+        !/\b(?:and|then|in|on|using|for|about|description|biography|website|page|browser|folder|file|document)\b/i.test(
+          local.query,
+        )
+      )
         return mockHermes.reply(`open ${local.query}`, mode, signal);
-      if (backend === "offline" || /^open\s+/i.test(text.trim()))
-        return mockHermes.reply(text, mode, signal);
+      if (backend === "offline") return mockHermes.reply(text, mode, signal);
       if (!isNative)
         throw Error(
           "Live providers require the native desktop app. Browser preview remains offline.",
@@ -177,7 +181,10 @@ export function agentFor(
       }
       signal.throwIfAborted();
       const reply = parseAgentReply(answer);
-      if (mode === "Chat" || mode === "Creative") delete reply.appQuery;
+      if (mode === "Chat" || mode === "Creative") {
+        delete reply.appQuery;
+        delete reply.computerTask;
+      }
       return reply;
     },
   };

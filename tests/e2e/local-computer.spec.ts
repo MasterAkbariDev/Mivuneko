@@ -46,6 +46,13 @@ test.beforeEach(async ({ page }) => {
               },
             ],
           };
+        if (command === "computer_select_target")
+          return { windowId: "", needsWorkspace: true };
+        if (command === "computer_resolve_page")
+          return {
+            url: "https://en.wikipedia.org/wiki/Elon_Musk",
+            title: "Elon Musk",
+          };
         if (command === "computer_open_browser") return { opened: true };
         if (command === "computer_start") return { sessionId: "session-1" };
         if (command === "computer_next") {
@@ -400,4 +407,70 @@ test("computer-task responses are spoken through the selected character voice", 
     "I've opened the page in your browser",
   );
   expect(phrases.every((v: any) => v.args.character === "haru")).toBe(true);
+});
+
+test("opening a description resolves and opens a relevant page rather than a search URL", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("open elon musk description in browser");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Open in browser", exact: true })
+    .click();
+  await expect(
+    page.getByText("I've opened Elon Musk in your browser.", { exact: true }),
+  ).toBeVisible();
+  const calls = await page.evaluate(() => (window as any).__calls);
+  expect(
+    calls.find((v: any) => v.command === "computer_resolve_page").args.task,
+  ).toBe("open elon musk description in browser");
+  expect(
+    calls.find((v: any) => v.command === "computer_open_browser").args.url,
+  ).toBe("https://en.wikipedia.org/wiki/Elon_Musk");
+});
+test("model-understood editor requests hand off the original goal and select the editor", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page.evaluate(() => {
+    const key = "mivuneko.preferences.v1";
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...JSON.parse(localStorage.getItem(key) || "{}"),
+        computerApproval: "automatic",
+      }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key }));
+    const api = (window as any).__TAURI_INTERNALS__,
+      invoke = api.invoke;
+    api.invoke = async (cmd: string, args: any) => {
+      if (cmd === "ollama_chat")
+        return JSON.stringify({
+          text: "I'll implement that in your editor.",
+          emotion: "happy",
+          computerTask: "Implement requested function in the editor",
+        });
+      if (cmd === "computer_select_target")
+        return { windowId: "qa-window", needsWorkspace: false };
+      return invoke(cmd, args);
+    };
+  });
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("Could you implement a small greeting function in my editor?");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Done", exact: true }),
+  ).toBeVisible();
+  const calls = await page.evaluate(() => (window as any).__calls);
+  expect(calls.find((v: any) => v.command === "computer_start").args.task).toBe(
+    "Could you implement a small greeting function in my editor?",
+  );
+  expect(
+    calls.find((v: any) => v.command === "computer_start").args.windowId,
+  ).toBe("qa-window");
 });

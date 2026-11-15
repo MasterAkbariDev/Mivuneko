@@ -39,6 +39,11 @@ export function parseAgentReply(raw: string): AgentReply {
   )
     return {
       text: json.text,
+      ...(typeof json.computerTask === "string" &&
+      json.computerTask.trim() &&
+      json.computerTask.length <= 4000
+        ? { computerTask: json.computerTask.trim() }
+        : {}),
       ...(json.companionActions !== undefined
         ? {
             companionActions: json.appQuery

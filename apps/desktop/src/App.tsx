@@ -491,6 +491,12 @@ export function App() {
       c.signal.throwIfAborted();
       markTurn("turn.first_text");
       markTurn("turn.reply_done");
+      if (reply.computerTask && (mode === "Assist" || mode === "Autonomous")) {
+        add(reply.text);
+        setComputerTask(text);
+        setMood("idle");
+        return;
+      }
       add(reply.text, false);
       if (reply.companionActions?.length) {
         if (!isNative)

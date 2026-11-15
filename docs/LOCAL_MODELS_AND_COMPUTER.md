@@ -56,3 +56,11 @@ The local test window task clicked a real editable control, typed `LOCAL CONTROL
 On Windows, sitting requires a visible window ledge or desktop icon with sufficient room for the character. Foreground windows mask covered ledges and icons. The character walks to the nearest usable support; if none is available, she stays standing. While seated, the hip anchor follows a moving window and she stands if the support disappears. Desktop icon discovery uses the installed local runtime. Window ledges work without it. Geometry stays local and does not require sending window contents to a provider.
 
 Computer-task acknowledgements and results now use the same character speech engine as ordinary replies. Preparing speech publishes a visible companion caption. Fast local voice is the everyday CPU option; Qwen still has substantial generation latency.
+
+## Understanding task goals
+
+Conversation providers can propose a `computerTask` for direct requests to do work in an app. The application passes the original user request to the action system, rather than treating a proposed goal as new authority. Chat and Creative modes discard those task proposals. Simple app launches and known website addresses retain their fast paths.
+
+“Search about Ultron in my browser” searches for **Ultron**; browser instructions and politeness stay out of the query. “Open Elon Musk’s description in browser” finds candidate information pages, lets the local model choose the page matching the goal, and opens that page. It does not report completion after merely opening search results. Candidate URLs come from actual search responses, not generated URL guesses; unavailable lookups produce an error instead of a fake success.
+
+For app work, the local model can select an unambiguous open editor/window. Tasks needing a workspace folder still require selecting that folder before file access; missing requirements are asked rather than invented. Execution remains limited to the implemented app controls and scoped file tools, so understanding an order does not guarantee that every application's controls are automatable.

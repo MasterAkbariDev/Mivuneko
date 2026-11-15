@@ -11,6 +11,8 @@ const COMMANDS: &[&str] = &[
     "install_local_runtime",
     "qwen_synthesize",
     "cancel_local_voice",
+    "computer_resolve_page",
+    "computer_select_target",
     "computer_open_browser",
     "computer_windows",
     "computer_start",

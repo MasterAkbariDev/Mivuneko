@@ -66,7 +66,7 @@ def observe(req):
             if rect.width() <= 0 or rect.height() <= 0: continue
             items.append({"id": element_id(e), "role": info.control_type, "name": "Protected input" if protected else info.name[:260], "protected": protected, "enabled": e.is_enabled(), "bounds": [rect.left-r.left, rect.top-r.top, rect.right-r.left, rect.bottom-r.top]})
         except Exception: continue
-    return {"window": str(w.handle), "processId": w.process_id(), "title": w.window_text()[:200], "width": r.width(), "height": r.height(), "imageWidth": image.width, "imageHeight": image.height, "image": base64.b64encode(output.getvalue()).decode(), "elements": items[:100], "windows":windows()["windows"], "observation": secrets.token_hex(16)}
+    return {"window": str(w.handle), "processId": w.process_id(), "title": w.window_text()[:200], "width": r.width(), "height": r.height(), "imageWidth": image.width, "imageHeight": image.height, "image": base64.b64encode(output.getvalue()).decode(), "elements": items[:100], "workspaceFiles":file_action({"workspace":req["workspace"]},{"kind":"list_files"})["files"] if req.get("workspace") else [], "windows":windows()["windows"], "observation": secrets.token_hex(16)}
 
 def file_path(root, value):
     if not root: raise ValueError("This session has no folder access")
@@ -222,6 +222,31 @@ def run(req):
     if sys.platform != "win32": raise ValueError("Computer control currently requires Windows")
     try: ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
     except Exception: pass
+    if req["op"] == "web_results":
+        from urllib.request import Request,build_opener,ProxyHandler
+        from urllib.parse import urlencode,urlparse
+        import xml.etree.ElementTree as ET
+        query=str(req.get("query","")).strip()
+        if not query or len(query)>500:raise ValueError("Invalid search query")
+        opener=build_opener(ProxyHandler({}))
+        def fetch(url):
+            with opener.open(Request(url,headers={"User-Agent":"Mivuneko/0.3 (desktop companion page lookup)"}),timeout=8) as response:return response.read(1500000)
+        results=[]
+        try:
+            feed=ET.fromstring(fetch("https://www.bing.com/search?"+urlencode({"q":query,"format":"rss"})))
+            for item in feed.findall("./channel/item")[:8]:
+                url=item.findtext("link","");parsed=urlparse(url)
+                if parsed.scheme in {"http","https"} and parsed.hostname and not parsed.username and not parsed.password:
+                    results.append({"title":item.findtext("title","")[:300],"url":url,"snippet":item.findtext("description","")[:800]})
+        except Exception:pass
+        try:
+            import re,html
+            payload=json.loads(fetch("https://en.wikipedia.org/w/api.php?"+urlencode({"action":"query","list":"search","srsearch":query,"srlimit":6,"format":"json"})))
+            wiki=[{"title":item["title"],"url":"https://en.wikipedia.org/?curid="+str(item["pageid"]),"snippet":html.unescape(re.sub('<[^>]+>','',item.get("snippet","")))[:800]} for item in payload.get("query",{}).get("search",[])]
+            results=wiki+results
+        except Exception:pass
+        if not results:raise ValueError("Web lookup is unavailable. Check the internet connection; I have not opened a guessed page.")
+        return {"results":results}
     if req["op"] == "browser":
         from urllib.parse import urlparse
         url=req["url"];parsed=urlparse(url)

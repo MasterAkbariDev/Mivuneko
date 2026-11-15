@@ -52,7 +52,16 @@ export function ComputerSession({
     setError("");
     setDone(false);
     try {
+      const page =
+        desired.intent === "page"
+          ? await call<{ url: string; title: string }>(
+              "computer_resolve_page",
+              { task, model: settings.current.ollamaModel },
+            )
+          : null;
+      if (ticket !== generation.current) return;
       const url =
+        page?.url ??
         desired.url ??
         `https://www.google.com/search?q=${encodeURIComponent(desired.query)}`;
       await call("computer_open_browser", {
@@ -63,9 +72,11 @@ export function ComputerSession({
       setSession("browser");
       setDone(true);
       onResult?.(
-        desired.url
-          ? "I've opened the page in your browser."
-          : `I've opened a browser search for ${desired.query}.`,
+        page
+          ? `I've opened ${page.title} in your browser.`
+          : desired.url
+            ? "I've opened the page in your browser."
+            : `I've opened a browser search for ${desired.query}.`,
       );
     } catch (e) {
       if (ticket === generation.current) setError(String(e));
@@ -81,6 +92,7 @@ export function ComputerSession({
   }
   useEffect(() => {
     let disposed = false;
+    const ticket = generation.current;
     if (browserTask(initialTask)) {
       void Promise.resolve().then(() => {
         if (disposed || autoStarted.current) return;
@@ -91,9 +103,35 @@ export function ComputerSession({
     } else
       void call<any>("computer_windows")
         .then(async (v) => {
-          if (disposed) return;
+          if (disposed || ticket !== generation.current) return;
           setWindows(v.windows);
           setTarget(v.windows[0]?.id ?? "");
+          if (
+            initialTask &&
+            settings.current.computerApproval === "automatic"
+          ) {
+            setBusy(true);
+            try {
+              const selected = await call<{
+                windowId: string;
+                needsWorkspace: boolean;
+              }>("computer_select_target", {
+                task: initialTask,
+                model: settings.current.ollamaModel,
+              });
+              if (disposed || ticket !== generation.current) return;
+              if (selected.windowId) {
+                setTarget(selected.windowId);
+                if (!selected.needsWorkspace) {
+                  void start(selected.windowId);
+                  return;
+                }
+              }
+            } catch (e) {
+              if (!disposed) setError(String(e));
+            }
+            if (!disposed) setBusy(false);
+          }
         })
         .catch((e) => setError(String(e)));
     const stop = () => {
@@ -426,7 +464,13 @@ export function ComputerSession({
           <button onClick={() => void next()}>Observe again</button>
         )}
         {busy && (
-          <p role="status">Observing the app and planning the next step…</p>
+          <p role="status">
+            {desiredBrowser?.intent === "page"
+              ? "Finding a page that matches your request…"
+              : desiredBrowser
+                ? "Opening your browser…"
+                : "Observing the app and planning the next step…"}
+          </p>
         )}
         {error && (
           <p role="alert" className="error">

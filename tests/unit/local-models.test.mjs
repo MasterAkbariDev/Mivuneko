@@ -96,3 +96,20 @@ test("website navigation is never mistaken for opening an installed app", () => 
   ])
     assert.equal(browserTask(text), null, text);
 });
+
+test("browser instructions are separated from the search subject and page goals", () => {
+  assert.equal(
+    browserTask("search about ultron in my browser\\").query,
+    "ultron",
+  );
+  assert.equal(
+    browserTask("open elon musk description in browser").intent,
+    "page",
+  );
+  assert.equal(
+    browserTask("open elon musk description in browser").query,
+    "elon musk description",
+  );
+  assert.equal(browserTask("open cmd.exe"), null);
+  assert.equal(browserTask("open main.py"), null);
+});

@@ -10,9 +10,10 @@ export function browserTask(text: string): {
   query: string;
   url?: string;
   useDefault?: boolean;
+  intent?: "page";
 } | null {
   const navigation =
-    /^(?:please\s+|can you\s+|could you\s+)?(?:open|visit|browse(?:\s+to)?|go\s+to)\s+(.+)/i.exec(
+    /^(?:please\s+|can you\s+|could you\s+)?(?:open|visit|browse(?:\s+to)?|go\s+to|find|show(?:\s+me)?)\s+(.+)/i.exec(
       text.trim(),
     );
   if (
@@ -25,7 +26,7 @@ export function browserTask(text: string): {
         /\s+(?:on|in|using|with)\s+(?:(?:my|the|a)\s+)?(?:default\s+|web\s+)?(?:browser|web|internet|edge|chrome|firefox)[.!?]*$/i,
         "",
       )
-      .replace(/^the\s+/i, "")
+      .replace(/^(?:the|a|an)\s+/i, "")
       .replace(/\s+(?:home\s*page|page|website|site)$/i, "")
       .replace(/[.!?]+$/, "")
       .trim();
@@ -38,6 +39,9 @@ export function browserTask(text: string): {
     let url = known[target.toLowerCase()];
     if (
       !url &&
+      !/\.(?:exe|msi|bat|cmd|ps1|py|js|ts|json|txt|zip|pdf|docx?)$/i.test(
+        target,
+      ) &&
       /^(?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[/:?#][^\s]*)?$/i.test(
         target,
       )
@@ -67,7 +71,7 @@ export function browserTask(text: string): {
           ? (named[1].toLowerCase() as "edge" | "chrome" | "firefox")
           : "edge",
         query: target,
-        ...(url ? { url } : {}),
+        ...(url ? { url } : { intent: "page" as const }),
         ...(!named ? { useDefault: true } : {}),
       };
     }
@@ -86,8 +90,14 @@ export function browserTask(text: string): {
       ? (explicit[1].toLowerCase() as "edge" | "chrome" | "firefox")
       : "edge",
     query: (explicit ? explicit[2] : search![1])
-      .replace(/\s+for me[.!?]*$/i, "")
-      .replace(/[.!?]+$/, "")
+      .replace(/[\\.!?]+$/, "")
+      .replace(/\s+for me\b/gi, "")
+      .replace(
+        /\s+(?:on|in|using|with)\s+(?:(?:my|the|a)\s+)?(?:default\s+|web\s+)?(?:browser|web|internet|edge|chrome|firefox)$/i,
+        "",
+      )
+      .replace(/^(?:about|for)\s+/i, "")
       .trim(),
+    ...(!explicit ? { useDefault: true } : {}),
   };
 }
