@@ -463,10 +463,20 @@ export function App() {
         return;
       }
       const intent = desktopIntent(text);
-      if (intent?.kind === "gesture" || intent?.kind === "lie") {
-        await performCompanionActions([intent], c.signal);
+      if (
+        intent?.kind === "gesture" ||
+        intent?.kind === "lie" ||
+        intent?.kind === "sit"
+      ) {
+        if ((intent.kind === "sit" || intent.kind === "lie") && !isNative)
+          updatePreferences({ petMode: intent.kind });
+        else await performCompanionActions([intent], c.signal);
         add(
-          intent.kind === "lie" ? "I'll lie down and relax." : "There you go.",
+          intent.kind === "lie"
+            ? "I'll lie down and relax."
+            : intent.kind === "sit"
+              ? "I found a seat."
+              : "There you go.",
         );
         return;
       }
@@ -508,7 +518,6 @@ export function App() {
       }
       if (
         intent?.kind === "stand" ||
-        intent?.kind === "sit" ||
         intent?.kind === "automatic" ||
         intent?.kind === "move"
       ) {
@@ -535,22 +544,18 @@ export function App() {
           petMode:
             intent.kind === "stand"
               ? "stand"
-              : intent.kind === "sit"
-                ? "sit"
-                : intent.kind === "automatic"
-                  ? "auto"
-                  : intent.gait,
+              : intent.kind === "automatic"
+                ? "auto"
+                : intent.gait,
         });
         add(
           intent.kind === "stand"
             ? "Standing up."
-            : intent.kind === "sit"
-              ? "I'll sit here."
-              : intent.kind === "automatic"
-                ? "I'll choose when to move and rest again."
-                : intent.destination === "unobtrusive"
-                  ? "I'll move to a quiet edge and stay out of your way."
-                  : `Moving ${intent.destination.startsWith("monitor-") ? "to your requested monitor" : intent.destination === "elsewhere" ? "to another spot" : `toward the ${intent.destination}`}.`,
+            : intent.kind === "automatic"
+              ? "I'll choose when to move and rest again."
+              : intent.destination === "unobtrusive"
+                ? "I'll move to a quiet edge and stay out of your way."
+                : `Moving ${intent.destination.startsWith("monitor-") ? "to your requested monitor" : intent.destination === "elsewhere" ? "to another spot" : `toward the ${intent.destination}`}.`,
         );
         setMood("happy");
         return;
@@ -571,12 +576,13 @@ export function App() {
       markTurn("turn.first_text");
       markTurn("turn.reply_done");
       if (reply.computerTask && (mode === "Assist" || mode === "Autonomous")) {
-        add(reply.text);
+        setStreaming("");
         launchTask(text, userMessageIndex + 1);
         setMood("idle");
         return;
       }
-      add(reply.text, false);
+      setStreaming("");
+      if (!reply.appQuery) add(reply.text, false);
       if (reply.companionActions?.length && !fileTask(text)) {
         if (!isNative)
           throw Error("Desktop actions require the installed app.");
@@ -593,7 +599,6 @@ export function App() {
         } finally {
           chainActive.current = false;
         }
-        add("Done. I finished the requested companion actions.");
         return;
       }
       const hasCode = /```|~~~/.test(reply.text);
@@ -864,7 +869,7 @@ export function App() {
                         role: "assistant",
                         text:
                           r.state === "arrived"
-                            ? "I'm here."
+                            ? pending.text
                             : r.state === "cancelled"
                               ? "Stopped."
                               : `I couldn't move there: ${r.message}`,
@@ -877,7 +882,7 @@ export function App() {
             if (r.state === "failed") {
               setError(r.message);
               publishPet("concerned", r.message);
-            } else if (r.state === "arrived") publishPet("happy", r.message);
+            } else if (r.state === "arrived") publishPet("idle", "");
           },
         ],
         [
@@ -1234,8 +1239,10 @@ export function App() {
                 ) : null}
                 {busy && streaming ? (
                   <div className="message assistant">
-                    <small>{name}</small>
-                    <p>{streaming}</p>
+                    <span className="message-portrait">
+                      <CompanionPortrait />
+                    </span>
+                    <Markdown text={streaming} />
                   </div>
                 ) : null}
                 {busy && !streaming ? (

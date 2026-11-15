@@ -66,7 +66,19 @@ export async function performCompanionActions(
           );
         });
       } else if (action.kind === "lie") {
-        cancelCompanionTask();
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("recover_pet", { center: false });
+        await moveCompanion(
+          "seat",
+          signal,
+          () =>
+            updatePreferences({
+              petMode: "walk",
+              petEdit: false,
+              focus: false,
+            }),
+          "lie",
+        );
         updatePreferences({ petMode: "lie" });
       } else if (action.kind === "move" || action.kind === "hide") {
         const destination =

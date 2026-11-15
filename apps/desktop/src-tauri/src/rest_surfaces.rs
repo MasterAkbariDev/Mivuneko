@@ -91,7 +91,7 @@ pub async fn pet_rest_surfaces(
   let cache=ICONS.get_or_init(||Mutex::new((Instant::now()-Duration::from_secs(30),vec![])));
   if let Ok(mut cached)=cache.lock(){if cached.0.elapsed()>Duration::from_secs(15){cached.0=Instant::now();if let Ok(config)=super::local_runtime::config(&app){if let Ok(path)=super::local_runtime::helper(&app,"rest_surface_worker.py",include_str!("../../../../services/local-runtime/computer.py")){use std::io::Write;use std::process::Stdio;if let Ok(mut child)=super::local_runtime::command(&config).arg(path).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn(){if let Some(mut input)=child.stdin.take(){let _=input.write_all(b"{\"op\":\"surfaces\"}");}
 if let Ok(output)=child.wait_with_output(){if let Ok(v)=serde_json::from_slice::<Value>(&output.stdout){if let Some(items)=v["result"].as_array(){cached.1=items.clone();}}}}}}}
-   result.extend(cached.1.iter().filter(|v|{let ix=v["left"].as_i64().unwrap_or(0) as i32;let iy=v["y"].as_i64().unwrap_or(0) as i32;ix>=x&&ix<x+width&&iy>y+80&&iy<y+height-30&&!windows.iter().any(|(_,r)|ix>=r.left&&ix<=r.right&&iy>=r.top&&iy<=r.bottom)}).cloned());}
+   result.extend(cached.1.iter().filter(|v|{let ix=v["left"].as_i64().unwrap_or(0) as i32;let iy=v["y"].as_i64().unwrap_or(0) as i32;let right=v["right"].as_i64().unwrap_or(ix as i64) as i32;ix>=x&&ix<x+width&&iy>y+80&&iy<y+height-30&&!windows.iter().any(|(_,r)|right>=r.left&&ix<=r.right&&iy>=r.top&&iy<=r.bottom)}).cloned());}
   Ok(result)
  }).await.map_err(|_|"Resting surface lookup failed")?
 }

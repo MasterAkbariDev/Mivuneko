@@ -44,6 +44,19 @@ test("walk and run repaint every illustrated character even with a selected expr
         "true",
         { timeout: 15000 },
       );
+      await expect
+        .poll(
+          () =>
+            preview.evaluate((el) => {
+              const c = el.querySelector("canvas");
+              return (
+                !!c?.dataset.image &&
+                el.getAttribute("data-frame")!.includes(c.dataset.image)
+              );
+            }),
+          { timeout: 15000 },
+        )
+        .toBe(true);
       const hashes = await preview
         .locator("canvas")
         .evaluate(async (canvas: HTMLCanvasElement) => {

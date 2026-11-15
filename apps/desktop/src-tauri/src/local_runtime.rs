@@ -25,6 +25,7 @@ pub struct Runtime {
     voice: Mutex<Option<Voice>>,
     pid: AtomicU32,
     speaking: AtomicBool,
+    generation: AtomicU32,
 }
 pub fn terminate_owned(pid: u32) {
     if pid == 0 {
@@ -176,17 +177,25 @@ impl Runtime {
             .voices
             .clone()
             .unwrap_or_else(|| config.model_dir.join("voices.bin"));
-        let result=self.call(app,json!({"action":"speak_fast","fastModelDir":config.model_dir,"voices":voices,"text":text,"speaker":speaker,"speed":speed}))?;
+        let result=self.call(app,json!({"action":"speak_fast","fastModelDir":config.model_dir,"voices":voices,"text":text,"speaker":speaker,"speed":speed}),self.generation.load(Ordering::SeqCst))?;
         base64::engine::general_purpose::STANDARD
             .decode(result["audio"].as_str().ok_or("No CPU speech returned")?)
             .map_err(|_| "Invalid CPU audio".into())
     }
-    fn call(&self, app: &tauri::AppHandle, request: Value) -> Result<Value, String> {
+    fn call(
+        &self,
+        app: &tauri::AppHandle,
+        request: Value,
+        generation: u32,
+    ) -> Result<Value, String> {
         let c = config(app)?;
         let mut voice = self
             .voice
             .lock()
             .map_err(|_| "Voice runtime lock unavailable")?;
+        if self.generation.load(Ordering::SeqCst) != generation {
+            return Err("Voice request cancelled".into());
+        }
         if voice
             .as_mut()
             .is_some_and(|v| v.child.try_wait().ok().flatten().is_some())
@@ -218,6 +227,10 @@ impl Runtime {
         }
         self.speaking.store(true, Ordering::SeqCst);
         let result = (|| {
+            if self.generation.load(Ordering::SeqCst) != generation {
+                terminate_owned(self.pid.swap(0, Ordering::SeqCst));
+                return Err("Voice request cancelled".into());
+            }
             let worker = voice.as_mut().unwrap();
             writeln!(worker.input, "{}", request).map_err(|e| e.to_string())?;
             worker.input.flush().map_err(|e| e.to_string())?;
@@ -284,26 +297,9 @@ impl Runtime {
         Ok(())
     }
     pub fn cancel(&self) {
-        if !self.speaking.load(Ordering::SeqCst) {
-            return;
-        }
-        let pid = self.pid.swap(0, Ordering::SeqCst);
-        if pid == 0 {
-            return;
-        }
-        #[cfg(windows)]
-        unsafe {
-            #[link(name = "kernel32")]
-            extern "system" {
-                fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
-                fn TerminateProcess(handle: isize, code: u32) -> i32;
-                fn CloseHandle(handle: isize) -> i32;
-            }
-            let h = OpenProcess(1, 0, pid);
-            if h != 0 {
-                TerminateProcess(h, 1);
-                CloseHandle(h);
-            }
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        if self.speaking.load(Ordering::SeqCst) {
+            terminate_owned(self.pid.swap(0, Ordering::SeqCst));
         }
     }
 }
@@ -372,11 +368,12 @@ pub async fn qwen_synthesize(
         return Err("Invalid voice request".into());
     }
     let runtime = runtime.inner().clone();
+    let generation = runtime.generation.load(Ordering::SeqCst);
     tauri::async_runtime::spawn_blocking(move||{
         let c=config(&app)?;
         // The 12 GB device cannot keep both large model families resident reliably.
         let _=reqwest::blocking::Client::builder().no_proxy().timeout(std::time::Duration::from_secs(20)).build().and_then(|http|http.post("http://127.0.0.1:11434/api/generate").json(&json!({"model":ollama_model,"keep_alive":0})).send());
-        let result=runtime.call(&app,json!({"action":"speak","text":text,"mood":mood,"speaker":speaker,"language":language,"instruction":instruction,"modelDir":c.model_dir}))?;
+        let result=runtime.call(&app,json!({"action":"speak","text":text,"mood":mood,"speaker":speaker,"language":language,"instruction":instruction,"modelDir":c.model_dir}),generation)?;
         base64::engine::general_purpose::STANDARD.decode(result["audio"].as_str().ok_or("No local speech returned")?).map_err(|_|"Invalid local audio".into())
     }).await.map_err(|_|"Local voice worker failed")?
 }
@@ -391,6 +388,28 @@ mod response_deadline_tests {
             voice_line_with_deadline(&mut input, 0, std::time::Duration::from_secs(1)).unwrap(),
             "{\"ok\":true}\n"
         );
+    }
+    #[cfg(windows)]
+    #[test]
+    fn cancellation_terminates_owned_descendants_and_invalidates_pending_requests() {
+        use std::os::windows::process::CommandExt;
+        let mut child = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", "& powershell.exe -NoProfile -NonInteractive -Command 'Write-Output ready; Start-Sleep -Seconds 30'"])
+            .creation_flags(0x08000000).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
+        let mut output = BufReader::new(child.stdout.take().unwrap());
+        let mut ready = String::new();
+        output.read_line(&mut ready).unwrap();
+        assert_eq!(ready.trim(), "ready");
+        let runtime = Runtime::default();
+        runtime.pid.store(child.id(), Ordering::SeqCst);
+        runtime.speaking.store(true, Ordering::SeqCst);
+        let start = std::time::Instant::now();
+        runtime.cancel();
+        assert_eq!(runtime.generation.load(Ordering::SeqCst), 1);
+        let mut line = String::new();
+        assert_eq!(output.read_line(&mut line).unwrap(), 0);
+        child.wait().unwrap();
+        assert!(start.elapsed() < std::time::Duration::from_secs(5));
     }
     #[cfg(windows)]
     #[test]

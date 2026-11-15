@@ -80,3 +80,23 @@ test("every bundled character has a distinct local voice recipe", () => {
   }
   assert.equal(recipes.size, roots.length);
 });
+
+test("casual sit and app requests retain executable intent", () => {
+  for (const text of [
+    "go sit somewhere",
+    "sit somewhere",
+    "please go and sit down",
+    "take a seat",
+  ])
+    assert.deepEqual(desktopIntent(text), { kind: "sit" });
+  assert.deepEqual(desktopIntent("open vscode for me"), {
+    kind: "open",
+    query: "vscode",
+  });
+  assert.equal(
+    matchApps(desktopIntent("open vscode for me").query, [
+      { name: "Visual Studio Code" },
+    ]).length,
+    1,
+  );
+});

@@ -57,3 +57,36 @@ test("supported seats follow moving ledges and choose the closest reachable surf
     ),
   );
 });
+
+test("taskbar is reserved for lying down, never sitting", () => {
+  const surface = {
+    id: "taskbar:1",
+    kind: "taskbar",
+    left: 0,
+    right: 1920,
+    y: 1040,
+  };
+  assert.equal(chooseRestSurface([surface], position, size, area, 280), null);
+  const lying = chooseRestSurface(
+    [surface],
+    position,
+    size,
+    area,
+    280,
+    { top: 0, bottom: 430 },
+    "lie",
+  );
+  assert.equal(lying.point.y + 430, surface.y);
+  assert.equal(
+    chooseRestSurface(
+      [ledge],
+      position,
+      size,
+      area,
+      280,
+      { top: 0, bottom: 430 },
+      "lie",
+    ),
+    null,
+  );
+});

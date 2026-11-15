@@ -384,6 +384,12 @@ export function CharacterScene({
           "leftToes",
           "rightToes",
           "head",
+          "leftHand",
+          "rightHand",
+          "leftIndexDistal",
+          "rightIndexDistal",
+          "leftMiddleDistal",
+          "rightMiddleDistal",
         ] as const) {
           const bone = vrm.humanoid.getNormalizedBoneNode(name);
           if (bone) {
@@ -426,12 +432,12 @@ export function CharacterScene({
         camera.position.x = targetX;
         camera.position.y = targetY;
         camera.lookAt(targetX, targetY, modelCenter.z);
-        camera.position.z = THREE.MathUtils.damp(
-          camera.position.z,
-          distance,
-          8,
-          delta,
-        );
+        // Expand immediately so a newly raised hand cannot cross the viewport.
+        // Only easing back toward a tighter portrait is safe to interpolate.
+        camera.position.z =
+          distance > camera.position.z
+            ? distance
+            : THREE.MathUtils.damp(camera.position.z, distance, 8, delta);
       }
       const effectKind = vrmEffect(s.expression);
       effect.visible = !!vrm && effectsRef.current && !!textures[effectKind];
@@ -534,6 +540,23 @@ export function CharacterScene({
           );
         });
         renderer.domElement.dataset.feetInFrame = String(visible);
+        renderer.domElement.dataset.handsInFrame = String(
+          [
+            "leftHand",
+            "rightHand",
+            "leftIndexDistal",
+            "rightIndexDistal",
+          ].every((name) => {
+            const bone = vrm!.humanoid.getNormalizedBoneNode(
+              name as import("@pixiv/three-vrm").VRMHumanBoneName,
+            );
+            if (!bone) return true;
+            const point = bone
+              .getWorldPosition(new THREE.Vector3())
+              .project(camera);
+            return Math.abs(point.x) < 0.98 && Math.abs(point.y) < 0.98;
+          }),
+        );
         const hips = vrm.humanoid.getNormalizedBoneNode("hips");
         if (hips) {
           const p = hips.getWorldPosition(new THREE.Vector3());

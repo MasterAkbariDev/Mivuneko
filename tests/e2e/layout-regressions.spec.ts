@@ -226,3 +226,42 @@ test("gesture composer applies bounded live combinations and voice delivery stay
   expect(voices.luna.instruction).toContain("playful live-host");
   expect(voices.haru.instruction).toContain("Warm, reassuring");
 });
+
+test("open vscode for me launches the resolved app and reports only the result", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any,
+      previous = w.__TAURI_INTERNALS__.invoke;
+    w.__launches = [];
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "list_apps")
+        return [{ id: "code", name: "Visual Studio Code" }];
+      if (c === "request_launch")
+        return {
+          id: "launch-1",
+          app: { id: "code", name: "Visual Studio Code" },
+          policy: "auto",
+        };
+      if (c === "resolve_launch") {
+        w.__launches.push(a);
+        return { ok: true, message: "Opened Visual Studio Code." };
+      }
+      if (c === "ollama_chat")
+        throw Error("Simple app launching must not be guessed by the LLM");
+      return previous(c, a);
+    };
+    const p = JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!);
+    p.voice = "off";
+    localStorage.setItem("mivuneko.preferences.v1", JSON.stringify(p));
+  });
+  await page.goto("/?view=chat");
+  await page.getByLabel(/^Message /).fill("open vscode for me");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page.getByText("Opened Visual Studio Code.", { exact: true }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__launches)).toEqual([
+    { requestId: "launch-1", allow: true },
+  ]);
+});

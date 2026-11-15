@@ -2,6 +2,7 @@ import { isNative } from "./broker";
 import { useSyncExternalStore } from "react";
 import type { Destination } from "../../../packages/shared-schemas/desktop-intent";
 export interface CompanionTask {
+  posture?: "sit" | "lie";
   destination: Destination;
   at: number;
 }
@@ -34,8 +35,15 @@ window.addEventListener("storage", (e) => {
       receive(JSON.parse(e.newValue ?? "null"));
     } catch {}
 });
-export function directCompanion(destination: Destination) {
-  const value = { destination, at: Math.max(Date.now(), (task?.at ?? 0) + 1) };
+export function directCompanion(
+  destination: Destination,
+  posture?: "sit" | "lie",
+) {
+  const value = {
+    destination,
+    ...(posture ? { posture } : {}),
+    at: Math.max(Date.now(), (task?.at ?? 0) + 1),
+  };
   receive(value);
   localStorage.setItem("mivuneko.behavior.v1", JSON.stringify(value));
   channel.postMessage(value);
@@ -74,6 +82,7 @@ export async function moveCompanion(
   destination: Destination,
   signal: AbortSignal,
   onStart: () => void,
+  posture?: "sit" | "lie",
 ) {
   const { listen } = await import("@tauri-apps/api/event");
   signal.throwIfAborted();
@@ -109,7 +118,7 @@ export async function moveCompanion(
   signal.addEventListener("abort", abort, { once: true });
   try {
     signal.throwIfAborted();
-    at = directCompanion(destination);
+    at = directCompanion(destination, posture);
     onStart();
     await completion;
   } finally {

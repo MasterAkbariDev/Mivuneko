@@ -145,8 +145,15 @@ export function desktopIntent(input: string): DesktopIntent | null {
     return { kind: "locate" };
   const open = /^(?:open|launch|start)\s+(.{1,200})$/i.exec(text);
   if (open)
-    return { kind: "open", query: open[1].replace(/\s+please$/i, "").trim() };
-  if (/^(?:sit(?: down| here| there)?|take a seat|settle down)$/i.test(text))
+    return {
+      kind: "open",
+      query: open[1].replace(/\s+(?:for me|please)$/i, "").trim(),
+    };
+  if (
+    /^(?:(?:go|move|walk)\s+(?:and\s+)?)?(?:sit(?: down)?(?: here| there| somewhere| anywhere| on (?:an? |the )?edge)?|take a seat|settle down)$/i.test(
+      text,
+    )
+  )
     return { kind: "sit" };
   if (
     /^(?:be automatic|resume(?: automatic behavior| free (?:walking|roaming))?|do your own thing|move freely|be free|you(?: are|'re) free|roam freely|free roam|walk freely)$/i.test(

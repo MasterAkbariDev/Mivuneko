@@ -95,6 +95,7 @@ export function usePetPlacement(options: Options) {
       settleY: number | undefined;
     let support: RestSurface | null = null,
       supportAt = 0;
+    let supportPosture: "sit" | "lie" = "sit";
     function seatOffset() {
       const value = parseFloat(
         document
@@ -240,7 +241,10 @@ export function usePetPlacement(options: Options) {
         }
         await fit();
         viewport();
-        if (o.sitting && (!o.task || finished === o.task.at)) {
+        if (
+          (o.sitting || o.prefs.petMode === "lie") &&
+          (!o.task || finished === o.task.at)
+        ) {
           if (!support) {
             o.onSupportLost();
             return;
@@ -261,6 +265,7 @@ export function usePetPlacement(options: Options) {
             size,
             seatOffset(),
             bodyBounds().bottom,
+            supportPosture,
           );
           const step = advance(
             position,
@@ -338,6 +343,7 @@ export function usePetPlacement(options: Options) {
                 areaOf(monitor),
                 seatOffset(),
                 bodyBounds(),
+                o.task.posture ?? "sit",
               );
               if (!chosen) {
                 finished = taskAt;
@@ -345,12 +351,15 @@ export function usePetPlacement(options: Options) {
                 await status(
                   taskAt,
                   "failed",
-                  "I'll stay standing; there isn't a suitable place to sit here.",
+                  o.task.posture === "lie"
+                    ? "I couldn't find a taskbar ledge to lie on."
+                    : "I'll stay standing; there isn't a suitable window or icon edge to sit on.",
                 );
                 o.onSupportLost();
                 return;
               }
               support = chosen.surface;
+              supportPosture = o.task.posture ?? "sit";
               target = chosen.point;
               supportAt = now;
             } else support = null;
@@ -407,7 +416,7 @@ export function usePetPlacement(options: Options) {
                 finished = o.task.at;
                 o.onComplete(finished);
                 o.onDirection(0);
-                await status(finished, "arrived", "I'm here.");
+                await status(finished, "arrived", "");
               }
             }
           }

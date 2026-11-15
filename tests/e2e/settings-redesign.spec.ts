@@ -544,7 +544,13 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
     const reducedHead = headBone.quaternion.clone();
     animateVrm(vrm, { ...state, activity: "speaking", mouth: 1 }, 1, 1, true);
     const reducedSpeechMotion = reducedHead.angleTo(headBone.quaternion);
+    const finger = vrm.humanoid.getNormalizedBoneNode("rightIndexProximal");
+    animateVrm(vrm, { ...state, expression: "idle" }, 1, 1, false);
+    const relaxedFinger = finger.quaternion.clone();
+    animateVrm(vrm, { ...state, expression: "angry" }, 1, 1, false);
+    const fingerMotion = relaxedFinger.angleTo(finger.quaternion);
     return {
+      fingerMotion,
       speechHeadMotion,
       speechArmMotion,
       reducedSpeechMotion,
@@ -557,6 +563,7 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
       ratio: canvas.width / canvas.getBoundingClientRect().width,
     };
   });
+  expect(result.fingerMotion).toBeGreaterThan(0.5);
   expect(result.speechHeadMotion).toBeGreaterThan(0.01);
   expect(result.speechArmMotion).toBeGreaterThan(0.01);
   expect(result.reducedSpeechMotion).toBeLessThan(0.001);
@@ -609,6 +616,25 @@ test("companion commands choose actions without a manual mode selector", async (
   ]) {
     await page.getByLabel("Message Mivuneko", { exact: true }).fill(text);
     await page.getByRole("button", { name: "Send", exact: true }).click();
+    if (mode === "sit") {
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () =>
+              JSON.parse(localStorage.getItem("mivuneko.behavior.v1") || "null")
+                ?.destination,
+          ),
+        )
+        .toBe("seat");
+      await page.evaluate(() => {
+        const task = JSON.parse(localStorage.getItem("mivuneko.behavior.v1")!);
+        (window as any).__emit("pet-move-result", {
+          at: task.at,
+          state: "arrived",
+          message: "",
+        });
+      });
+    }
     await expect
       .poll(() =>
         page.evaluate(
@@ -1100,7 +1126,12 @@ test("LLM posture actions execute instead of only producing an acknowledgement",
     page.getByText("Done. I finished the requested companion actions.", {
       exact: true,
     }),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await expect(
+    page
+      .locator(".message.assistant")
+      .filter({ hasText: "I'll straighten up now." }),
+  ).toHaveCount(1);
 });
 
 test("wake and movement clear sleeping overrides and the name placeholder follows the selected character", async ({
@@ -1469,4 +1500,306 @@ test("Gemini receives the selected per-character performance direction", async (
     w.__finishSpeech();
   });
   await expect(happy).toBeEnabled();
+});
+
+test("slow expressive voice cancels and falls back without late playback", async ({
+  page,
+}) => {
+  await streamingVoice(page);
+  await page.evaluate(() => {
+    const w = window as any,
+      previous = w.__TAURI_INTERNALS__.invoke;
+    w.__qwenCalls = 0;
+    w.__fastCalls = 0;
+    w.__cancelCalls = 0;
+    w.AudioContext.prototype.decodeAudioData = async () => ({ duration: 0.1 });
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+      if (command === "qwen_synthesize") {
+        w.__qwenCalls++;
+        return new Promise(() => {});
+      }
+      if (command === "cancel_local_voice") {
+        w.__cancelCalls++;
+        return;
+      }
+      if (command === "character_voice")
+        return { engine: "kokoro", speed: 1, gain: 1 };
+      if (command === "synthesize_phrase") {
+        w.__fastCalls++;
+        return [1, 2];
+      }
+      return previous(command, args);
+    };
+  });
+  await page.getByLabel("Speech engine", { exact: true }).selectOption("qwen");
+  await page.getByText("Preview voice & emotions", { exact: true }).click();
+  const happy = page
+    .locator(".mood-previews")
+    .getByRole("button", { name: "Happy", exact: true });
+  await happy.click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__fastCalls), {
+      timeout: 9000,
+    })
+    .toBeGreaterThan(0);
+  await expect(happy).toBeEnabled();
+  expect(
+    await page.evaluate(() => (window as any).__audioStarts.length),
+  ).toBeGreaterThan(0);
+  expect(
+    await page.evaluate(() => (window as any).__cancelCalls),
+  ).toBeGreaterThan(0);
+  await happy.click();
+  await expect(happy).toBeEnabled();
+  expect(await page.evaluate(() => (window as any).__qwenCalls)).toBe(1);
+});
+
+test("streaming uses the same avatar and commits only one final reply", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any,
+      previous = w.__TAURI_INTERNALS__.invoke;
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ backend: "ollama", voice: "off" }),
+    );
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "ollama_chat") {
+        w.__replyRequest = a;
+        return await new Promise((resolve) => {
+          w.__finishReply = () =>
+            resolve(
+              JSON.stringify({
+                text: "Hello, I am Haru.",
+                emotion: "happy",
+                companionActions: [{ kind: "stand" }],
+              }),
+            );
+        });
+      }
+      return previous(c, a);
+    };
+  });
+  await page.goto("/?view=chat");
+  await page.getByLabel("Message Mivuneko", { exact: true }).fill("hello haru");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => !!(window as any).__replyRequest))
+    .toBe(true);
+  await page.evaluate(() => {
+    const w = window as any;
+    w.__emit("provider-stream", {
+      requestId: w.__replyRequest.requestId,
+      delta: '{"text":"Hello, I am Haru.',
+    });
+  });
+  await expect(
+    page
+      .locator(".message.assistant")
+      .filter({ hasText: "Hello, I am Haru." })
+      .locator(".message-portrait"),
+  ).toBeVisible();
+  await page.evaluate(() => (window as any).__finishReply());
+  await expect(
+    page.getByRole("button", { name: "Stop", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator(".message.assistant").filter({ hasText: "Hello, I am Haru." }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByText("Done. I finished the requested companion actions.", {
+      exact: true,
+    }),
+  ).toHaveCount(0);
+});
+
+test("go sit somewhere waits for a seat and arrival does not say Im here", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ voice: "off", petMode: "stand" }),
+    );
+  });
+  await page.goto("/?view=chat");
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("go sit somewhere");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("mivuneko.behavior.v1") || "null")
+            ?.destination,
+      ),
+    )
+    .toBe("seat");
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!).petMode,
+    ),
+  ).toBe("walk");
+  await page.evaluate(() => {
+    const t = JSON.parse(localStorage.getItem("mivuneko.behavior.v1")!);
+    (window as any).__emit("pet-move-result", {
+      at: t.at,
+      state: "arrived",
+      message: "",
+    });
+  });
+  await expect(
+    page.getByText("I found a seat.", { exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!).petMode,
+    ),
+  ).toBe("sit");
+  await expect(page.getByText("I'm here.", { exact: true })).toHaveCount(0);
+});
+
+test("raised hands and fingertips stay inside the rendered viewport", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    delete (window as any).__TAURI_INTERNALS__;
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({
+        renderer: "sample-vrm",
+        petMode: "stand",
+        petScale: 1,
+        petEffects: false,
+      }),
+    );
+  });
+  await page.goto("/?view=pet");
+  const scene = page.locator('.character-scene[data-model-ready="true"]');
+  await expect(scene).toBeVisible({ timeout: 30000 });
+  for (const arms of ["raised", "stretch", "wave", "open", "clap"]) {
+    await page.evaluate(async (arms) => {
+      const path = "/src/preferences.ts";
+      const p = await import(path);
+      p.updatePreferences({
+        petGesture: {
+          arms,
+          head: "neutral",
+          intensity: 1,
+          tempo: 1,
+          duration: 12,
+          started: Date.now(),
+        },
+      });
+    }, arms);
+    await page.waitForTimeout(350);
+    await expect(scene.locator("canvas")).toHaveAttribute(
+      "data-hands-in-frame",
+      "true",
+    );
+  }
+});
+
+test("live replies never wait for experimental Qwen synthesis", async ({
+  page,
+}) => {
+  await streamingVoice(page);
+  await page.evaluate(() => {
+    const w = window as any,
+      previous = w.__TAURI_INTERNALS__.invoke;
+    w.__qwenCalls = 0;
+    w.__fastCalls = 0;
+    w.AudioContext.prototype.decodeAudioData = async () => ({ duration: 0.1 });
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "hermes_chat")
+        return JSON.stringify({
+          text: "Hello, I am here to help.",
+          emotion: "happy",
+        });
+      if (c === "character_voice")
+        return { engine: "kokoro", speed: 1, gain: 1 };
+      if (c === "qwen_synthesize") {
+        w.__qwenCalls++;
+        throw Error("Live replies must not invoke Qwen");
+      }
+      if (c === "synthesize_phrase") {
+        w.__fastCalls++;
+        return [1, 2];
+      }
+      return previous(c, a);
+    };
+    const key = "mivuneko.preferences.v1",
+      p = JSON.parse(localStorage.getItem(key)!);
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...p,
+        backend: "hermes",
+        voice: "push-to-talk",
+        voiceProvider: "qwen",
+      }),
+    );
+    dispatchEvent(new StorageEvent("storage", { key }));
+  });
+  await page
+    .getByRole("button", { name: "Conversations", exact: true })
+    .click();
+  await page.getByLabel("Message Mivuneko", { exact: true }).fill("hello");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__audioStarts.length), {
+      timeout: 3000,
+    })
+    .toBeGreaterThan(0);
+  expect(await page.evaluate(() => (window as any).__qwenCalls)).toBe(0);
+});
+
+test("lie down requests a taskbar resting route before changing posture", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({ voice: "off", petMode: "stand" }),
+    ),
+  );
+  await page.goto("/?view=chat");
+  await page.getByLabel("Message Mivuneko", { exact: true }).fill("lie down");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("mivuneko.behavior.v1") || "null")
+            ?.posture,
+      ),
+    )
+    .toBe("lie");
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!).petMode,
+    ),
+  ).toBe("walk");
+  await page.evaluate(() => {
+    const t = JSON.parse(localStorage.getItem("mivuneko.behavior.v1")!);
+    (window as any).__emit("pet-move-result", {
+      at: t.at,
+      state: "arrived",
+      message: "",
+    });
+  });
+  await expect(
+    page.getByText("I'll lie down and relax.", { exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!).petMode,
+    ),
+  ).toBe("lie");
 });

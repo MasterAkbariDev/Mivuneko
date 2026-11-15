@@ -32,7 +32,7 @@ test("a deictic app clarification keeps the original goal while unrelated tasks 
     "Open https://www.mozilla.org/",
   );
 });
-test("taskbar resting uses the feet and remains available to oversized characters", () => {
+test("taskbar lying uses the rendered bottom and remains available to oversized characters", () => {
   const surface = {
     id: "taskbar",
     kind: "taskbar",
@@ -47,6 +47,7 @@ test("taskbar resting uses the feet and remains available to oversized character
     { x: 0, y: 0, width: 1920, height: 1040 },
     1400,
     { top: 100, bottom: 2400 },
+    "lie",
   );
   assert.ok(seat);
   assert.equal(seat.point.y + 2400, 1040);

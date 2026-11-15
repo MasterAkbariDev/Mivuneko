@@ -32,6 +32,11 @@ export function useVoice(
   const cloud = preferences.voiceProvider === "gemini";
   const packVoicePrompt = useRef<string | undefined>(undefined);
   const requests = useRef(new Set<string>());
+  const slowExpressive = useRef(false);
+  const warmCharacter = useRef("");
+  useEffect(() => {
+    slowExpressive.current = false;
+  }, [preferences.voiceProvider]);
   const [recording, setRecording] = useState(false),
     [speaking, setSpeaking] = useState(false);
   const [preparing, setPreparing] = useState(false);
@@ -47,9 +52,47 @@ export function useVoice(
     discard = useRef(false),
     starting = useRef(false);
   function prepare() {
-    if (!context.current) context.current = new AudioContext();
+    if (!context.current || context.current.state === "closed")
+      context.current = new AudioContext();
     void context.current.resume();
+    warmVoice();
   }
+  function warmVoice() {
+    // Warm the CPU voice while the conversation model is preparing its answer.
+    // Experimental Qwen is reserved for previews; live replies must not wait for it.
+    const character =
+      preferences.renderer === "sample-vrm" ? "haru" : preferences.character;
+    if (
+      options.measureTurn &&
+      ["local", "qwen"].includes(preferences.voiceProvider) &&
+      !preferences.activePackId &&
+      preferences.renderer !== "custom-vrm" &&
+      warmCharacter.current !== character
+    ) {
+      warmCharacter.current = character;
+      void import("@tauri-apps/api/core")
+        .then(({ invoke }) =>
+          invoke("synthesize_phrase", {
+            text: "Hi.",
+            character,
+            mood: "idle",
+            speed: 1,
+          }),
+        )
+        .catch(() => {
+          warmCharacter.current = "";
+        });
+    }
+  }
+  useEffect(() => {
+    if (isNative && options.measureTurn && preferences.voice !== "off")
+      warmVoice();
+  }, [
+    preferences.voice,
+    preferences.voiceProvider,
+    preferences.character,
+    preferences.renderer,
+  ]);
   function releaseMic() {
     stream.current?.getTracks().forEach((t) => t.stop());
     stream.current = null;
@@ -192,9 +235,15 @@ export function useVoice(
     volume: number,
     emotion: Mood,
     ticket: number,
+    fastFallback = false,
   ): Promise<boolean> {
     const system = preferences.voiceProvider === "system";
-    const expressive = preferences.voiceProvider === "qwen";
+    const expressive =
+      preferences.voiceProvider === "qwen" &&
+      !fastFallback &&
+      (!options.measureTurn || !!packVoicePrompt.current);
+    if (expressive && slowExpressive.current && !packVoicePrompt.current)
+      return speakCharacter(text, volume, emotion, ticket, true);
     const identity = voiceIdentity(preferences);
     const character =
       preferences.renderer === "sample-vrm" ? "haru" : preferences.character;
@@ -270,7 +319,36 @@ export function useVoice(
       if (expressive) {
         for (const part of parts) {
           if (ticket !== generation.current) return true;
-          buffered.push(await make(part.text));
+          let deadline: ReturnType<typeof setTimeout> | undefined;
+          try {
+            buffered.push(
+              await Promise.race([
+                make(part.text),
+                new Promise<never>((_, reject) => {
+                  deadline = setTimeout(
+                    () =>
+                      reject(
+                        Error(
+                          "Expressive voice exceeded the live reply budget",
+                        ),
+                      ),
+                    5000,
+                  );
+                }),
+              ]),
+            );
+          } catch (error) {
+            if (ticket !== generation.current) return true;
+            await invoke("cancel_local_voice").catch(() => {});
+            if (packVoicePrompt.current) throw error;
+            slowExpressive.current = true;
+            onError(
+              "Expressive voice is too slow for live replies on this device. Using the character's fast local voice for this session.",
+            );
+            return speakCharacter(text, volume, emotion, ticket, true);
+          } finally {
+            clearTimeout(deadline);
+          }
         }
       }
       let pending = expressive

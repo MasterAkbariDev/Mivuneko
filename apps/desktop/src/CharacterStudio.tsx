@@ -1,3 +1,5 @@
+import { isNative } from "./broker";
+import { performCompanionActions } from "./performCompanionActions";
 import { CustomSelect } from "./CustomSelect";
 import { RangeSlider } from "./RangeSlider";
 import { cancelCompanionTask } from "./companionTask";
@@ -24,6 +26,25 @@ export function CharacterStudio({
 }) {
   const p = usePreferences();
   const session = usePetSession();
+  const [performanceError, setPerformanceError] = useState("");
+  const [placingRest, setPlacingRest] = useState(false);
+  async function lieDown() {
+    setPerformanceError("");
+    setPlacingRest(true);
+    try {
+      if (isNative)
+        await performCompanionActions(
+          [{ kind: "lie" }],
+          new AbortController().signal,
+        );
+      else updatePreferences({ petMode: "lie", petExpression: "auto" });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        setPerformanceError(String(error));
+    } finally {
+      setPlacingRest(false);
+    }
+  }
   const [arms, setArms] = useState("wave"),
     [head, setHead] = useState("nod"),
     [strength, setStrength] = useState(0.65),
@@ -224,14 +245,15 @@ export function CharacterStudio({
                     {label}
                   </button>
                 ))}
-                <button
-                  onClick={() =>
-                    updatePreferences({ petMode: "lie", petExpression: "auto" })
-                  }
-                >
+                <button disabled={placingRest} onClick={() => void lieDown()}>
                   Lie down
                 </button>
               </div>
+              {performanceError && (
+                <p className="error" role="alert">
+                  {performanceError}
+                </p>
+              )}
               <div className="gesture-composer">
                 <label>
                   Arms

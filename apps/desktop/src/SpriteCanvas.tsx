@@ -13,6 +13,8 @@ export function SpriteCanvas({
   useEffect(() => {
     let disposed = false;
     setError("");
+    if (ref.current?.dataset.image !== frame.image && ref.current)
+      ref.current.dataset.ready = "false";
     void prepareAtlas(frame.image, frame.columns, frame.rows)
       .then((frames) => {
         if (disposed || !ref.current) return;
@@ -26,6 +28,7 @@ export function SpriteCanvas({
           ctx.scale(-1, 1);
         }
         ctx.drawImage(f.canvas, 0, 0);
+        c.dataset.image = frame.image;
         c.dataset.ready = "true";
         c.petHit = (x, y) => {
           const r = c.getBoundingClientRect(),

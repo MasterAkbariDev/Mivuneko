@@ -18,6 +18,7 @@ export function restPoint(
   size: Size,
   seatOffset: number,
   feetOffset = size.height - 20,
+  posture: "sit" | "lie" = "sit",
 ): Point {
   const center = Math.max(
     surface.left + 8,
@@ -25,7 +26,7 @@ export function restPoint(
   );
   return {
     x: center - size.width / 2,
-    y: surface.y - (surface.kind === "taskbar" ? feetOffset : seatOffset),
+    y: surface.y - (posture === "lie" ? feetOffset : seatOffset),
   };
 }
 export function chooseRestSurface(
@@ -35,13 +36,25 @@ export function chooseRestSurface(
   area: Area,
   seatOffset = PET_TOP + (size.height - PET_EXTRA) * 0.62,
   bounds = { top: 0, bottom: size.height },
+  posture: "sit" | "lie" = "sit",
 ) {
   return (
     surfaces
-      .filter((s) => s.right - s.left >= 24)
+      .filter(
+        (s) =>
+          s.right - s.left >= 24 &&
+          (posture === "lie" ? s.kind === "taskbar" : s.kind !== "taskbar"),
+      )
       .map((surface) => ({
         surface,
-        point: restPoint(surface, position, size, seatOffset, bounds.bottom),
+        point: restPoint(
+          surface,
+          position,
+          size,
+          seatOffset,
+          bounds.bottom,
+          posture,
+        ),
       }))
       .filter(
         ({ surface, point }) =>

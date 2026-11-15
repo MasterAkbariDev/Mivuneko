@@ -31,6 +31,8 @@ export function animateVrm(
     rightUpperLeg: [0, 0, 0],
     leftLowerLeg: [0, 0, 0],
     rightLowerLeg: [0, 0, 0],
+    leftFoot: [0, 0, 0],
+    rightFoot: [0, 0, 0],
   };
   const mood = state.expression;
   if (["happy", "love", "wink", "joking", "teasing"].includes(mood)) {
@@ -283,6 +285,44 @@ export function animateVrm(
   pose.rightUpperArm[1] = Math.abs(pose.rightUpperArm[1]);
   pose.leftLowerArm[1] = -Math.abs(pose.leftLowerArm[1]);
   pose.rightLowerArm[1] = Math.abs(pose.rightLowerArm[1]);
+  // VRM normalized fingers curl around their local Z axes, mirrored by hand.
+  // Optional finger bones are skipped naturally by the pose application below.
+  for (const side of ["left", "right"] as const) {
+    const direction = side === "left" ? -1 : 1;
+    const activeArms =
+      gesture && Date.now() - gesture.started < gesture.duration * 1000
+        ? gesture.arms
+        : "rest";
+    const pointing = activeArms === `point-${side}`;
+    const open =
+      ["wave", "open", "raised", "clap", "stretch"].includes(
+        gesture?.arms ?? "",
+      ) || ["surprised", "excited"].includes(mood);
+    const fist = ["angry", "determined"].includes(mood) || state.body === "run";
+    for (const finger of ["Index", "Middle", "Ring", "Little"]) {
+      const curl =
+        pointing && finger === "Index"
+          ? 0.02
+          : pointing || fist
+            ? 1.05
+            : open
+              ? 0.06
+              : 0.25 + (finger === "Little" ? 0.1 : 0);
+      for (const [joint, factor] of [
+        ["Proximal", 1],
+        ["Intermediate", 0.8],
+        ["Distal", 0.6],
+      ] as const)
+        pose[`${side}${finger}${joint}`] = [0, 0, direction * curl * factor];
+    }
+    pose[`${side}ThumbMetacarpal`] = [
+      0.12,
+      direction * (fist ? 0.4 : 0.12),
+      direction * 0.15,
+    ];
+    pose[`${side}ThumbProximal`] = [0, 0, direction * (fist ? 0.55 : 0.12)];
+    pose[`${side}ThumbDistal`] = [0, 0, direction * (fist ? 0.35 : 0.08)];
+  }
   const alpha = 1 - Math.exp(-10 * delta),
     q = new THREE.Quaternion(),
     e = new THREE.Euler();

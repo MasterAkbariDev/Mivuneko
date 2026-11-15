@@ -175,7 +175,7 @@ export function CharacterVoice({
           }
         >
           <option value="local">Fast local character voice · CPU</option>
-          <option value="qwen">Qwen3-TTS · experimental, high GPU use</option>
+          <option value="qwen">Qwen3-TTS previews · fast local replies</option>
           <option value="gemini">Expressive character voice · Gemini</option>
           {(systemSpeech || preferences.voiceProvider === "system") && (
             <option value="system" disabled={!systemSpeech}>
@@ -236,8 +236,10 @@ export function CharacterVoice({
           <p className="hint">
             Runs locally with emotion and delivery instructions. The model
             shares GPU memory with Ollama; the app unloads one before loading
-            the other. Generation can be slow. For quick conversation, choose
-            fast local voice or Gemini.
+            the other. Qwen is used for expressive previews; live replies use
+            the character's fast local voice to avoid long waits. Previews also
+            fall back after five seconds on slow devices. Choose Gemini for
+            expressive streamed replies.
           </p>
           <label className="setting">
             Voice
