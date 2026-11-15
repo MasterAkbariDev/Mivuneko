@@ -47,7 +47,7 @@ test.beforeEach(async ({ page }) => {
             ],
           };
         if (command === "computer_select_target")
-          return { windowId: "", needsWorkspace: true };
+          return { windowId: "qa-window", needsWorkspace: false };
         if (command === "computer_resolve_page")
           return {
             url: "https://en.wikipedia.org/wiki/Elon_Musk",
@@ -145,9 +145,8 @@ test("computer actions wait for approval and submit only the bound session revis
       }),
     ),
   );
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(
-    page.getByText("Click the visible test button", { exact: true }),
+    page.getByRole("region", { name: "Permission request" }),
   ).toBeVisible();
   expect(
     await page.evaluate(
@@ -156,12 +155,10 @@ test("computer actions wait for approval and submit only the bound session revis
           .length,
     ),
   ).toBe(0);
-  await page
-    .getByRole("button", { name: "Approve this step", exact: true })
-    .click();
-  await expect(
-    page.getByRole("button", { name: "Done", exact: true }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
+  await expect(page.locator(".thinking-trace > summary").last()).toContainText(
+    "Completed",
+  );
   const call = await page.evaluate(() =>
     (window as any).__calls.find((v: any) => v.command === "computer_act"),
   );
@@ -169,10 +166,14 @@ test("computer actions wait for approval and submit only the bound session revis
     sessionId: "session-1",
     revision: 0,
     interactive: false,
+    approved: true,
   });
-  await page.getByRole("button", { name: "Done", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Computer task" })).toHaveCount(
+  await expect(page.getByRole("button", { name: "Stop session" })).toHaveCount(
     0,
+  );
+  await page.locator(".thinking-trace > summary").last().click();
+  await expect(page.locator(".thinking-scroll")).toContainText(
+    "Selecting a control",
   );
 });
 test("Stop discards a late computer proposal without executing it", async ({
@@ -185,14 +186,13 @@ test("Stop discards a late computer proposal without executing it", async ({
       new CustomEvent("mivuneko-open-computer", { detail: "Use the test app" }),
     );
   });
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Stop session", exact: true }),
+    page.getByRole("button", { name: "Stop", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Stop session", exact: true }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
   await page.evaluate(() => (window as any).__releasePlan());
   await expect(
-    page.getByRole("button", { name: "Approve this step", exact: true }),
+    page.getByRole("button", { name: "Allow", exact: true }),
   ).toHaveCount(0);
   expect(
     await page.evaluate(
@@ -211,9 +211,7 @@ test("browser searches open directly without planning, mouse input or step appro
     .getByLabel("Message Mivuneko", { exact: true })
     .fill("open Edge and search elon musk for me");
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Open in browser", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
   await expect(
     page.getByText("I've opened a browser search for elon musk.", {
       exact: true,
@@ -302,10 +300,9 @@ test("routine app steps execute automatically and reobserve a stale window", asy
       }),
     );
   });
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Done", exact: true }),
-  ).toBeVisible();
+  await expect(page.locator(".thinking-trace > summary").last()).toContainText(
+    "Completed",
+  );
   const calls = await page.evaluate(() => (window as any).__calls);
   expect(calls.filter((v: any) => v.command === "computer_next")).toHaveLength(
     3,
@@ -417,9 +414,7 @@ test("opening a description resolves and opens a relevant page rather than a sea
     .getByLabel("Message Mivuneko", { exact: true })
     .fill("open elon musk description in browser");
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Open in browser", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
   await expect(
     page.getByText("I've opened Elon Musk in your browser.", { exact: true }),
   ).toBeVisible();
@@ -463,9 +458,9 @@ test("model-understood editor requests hand off the original goal and select the
     .getByLabel("Message Mivuneko", { exact: true })
     .fill("Could you implement a small greeting function in my editor?");
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Done", exact: true }),
-  ).toBeVisible();
+  await expect(page.locator(".thinking-trace > summary").last()).toContainText(
+    "Completed",
+  );
   const calls = await page.evaluate(() => (window as any).__calls);
   expect(calls.find((v: any) => v.command === "computer_start").args.task).toBe(
     "Could you implement a small greeting function in my editor?",
@@ -473,4 +468,286 @@ test("model-understood editor requests hand off the original goal and select the
   expect(
     calls.find((v: any) => v.command === "computer_start").args.windowId,
   ).toBe("qa-window");
+});
+
+test("explicit file requests need no app and follow-ups retain the original goal", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any;
+    const old = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "computer_start") w.__step = 0;
+      return old(c, a);
+    };
+    const key = "mivuneko.preferences.v1";
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...JSON.parse(localStorage.getItem(key)!),
+        computerApproval: "automatic",
+        actionReview: "auto",
+      }),
+    );
+  });
+  await page.goto("/?view=chat");
+  async function send(text: string) {
+    const before = await page.evaluate(
+      () =>
+        (window as any).__calls.filter(
+          (x: any) => x.command === "computer_start",
+        ).length,
+    );
+    await page.getByLabel("Message Mivuneko", { exact: true }).fill(text);
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as any).__calls.filter(
+              (x: any) => x.command === "computer_start",
+            ).length,
+        ),
+      )
+      .toBe(before + 1);
+    await expect(page.locator(".thinking-trace>summary").last()).toContainText(
+      "Completed",
+    );
+  }
+  await send(
+    'hey luna can you create a closure function example on this directory: "J:/Projects/jsPractice/closure/"',
+  );
+  await send("use notepad for that matter");
+  let starts = await page.evaluate(() =>
+    (window as any).__calls
+      .filter((x: any) => x.command === "computer_start")
+      .map((x: any) => x.args),
+  );
+  expect(starts[0].windowId).toBe("");
+  expect(starts[0].workspace).toBe("J:/Projects/jsPractice/closure");
+  expect(starts[1].task).toContain("closure function");
+  expect(starts[1].task).toContain("notepad");
+  await send('Create a grocery list file in "J:/Projects/shopping/"');
+  starts = await page.evaluate(() =>
+    (window as any).__calls
+      .filter((x: any) => x.command === "computer_start")
+      .map((x: any) => x.args),
+  );
+  expect(starts.at(-1).task).not.toContain("closure");
+  expect(starts.at(-1).workspace).toBe("J:/Projects/shopping");
+  const calls = await page.evaluate(() => (window as any).__calls);
+  expect(calls.some((x: any) => x.command === "computer_select_target")).toBe(
+    false,
+  );
+});
+
+test("numbered questions support keyboard selection and preserve task context", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any,
+      old = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "computer_next" && !w.__asked) {
+        w.__asked = true;
+        return {
+          revision: 0,
+          step: 1,
+          action: {
+            kind: "ask_user",
+            reason: "Which example would you like?",
+            options: ["Counter", "Private state", "Both"],
+          },
+          observation: { image: "", title: "Workspace", elements: [] },
+        };
+      }
+      return old(c, a);
+    };
+    const key = "mivuneko.preferences.v1";
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...JSON.parse(localStorage.getItem(key)!),
+        computerApproval: "automatic",
+      }),
+    );
+  });
+  await page.goto("/?view=chat");
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill('Create a closure example in "J:/Projects/practice/"');
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  const question = page.getByRole("region", { name: "Companion question" });
+  await expect(question.getByRole("radio")).toHaveCount(3);
+  await question.getByRole("radio").first().focus();
+  await page.keyboard.press("3");
+  await expect(question.getByRole("radio").nth(2)).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await page.keyboard.press("Enter");
+  await expect(question).toHaveCount(0);
+  await expect(page.locator(".thinking-trace>summary").last()).toContainText(
+    "Completed",
+  );
+  const starts = await page.evaluate(() =>
+    (window as any).__calls.filter((x: any) => x.command === "computer_start"),
+  );
+  expect(starts.at(-1).args.task).toContain("Both");
+  expect(starts.at(-1).args.task).toContain("closure example");
+});
+
+test("custom dropdown opens styled options and mic control stays square", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await expect(page.getByLabel("Companion mode")).not.toBeVisible();
+  await page.getByLabel("Conversation options", { exact: true }).click();
+  const control = page
+    .locator(".custom-select")
+    .filter({ has: page.getByLabel("Companion mode") });
+  await control.getByRole("button").click();
+  const menu = page.getByRole("listbox", { name: "Companion mode" });
+  await expect(menu).toBeVisible();
+  await menu.getByRole("option", { name: "Creative", exact: true }).click();
+  await expect(page.getByLabel("Companion mode")).toHaveValue("Creative");
+  await page.getByLabel("Conversation options", { exact: true }).click();
+  const box = await page
+    .getByRole("button", { name: "Record", exact: true })
+    .boundingBox();
+  expect(Math.abs(box!.width - box!.height)).toBeLessThan(1);
+  await page.setViewportSize({ width: 430, height: 820 });
+  await expect(
+    page.getByLabel("Message Mivuneko", { exact: true }),
+  ).toBeInViewport();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("task activity names the running action, survives tab changes and retains completed records", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any,
+      old = w.__TAURI_INTERNALS__.invoke;
+    w.__holdAction = true;
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "computer_start") w.__step = 0;
+      if (c === "computer_next" && !w.__step)
+        return {
+          revision: 0,
+          step: 1,
+          action: {
+            kind: "write_file",
+            path: "closure.js",
+            text: "const counter = () => 1;",
+            reason: "Save the requested example",
+          },
+          observation: { image: "", title: "Workspace", elements: [] },
+          review: { decision: "allow", summary: "Requested file creation" },
+        };
+      if (c === "computer_act" && !w.__step && w.__holdAction)
+        await new Promise<void>((resolve) => {
+          w.__releaseAction = resolve;
+        });
+      return old(c, a);
+    };
+    const key = "mivuneko.preferences.v1";
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...JSON.parse(localStorage.getItem(key)!),
+        computerApproval: "automatic",
+      }),
+    );
+  });
+  await page.goto("/?view=chat");
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill('Create a closure example in "J:/Projects/practice/"');
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.locator(".thinking-trace>summary").last()).toContainText(
+    "Saving closure.js",
+  );
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__calls.filter(
+          (x: any) => x.command === "computer_stop",
+        ).length,
+    ),
+  ).toBe(0);
+  await page.evaluate(() => {
+    (window as any).__holdAction = false;
+    (window as any).__releaseAction();
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).__calls.filter(
+            (x: any) => x.command === "computer_stop",
+          ).length,
+      ),
+    )
+    .toBeGreaterThan(0);
+  await page
+    .getByRole("button", { name: "Conversations", exact: true })
+    .click();
+  await expect(page.locator(".thinking-trace>summary").last()).toContainText(
+    "Completed",
+  );
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill('Create a shopping file in "J:/Projects/shopping/"');
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.locator(".thinking-trace")).toHaveCount(2);
+  await expect(page.locator(".thinking-trace>summary").last()).toContainText(
+    "Completed",
+  );
+  await page.locator(".thinking-trace>summary").first().click();
+  await expect(page.locator(".thinking-trace").first()).toContainText(
+    "Saving closure.js",
+  );
+  await page.screenshot({ path: ".local/design/task-activity.png" });
+  expect(
+    await page
+      .locator(".thinking-trace")
+      .first()
+      .evaluate(
+        (el) =>
+          !!el
+            .closest(".conversation-turn")
+            ?.nextElementSibling?.textContent?.includes("requested result"),
+      ),
+  ).toBe(true);
+});
+
+test("the add button is separate from the composer and controls stay within their row", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  const plus = page.getByRole("button", { name: "Apps", exact: true });
+  expect(await plus.evaluate((el) => el.closest("form") === null)).toBe(true);
+  for (const width of [1440, 900, 430]) {
+    await page.setViewportSize({ width, height: 900 });
+    const a = await plus.boundingBox(),
+      form = await page.locator(".composer-row form").boundingBox();
+    expect(a!.x + a!.width).toBeLessThan(form!.x);
+    await expect(
+      page.getByLabel("Message Mivuneko", { exact: true }),
+    ).toBeInViewport();
+    for (const name of ["Record", "Send"]) {
+      const r = await page
+        .getByRole("button", { name, exact: true })
+        .boundingBox();
+      expect(r!.x + r!.width).toBeLessThanOrEqual(form!.x + form!.width);
+      expect(r!.y + r!.height).toBeLessThanOrEqual(form!.y + form!.height);
+      expect(Math.abs(r!.height - r!.width)).toBeLessThan(1);
+    }
+  }
 });

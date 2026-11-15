@@ -1,3 +1,5 @@
+import { CustomSelect } from "./CustomSelect";
+import { PetSettings } from "./PetSettings";
 import { RangeSlider } from "./RangeSlider";
 import { useState } from "react";
 import { BackendSettings } from "./BackendSettings";
@@ -7,6 +9,9 @@ import { ShortcutSettings } from "./ShortcutSettings";
 import { usePreferences, updatePreferences } from "./preferences";
 import { useVoice } from "./useVoice";
 let activeCategory = "Voice & input";
+export function openSettingsCategory(name: string) {
+  activeCategory = name;
+}
 export function SettingsHome() {
   const [tab, setTab] = useState(activeCategory);
   const [error, setError] = useState("");
@@ -19,22 +24,26 @@ export function SettingsHome() {
   return (
     <div className="settings-home">
       <nav className="settings-tabs" aria-label="Settings category">
-        {["Voice & input", "Connections", "Shortcuts", "Appearance"].map(
-          (name) => (
-            <button
-              type="button"
-              key={name}
-              aria-pressed={tab === name}
-              onClick={() => {
-                void preview.stop();
-                activeCategory = name;
-                setTab(name);
-              }}
-            >
-              {name}
-            </button>
-          ),
-        )}
+        {[
+          "Appearance",
+          "Voice & input",
+          "Connections",
+          "Shortcuts",
+          "Companion",
+        ].map((name) => (
+          <button
+            type="button"
+            key={name}
+            aria-pressed={tab === name}
+            onClick={() => {
+              void preview.stop();
+              activeCategory = name;
+              setTab(name);
+            }}
+          >
+            {name}
+          </button>
+        ))}
       </nav>
       <div className="settings-content">
         {tab === "Voice & input" ? (
@@ -44,7 +53,7 @@ export function SettingsHome() {
               <h3>A conversation that feels natural</h3>
               <label className="setting">
                 Voice mode
-                <select
+                <CustomSelect
                   aria-label="Voice mode"
                   value={p.voice}
                   onChange={(e) =>
@@ -57,7 +66,7 @@ export function SettingsHome() {
                   <option value="spoken">Spoken replies</option>
                   <option value="push-to-talk">Push to talk + replies</option>
                   <option value="open-mic">Open mic + replies</option>
-                </select>
+                </CustomSelect>
               </label>
               <label className="setting">
                 Reply volume · {Math.round(p.volume * 100)}%
@@ -86,6 +95,8 @@ export function SettingsHome() {
             )}
             <SpeechSettings />
           </>
+        ) : tab === "Companion" ? (
+          <PetSettings />
         ) : tab === "Connections" ? (
           <BackendSettings />
         ) : tab === "Shortcuts" ? (

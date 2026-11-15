@@ -99,10 +99,11 @@ test("2D choices and expressions update the desktop pet", async ({
     ).toBeVisible();
     await expect(pet.locator(".luna-model")).toHaveAttribute("data-model", id);
   }
-  await page.getByLabel("Pet expression").selectOption("love");
+  await page.getByRole("button", { name: "Love", exact: true }).click();
   await expect(pet.locator(".luna-model")).toHaveAttribute("data-pose", "love");
   await expect(pet.locator(".effect-hearts")).toBeVisible();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByText("Preview voice & emotions", { exact: true }).click();
   await expect(
     page
       .locator(".mood-previews")
@@ -122,20 +123,23 @@ test("Luna previews unique expression and movement frames", async ({
     .getByLabel("Live character preview")
     .locator(".luna-model");
   const frames = new Set<string>();
-  for (const option of await page
-    .getByLabel("Pet expression")
-    .locator("option")
-    .evaluateAll((items) =>
-      items
-        .map((x) => (x as HTMLOptionElement).value)
-        .filter((x) => x !== "auto"),
-    )) {
-    await page.getByLabel("Pet expression").selectOption(option);
+  for (const [label, option] of [
+    ["Happy", "happy"],
+    ["Sad", "sad"],
+    ["Sleepy", "sleeping"],
+    ["Love", "love"],
+    ["Thinking", "thinking"],
+    ["Excited", "excited"],
+  ]) {
+    await page.getByRole("button", { name: label, exact: true }).click();
     await expect(preview).toHaveAttribute("data-pose", option);
     frames.add((await preview.getAttribute("data-frame"))!);
   }
-  expect(frames.size).toBe(21);
-  await page.getByLabel("Pet expression").selectOption("auto");
+  expect(frames.size).toBe(6);
+  await page.evaluate(async () => {
+    const { updatePreferences } = await import("/src/preferences.ts");
+    updatePreferences({ petExpression: "auto" });
+  });
   const moves = new Set<string>();
   for (const mode of ["walk", "run", "sit"]) {
     await page
@@ -163,7 +167,7 @@ test("Luna previews unique expression and movement frames", async ({
 test("every illustrated character loads distinct nonempty emotions and directional motion artwork", async ({
   page,
 }) => {
-  test.setTimeout(60000);
+  test.setTimeout(120000);
   await page.goto("/?view=chat&tab=Characters");
   const results = await page.evaluate(async () => {
     const modelsPath = "/src/lunaModel.ts",

@@ -1,3 +1,4 @@
+import { CustomSelect } from "./CustomSelect";
 import { GeminiSettings } from "./GeminiSettings";
 import { LocalModels } from "./LocalModels";
 import { useState } from "react";
@@ -11,7 +12,7 @@ export function BackendSettings() {
       <h3>Reasoning and conversation history</h3>
       <label className="setting">
         Agent backend
-        <select
+        <CustomSelect
           aria-label="Agent backend"
           value={p.backend}
           onChange={(e) =>
@@ -34,7 +35,7 @@ export function BackendSettings() {
           <option value="hermes" disabled={!isNative}>
             Local Hermes Agent
           </option>
-        </select>
+        </CustomSelect>
       </label>
       {p.backend === "auto" && (
         <p className="hint">

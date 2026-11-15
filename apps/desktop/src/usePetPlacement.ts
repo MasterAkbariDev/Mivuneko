@@ -109,6 +109,20 @@ export function usePetPlacement(options: Options) {
         (size.width / Math.max(1, innerWidth))
       );
     }
+    function bodyBounds() {
+      const root = document.querySelector<HTMLElement>(".pet-root");
+      const factor = size.width / Math.max(1, innerWidth);
+      const top = parseFloat(root?.style.getPropertyValue("--model-top") || "");
+      const bottom = parseFloat(
+        root?.style.getPropertyValue("--model-bottom") || "",
+      );
+      return {
+        top: Number.isFinite(top) ? top * factor : PET_TOP * factor,
+        bottom: Number.isFinite(bottom)
+          ? bottom * factor
+          : size.height - 20 * factor,
+      };
+    }
     const offs: Array<() => void> = [];
     async function status(at: number, state: string, message: string) {
       const { emitTo } = await import("@tauri-apps/api/event");
@@ -241,7 +255,13 @@ export function usePetPlacement(options: Options) {
               return;
             }
           }
-          const target = restPoint(support, position, size, seatOffset());
+          const target = restPoint(
+            support,
+            position,
+            size,
+            seatOffset(),
+            bodyBounds().bottom,
+          );
           const step = advance(
             position,
             target,
@@ -317,6 +337,7 @@ export function usePetPlacement(options: Options) {
                 size,
                 areaOf(monitor),
                 seatOffset(),
+                bodyBounds(),
               );
               if (!chosen) {
                 finished = taskAt;

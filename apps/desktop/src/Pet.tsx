@@ -276,17 +276,19 @@ export function Pet() {
   const body: BodyAction =
     prefs.petMode === "auto"
       ? automaticBody
-      : prefs.petMode === "run"
-        ? "run"
-        : prefs.petMode === "walk"
-          ? "walk"
-          : prefs.petMode === "dance"
-            ? "dance"
-            : prefs.petMode === "sleep"
-              ? "sleep"
-              : prefs.petMode === "sit"
-                ? "sit"
-                : "idle";
+      : prefs.petMode === "lie"
+        ? "lie"
+        : prefs.petMode === "run"
+          ? "run"
+          : prefs.petMode === "walk"
+            ? "walk"
+            : prefs.petMode === "dance"
+              ? "dance"
+              : prefs.petMode === "sleep"
+                ? "sleep"
+                : prefs.petMode === "sit"
+                  ? "sit"
+                  : "idle";
   const mood =
     prefs.petMode === "sleep"
       ? "sleeping"

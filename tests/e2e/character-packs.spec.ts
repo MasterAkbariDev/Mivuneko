@@ -58,7 +58,7 @@ test("folder imports create independent persistent slots and reject a broken pac
     page.getByRole("img", { name: /Library companion 2d companion, happy/ }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: /Creating characters & voices/ })
+    .getByRole("button", { name: "Character guide", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Character guide", exact: true }),
@@ -72,7 +72,7 @@ test("standalone VRM imports keep two independent character slots", async ({
 }) => {
   test.setTimeout(60000);
   await studio(page);
-  await page.getByRole("tab", { name: "3D Animated VRM", exact: true }).click();
+  await page.getByRole("tab", { name: "3D", exact: true }).click();
   const bytes = readFileSync("apps/desktop/public/models/haru.vrm");
   await page.getByLabel("Import VRM file").setInputFiles([
     { name: "first.vrm", mimeType: "application/octet-stream", buffer: bytes },

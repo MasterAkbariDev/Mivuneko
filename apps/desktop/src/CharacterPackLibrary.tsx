@@ -1,3 +1,4 @@
+import { CustomSelect } from "./CustomSelect";
 import { useEffect, useRef, useState } from "react";
 import {
   importPack,
@@ -137,7 +138,7 @@ export function CharacterPackLibrary({
               {p.activePackId === pack.id && pack.manifest.format !== "3d" && (
                 <label>
                   Pose preview
-                  <select
+                  <CustomSelect
                     aria-label="Imported character pose"
                     value={p.customPackPose}
                     onChange={(e) =>
@@ -150,7 +151,7 @@ export function CharacterPackLibrary({
                         {pose}
                       </option>
                     ))}
-                  </select>
+                  </CustomSelect>
                 </label>
               )}
               <small>{pack.manifest.license}</small>

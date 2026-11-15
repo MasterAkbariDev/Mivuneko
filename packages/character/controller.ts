@@ -7,8 +7,11 @@ export type Activity =
   | "working"
   | "approval"
   | "sleeping";
-export type BodyAction = "idle" | "walk" | "run" | "sit" | "sleep" | "dance";
+export type BodyAction =
+  "idle" | "walk" | "run" | "sit" | "sleep" | "dance" | "lie";
 export interface CharacterState {
+  gesture?:
+    import("../shared-schemas/procedural-gesture.ts").ProceduralGesture | null;
   activity: Activity;
   expression:
     | Mood

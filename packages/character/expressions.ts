@@ -1,5 +1,19 @@
 export function vrmFace(mood: string): Record<string, number> {
   switch (mood) {
+    case "bored":
+      return { relaxed: 0.55, sad: 0.14, blinkLeft: 0.35, blinkRight: 0.35 };
+    case "nervous":
+      return { surprised: 0.2, sad: 0.25, blinkLeft: 0.08, blinkRight: 0.03 };
+    case "relieved":
+      return { happy: 0.22, relaxed: 0.68, blinkLeft: 0.18, blinkRight: 0.18 };
+    case "embarrassed":
+      return {
+        happy: 0.32,
+        sad: 0.12,
+        relaxed: 0.25,
+        blinkLeft: 0.22,
+        blinkRight: 0.32,
+      };
     case "happy":
       return { happy: 0.7 };
     case "celebrating":
@@ -45,7 +59,7 @@ export function vrmFace(mood: string): Record<string, number> {
 export function vrmEffect(mood: string) {
   if (["happy", "love"].includes(mood)) return "hearts";
   if (["curious", "confused", "thinking"].includes(mood)) return "question";
-  if (mood === "shy") return "blush";
+  if (mood === "shy" || mood === "embarrassed") return "blush";
   if (["sad", "crying", "concerned"].includes(mood)) return "sad";
   if (["angry", "determined"].includes(mood)) return "angry";
   if (mood === "surprised") return "surprised";

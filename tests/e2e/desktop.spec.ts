@@ -29,30 +29,40 @@ test("launch approval, deny, allow, activity and unknown app", async ({
 }) => {
   await chat(page);
   await ask(page, "Open Telegram");
-  await expect(page.getByRole("dialog")).toContainText("Open Telegram?");
+  await expect(
+    page.getByRole("region", { name: "Permission request" }),
+  ).toContainText("Open Telegram?");
   await page.getByRole("button", { name: "Deny", exact: true }).click();
   await expect(page.getByRole("log")).toContainText("Launch denied");
   await ask(page, "Open Telegram");
-  await page.getByRole("button", { name: "Allow once" }).click();
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
   await expect(page.getByRole("log")).toContainText("Mock launch: Telegram");
   await ask(page, "Open cmd.exe");
   await expect(page.getByRole("alert")).toContainText(
     "No unique installed app",
   );
   await page.getByRole("button", { name: "Activity", exact: true }).click();
-  await expect(page.locator(".page")).toContainText("Mock launch: Telegram");
+  await expect(page.locator(".activity-view")).toContainText(
+    "Mock launch: Telegram",
+  );
   await page.getByRole("button", { name: "Delete log" }).click();
-  await expect(page.locator(".page")).toContainText("No tools have run");
+  await expect(page.locator(".activity-view")).toContainText(
+    "No tools have run",
+  );
 });
 test("Chat mode has no tools and disabling permission fails closed", async ({
   page,
 }) => {
   await chat(page);
+  await page.getByLabel("Conversation options", { exact: true }).click();
   await page.getByLabel("Companion mode").selectOption("Chat");
+  await page.getByLabel("Conversation options", { exact: true }).click();
   await ask(page, "Open Telegram");
   await expect(page.getByRole("log")).toContainText("Switch to Assist");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByLabel("Conversation options", { exact: true }).click();
   await page.getByLabel("Companion mode").selectOption("Assist");
+  await page.getByLabel("Conversation options", { exact: true }).click();
   await page.getByRole("button", { name: "Permissions", exact: true }).click();
   await page.getByLabel("App launching", { exact: true }).uncheck();
   await page
@@ -64,29 +74,25 @@ test("Chat mode has no tools and disabling permission fails closed", async ({
   );
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
-test("Stop cancels pending approval and modal traps keyboard focus", async ({
+test("Stop cancels a sticky permission without blocking chat", async ({
   page,
 }) => {
   await chat(page);
   await ask(page, "Open Notepad");
   await expect(
-    page.getByRole("button", { name: "Deny", exact: true }),
-  ).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(
-    page.getByRole("button", { name: "Cancel request" }),
-  ).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(
-    page.getByRole("button", { name: "Deny", exact: true }),
-  ).toBeFocused();
-  await page.getByRole("button", { name: "Cancel request" }).click();
+    page.getByRole("region", { name: "Permission request" }),
+  ).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Permission request" }),
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "Activity", exact: true }).click();
-  await expect(page.locator(".page")).toContainText(
+  await expect(page.locator(".activity-view")).toContainText(
     "Stopped; pending approvals revoked",
   );
 });
+
 test("settings and chat activity synchronize to an already open pet", async ({
   page,
   context,
@@ -99,6 +105,7 @@ test("settings and chat activity synchronize to an already open pet", async ({
   await expect(
     page.getByRole("img", { name: /Miku 2D companion/ }),
   ).toBeVisible();
+  await settings(main, "Companion");
   await main.getByLabel("Do not disturb", { exact: true }).check();
   await expect
     .poll(() =>
@@ -118,7 +125,7 @@ test("settings and chat activity synchronize to an already open pet", async ({
     "data-emotion",
     "concerned",
   );
-  await main.getByRole("button", { name: "Allow once" }).click();
+  await main.getByRole("button", { name: "Allow", exact: true }).click();
   await expect(page.locator(".pet-bubble p")).toContainText(
     "Mock launch: Telegram",
   );
@@ -171,8 +178,10 @@ test("installed app picker still requires approval", async ({ page }) => {
   await page
     .getByRole("button", { name: "Request Calculator", exact: true })
     .click();
-  await expect(page.getByRole("dialog")).toContainText("Open Calculator?");
-  await page.getByRole("button", { name: "Allow once" }).click();
+  await expect(
+    page.getByRole("region", { name: "Permission request" }),
+  ).toContainText("Open Calculator?");
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
   await expect(page.getByRole("log")).toContainText("Mock launch: Calculator");
 });
 test("opt-in history survives reload and disabling it deletes storage", async ({
@@ -272,7 +281,9 @@ test("synthetic microphone recording converts to WAV and routes transcript into 
   await page
     .getByRole("button", { name: "Finish recording", exact: true })
     .click();
-  await expect(page.getByRole("dialog")).toContainText("Open Calculator?");
+  await expect(
+    page.getByRole("region", { name: "Permission request" }),
+  ).toContainText("Open Calculator?");
   const wav = await page.evaluate(
     () =>
       (window as any).__calls.find((c: any) => c.command === "transcribe_audio")
@@ -654,7 +665,7 @@ test("completed pet captions clear while the conversation remains", async ({
   const main = await context.newPage();
   await chat(main);
   await ask(main, "Open Telegram");
-  await main.getByRole("button", { name: "Allow once" }).click();
+  await main.getByRole("button", { name: "Allow", exact: true }).click();
   await expect(page.locator(".pet-bubble")).toContainText(
     "Mock launch: Telegram",
   );
@@ -675,13 +686,17 @@ test("spoken approval resolves the pending launch", async ({ page }) => {
   });
   await chat(page);
   await ask(page, "Open Calculator");
-  await expect(page.getByRole("dialog")).toContainText("Open Calculator?");
-  await page.getByRole("button", { name: "Decide by voice" }).click();
   await expect(
-    page.getByRole("button", { name: "Finish voice decision" }),
+    page.getByRole("region", { name: "Permission request" }),
+  ).toContainText("Open Calculator?");
+  await page.getByRole("button", { name: "Record", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Finish recording", exact: true }),
   ).toBeVisible();
   await page.waitForTimeout(400);
-  await page.getByRole("button", { name: "Finish voice decision" }).click();
+  await page
+    .getByRole("button", { name: "Finish recording", exact: true })
+    .click();
   await expect(page.getByRole("log")).toContainText(
     "Launch requested for Calculator.",
   );
@@ -940,6 +955,7 @@ test("character playback completes and recovers from a failed later phrase", asy
   });
   await chat(page);
   await settings(page);
+  await page.getByText("Preview voice & emotions", { exact: true }).click();
   const happy = page
     .locator(".mood-previews")
     .getByRole("button", { name: "Happy", exact: true });

@@ -1,11 +1,30 @@
 import { desktopIntent, type DesktopIntent } from "./desktop-intent.ts";
 export type CompanionAction = Extract<
   DesktopIntent,
-  { kind: "move" | "sit" | "stand" | "automatic" | "expression" | "hide" }
+  {
+    kind:
+      | "move"
+      | "sit"
+      | "stand"
+      | "automatic"
+      | "expression"
+      | "hide"
+      | "lie"
+      | "gesture";
+  }
 >;
 const allowed = (a: DesktopIntent | null): a is CompanionAction =>
   !!a &&
-  ["move", "sit", "stand", "automatic", "expression", "hide"].includes(a.kind);
+  [
+    "move",
+    "sit",
+    "stand",
+    "automatic",
+    "expression",
+    "hide",
+    "lie",
+    "gesture",
+  ].includes(a.kind);
 export function companionSequence(
   input: string,
 ): { actions: CompanionAction[]; error?: string } | null {
@@ -37,6 +56,8 @@ export function companionSequence(
   return { actions };
 }
 export function describeAction(a: CompanionAction): string {
+  if (a.kind === "lie") return "lie down";
+  if (a.kind === "gesture") return `make a ${a.arms} gesture`;
   if (a.kind === "hide") return "step out of view";
   if (a.kind === "expression")
     return a.expression === "auto"

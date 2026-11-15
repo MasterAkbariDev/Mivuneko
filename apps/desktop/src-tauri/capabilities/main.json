@@ -74,6 +74,7 @@
     "allow-load-history",
     "allow-clear-history",
     "allow-foreground-fullscreen",
-    "allow-record-spans"
+    "allow-record-spans",
+    "allow-tray-action"
   ]
 }

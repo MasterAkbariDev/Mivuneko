@@ -1,4 +1,8 @@
 export type IconName =
+  | "search"
+  | "frame"
+  | "eye-off"
+  | "power"
   | "plus"
   | "more"
   | "pencil"
@@ -21,6 +25,12 @@ export type IconName =
   | "volume"
   | "sun";
 const paths: Record<IconName, string> = {
+  search: "M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15ZM16 16l5 5",
+  frame:
+    "M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3",
+  "eye-off":
+    "m3 3 18 18M10 5a12 12 0 0 1 2-.2c5.5 0 9 7.2 9 7.2a18 18 0 0 1-3.3 4.1M7 6.3A18 18 0 0 0 3 12s3.5 7.2 9 7.2a10 10 0 0 0 5-1.5M10 10a3 3 0 0 0 4 4",
+  power: "M12 2v10m-5-7a9 9 0 1 0 10 0",
   plus: "M12 5v14M5 12h14",
   more: "M5 12h.01M12 12h.01M19 12h.01",
   pencil: "m4 16-1 5 5-1L20 8l-4-4L4 16Zm9-9 4 4M4 16l4 4",
@@ -38,7 +48,7 @@ const paths: Record<IconName, string> = {
   shield: "M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7l-9-4Zm0 5v8m-4-4h8",
   settings:
     "m9 3-.6 3-2.5 1-2.5-1.2L1 10l2.5 2L3 15l-1 1 3 4 3-1 2 1 .5 3h4l.5-3 2-1 3 1 3-4-2-2v-3l2-1-2-4-3 1-2-1-.5-3H9ZM12 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z",
-  cat: "M6 21h13c2-2 1-5-1-6V9l-1-6-5 4-5-3-2 7-2 5c-1 3 0 5 3 5Zm3-9h.01M14 12h.01m-4 4h2",
+  cat: "M5 10 4 3l5 3a11 11 0 0 1 6 0l5-3-1 7c4 7 0 12-7 12S1 17 5 10Zm3 3v1m8-1v1m-5 3h2M5 16l-3-1m3 3-3 1m17-3 3-1m-3 3 3 1",
   pin: "m8 3 8 0-1 7 4 4H5l4-4-1-7Zm4 11v8",
   moon: "M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11Z",
   window: "M3 4h18v16H3V4Zm0 5h18M7 6.5h.01M10 6.5h.01",

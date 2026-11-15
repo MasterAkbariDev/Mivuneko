@@ -388,6 +388,10 @@ export function CharacterScene({
           const bone = vrm.humanoid.getNormalizedBoneNode(name);
           if (bone) {
             const p = bone.getWorldPosition(new THREE.Vector3());
+            halfWidth = Math.max(
+              halfWidth,
+              Math.abs(p.x - modelCenter.x) + modelHeight * 0.08,
+            );
             floor = Math.min(floor, p.y - modelHeight * 0.07);
             ceiling = Math.max(ceiling, p.y + modelHeight * 0.07);
           }

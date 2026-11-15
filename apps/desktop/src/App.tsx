@@ -1,3 +1,13 @@
+import { TaskActivity, type TaskSnapshot } from "./TaskActivity";
+import { CustomSelect } from "./CustomSelect";
+import { CompanionPortrait } from "./CompanionPortrait";
+import { ActivityView } from "./ActivityView";
+import { QuestionPanel, type TaskQuestion } from "./QuestionPanel";
+import {
+  fileTask,
+  taskWithContext,
+  isTaskFollowup,
+} from "../../../packages/shared-schemas/task-context";
 import { CharacterGuide } from "./CharacterGuide";
 import { ComputerSession } from "./ComputerSession";
 import { computerIntent } from "../../../packages/shared-schemas/computer-intent";
@@ -34,7 +44,7 @@ import type {
 import { agentFor } from "./agent";
 import { InstalledApps } from "./InstalledApps";
 import { BackendSettings } from "./BackendSettings";
-import { SettingsHome } from "./SettingsHome";
+import { SettingsHome, openSettingsCategory } from "./SettingsHome";
 import { SpeechDownloadDock } from "./speechDownloads";
 import { matchesShortcut } from "../../../packages/shared-schemas/shortcuts.ts";
 import { useVoice } from "./useVoice";
@@ -64,10 +74,40 @@ const tabs = [
 export function App() {
   const [screenRequest, setScreenRequest] = useState<string | null>(null);
   const [computerTask, setComputerTask] = useState<string | null>(null);
+  const taskContext = useRef("");
+  const messageCount = useRef(0),
+    nextRun = useRef(0),
+    activeRun = useRef(0);
+  const [taskRuns, setTaskRuns] = useState<
+    { id: number; task: string; anchor: number; snapshot?: TaskSnapshot }[]
+  >([]);
+  function beginTask(goal: string, anchor: number) {
+    const id = ++nextRun.current;
+    activeRun.current = id;
+    setTaskRuns((old) => [...old.slice(-29), { id, task: goal, anchor }]);
+    setComputerTask(goal);
+  }
+
+  const [taskRunning, setTaskRunning] = useState(false);
+  const [taskQuestion, setTaskQuestion] = useState<TaskQuestion | null>(null);
+  function launchTask(request: string, anchor = messageCount.current) {
+    const previous =
+      taskContext.current ||
+      messages.filter((m) => m.role === "user" && fileTask(m.text)).at(-1)
+        ?.text ||
+      "";
+    const goal = taskWithContext(request, previous);
+    taskContext.current = goal;
+    setTaskQuestion(null);
+    beginTask(goal, anchor);
+  }
   useEffect(() => {
     const show = (e: Event) => {
       setTab("Conversations");
-      setComputerTask((e as CustomEvent<string>).detail || "");
+      launchTask(
+        (e as CustomEvent<string>).detail || "",
+        Math.max(0, messageCount.current - 1),
+      );
     };
     window.addEventListener("mivuneko-open-computer", show);
     return () => window.removeEventListener("mivuneko-open-computer", show);
@@ -88,6 +128,7 @@ export function App() {
     [mode, setMode] = useState<Mode>("Assist"),
     [mood, setMood] = useState<Mood>("idle");
   const [messages, setMessages] = useConversation();
+  messageCount.current = messages.length;
   useEffect(() => {
     if (!isNative) return;
     let disposed = false;
@@ -321,6 +362,32 @@ export function App() {
     setMood(result.ok ? "celebrating" : "idle");
   }
   async function send(text = input) {
+    if (pending && text.trim()) {
+      const decision = voiceDecision(text);
+      if (decision !== null) {
+        setInput("");
+        await resolve(decision);
+      } else setError("Say allow or deny, or choose a button below.");
+      return;
+    }
+    if (taskQuestion && text.trim()) {
+      if (taskQuestion.kind === "question") {
+        setInput("");
+        const option = taskQuestion.options?.[Number(text.trim()) - 1];
+        taskQuestion.resolve(option?.value || text.trim());
+        return;
+      }
+      if (/^(?:allow|approve|yes)[.!?]*$/i.test(text.trim())) {
+        setInput("");
+        taskQuestion.resolve("allow");
+        return;
+      }
+      if (/^(?:deny|no|skip)[.!?]*$/i.test(text.trim())) {
+        setInput("");
+        taskQuestion.resolve(null);
+        return;
+      }
+    }
     if (
       /^(?:please\s+)?(?:stop (?:talking|speaking)|be quiet|quiet please|pause (?:your )?(?:voice|speech))\s*[.!?]*$/i.test(
         text.trim(),
@@ -343,6 +410,7 @@ export function App() {
       setError("Messages are limited to 4000 characters.");
       return;
     }
+    const userMessageIndex = messages.length;
     updatePreferences(wakeCompanion(preferences));
     setInput("");
     setStreaming("");
@@ -362,9 +430,13 @@ export function App() {
       }
       if (
         (mode === "Assist" || mode === "Autonomous") &&
-        computerIntent(text)
+        (computerIntent(text) ||
+          fileTask(text) ||
+          (isTaskFollowup(text) &&
+            (!!taskContext.current ||
+              messages.some((m) => m.role === "user" && fileTask(m.text)))))
       ) {
-        setComputerTask(text);
+        launchTask(text, userMessageIndex);
         setMood("idle");
         return;
       }
@@ -391,6 +463,13 @@ export function App() {
         return;
       }
       const intent = desktopIntent(text);
+      if (intent?.kind === "gesture" || intent?.kind === "lie") {
+        await performCompanionActions([intent], c.signal);
+        add(
+          intent.kind === "lie" ? "I'll lie down and relax." : "There you go.",
+        );
+        return;
+      }
       if (intent?.kind === "hide") {
         if (!isNative)
           throw Error("Desktop movement is available in the installed app.");
@@ -493,12 +572,12 @@ export function App() {
       markTurn("turn.reply_done");
       if (reply.computerTask && (mode === "Assist" || mode === "Autonomous")) {
         add(reply.text);
-        setComputerTask(text);
+        launchTask(text, userMessageIndex + 1);
         setMood("idle");
         return;
       }
       add(reply.text, false);
-      if (reply.companionActions?.length) {
+      if (reply.companionActions?.length && !fileTask(text)) {
         if (!isNative)
           throw Error("Desktop actions require the installed app.");
         setMood(reply.mood ?? "happy");
@@ -639,6 +718,7 @@ export function App() {
     setMood("idle");
   }
   async function stop() {
+    setTaskQuestion(null);
     window.dispatchEvent(new Event("mivuneko-computer-stop"));
     if (isNative)
       void import("@tauri-apps/api/core")
@@ -872,21 +952,113 @@ export function App() {
     void import("@tauri-apps/api/event").then(({ emit }) =>
       emit(
         "pet-chat-busy",
-        busy || !!pending || !!screenRequest || !historyReady,
+        busy ||
+          taskRunning ||
+          !!pending ||
+          !!taskQuestion ||
+          !!screenRequest ||
+          !historyReady,
       ),
     );
-  }, [busy, pending, screenRequest, historyReady]);
+  }, [busy, taskRunning, taskQuestion, pending, screenRequest, historyReady]);
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--text-scale",
       String(preferences.textScale),
     );
   }, [preferences.textScale]);
+  function renderTask(run: (typeof taskRuns)[number]) {
+    return (
+      <div key={`trace-${run.id}`} className="turn-task">
+        {run.snapshot ? (
+          <TaskActivity snapshot={run.snapshot} />
+        ) : (
+          <TaskActivity
+            snapshot={{
+              label: "Thinking…",
+              busy: true,
+              done: false,
+              error: "",
+              entries: [],
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+  function renderTaskEngine(run: (typeof taskRuns)[number]) {
+    return (
+      <div key={`task-${run.id}`} className="task-engine">
+        {activeRun.current === run.id && computerTask !== null ? (
+          <ComputerSession
+            key={run.id}
+            inline
+            headless
+            initialTask={run.task}
+            onClose={() => {
+              setTaskQuestion(null);
+              setComputerTask(null);
+            }}
+            onBusyChange={(busy) => {
+              if (activeRun.current === run.id) setTaskRunning(busy);
+            }}
+            onSnapshot={(snapshot) =>
+              setTaskRuns((old) =>
+                old.map((r) => (r.id === run.id ? { ...r, snapshot } : r)),
+              )
+            }
+            onQuestion={(question) => {
+              if (question.kind === "question") add(question.title);
+              setTaskQuestion({
+                ...question,
+                resolve: (answer) => {
+                  setTaskQuestion(null);
+                  question.resolve(answer);
+                },
+              });
+            }}
+            onClarification={(answer) => {
+              const answerIndex = messageCount.current;
+              setMessages((m) => [...m, { role: "user", text: answer }]);
+              const goal = `${taskContext.current}\nUser clarification: ${answer}`;
+              taskContext.current = goal;
+              setTaskRuns((old) =>
+                old.map((r) =>
+                  r.id === run.id && r.snapshot
+                    ? {
+                        ...r,
+                        snapshot: {
+                          ...r.snapshot,
+                          label: "Continued",
+                          busy: false,
+                        },
+                      }
+                    : r,
+                ),
+              );
+              beginTask(goal, answerIndex);
+            }}
+            onProgress={(answer) => {
+              publishPet("thinking", answer);
+              if (preferences.voice !== "off" && isNative)
+                void voice.speak(answer, preferences.volume, "curious");
+            }}
+            onResult={(answer) => {
+              taskContext.current += `\nObserved result: ${answer}`;
+              setMood("happy");
+              publishPet("happy", answer);
+              add(answer);
+            }}
+          />
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div className={preferences.reduced ? "shell reduced" : "shell"}>
-      <aside inert={onboard || !!pending || showApps}>
+      <aside inert={onboard || showApps}>
         <div className="brand">
-          <Icon name="cat" /> Mivuneko<small>DESKTOP COMPANION</small>
+          <Icon name="cat" /> Mivuneko
         </div>
         <nav>
           {tabs.map((t, i) => (
@@ -912,7 +1084,7 @@ export function App() {
         <div className="sidebar-bottom">
           <div className="sidebar-presence">
             <span className="sidebar-avatar">
-              <Icon name="cat" />
+              <CompanionPortrait />
             </span>
             <div>
               <strong>{name}</strong>
@@ -922,24 +1094,26 @@ export function App() {
               </small>
             </div>
           </div>
-          <small>Your space. Your rules.</small>
-          <button onClick={() => setOnboard(true)}>Quick start ↗</button>
         </div>
       </aside>
       <main
         className={
           tab === "Conversations" ? "conversation-main" : "settings-main"
         }
-        inert={onboard || !!pending || showApps}
+        inert={onboard || showApps}
       >
         <header className={tab === "Conversations" ? "sr" : undefined}>
           <div>
             <h1>{tab}</h1>
             {tab !== "Conversations" && (
               <p>
-                {tab === "Settings" || tab === "Characters"
-                  ? "A space that feels like you."
-                  : "Your companion, with you in control."}
+                {tab === "Characters"
+                  ? "Choose your companion."
+                  : tab === "Settings"
+                    ? "Make yourself at home."
+                    : tab === "Activity"
+                      ? "Your recent actions."
+                      : "Choose what your companion can do."}
               </p>
             )}
           </div>
@@ -951,9 +1125,11 @@ export function App() {
                 ? "Gemini"
                 : preferences.backend === "groq-only"
                   ? "Groq"
-                  : preferences.backend === "hermes"
-                    ? "Hermes local"
-                    : "Offline utilities"}{" "}
+                  : preferences.backend === "ollama"
+                    ? "Local model"
+                    : preferences.backend === "hermes"
+                      ? "Hermes local"
+                      : "Offline utilities"}{" "}
           </span>
         </header>
         {tab === "Conversations" ? (
@@ -966,16 +1142,6 @@ export function App() {
                   </h2>
                 </div>
                 <div className="chat-head-tools">
-                  <select
-                    aria-label="Companion mode"
-                    value={mode}
-                    onChange={(e) => setMode(e.target.value as Mode)}
-                    disabled={!!pending || busy || voice.recording}
-                  >
-                    {["Chat", "Assist", "Creative", "Autonomous"].map((m) => (
-                      <option key={m}>{m}</option>
-                    ))}
-                  </select>
                   <details className="conversation-options">
                     <summary
                       aria-label="Conversation options"
@@ -984,17 +1150,24 @@ export function App() {
                       <Icon name="more" />
                     </summary>
                     <div className="conversation-options-panel">
-                      <button
-                        type="button"
-                        disabled={!isNative}
-                        onClick={() => setComputerTask("")}
-                      >
-                        <Icon name="window" />
-                        Start computer session
-                      </button>
+                      <label>
+                        Response style
+                        <CustomSelect
+                          aria-label="Companion mode"
+                          value={mode}
+                          onChange={(e) => setMode(e.target.value as Mode)}
+                          disabled={!!pending || busy || voice.recording}
+                        >
+                          {["Chat", "Assist", "Creative", "Autonomous"].map(
+                            (m) => (
+                              <option key={m}>{m}</option>
+                            ),
+                          )}
+                        </CustomSelect>
+                      </label>
                       <label>
                         Voice mode
-                        <select
+                        <CustomSelect
                           aria-label="Chat voice mode"
                           value={preferences.voice}
                           onChange={(e) =>
@@ -1006,7 +1179,7 @@ export function App() {
                           <option value="off">Text only</option>
                           <option value="push-to-talk">Push to talk</option>
                           <option value="open-mic">Open microphone</option>
-                        </select>
+                        </CustomSelect>
                       </label>
                       <label className="conversation-interruption">
                         <input
@@ -1034,18 +1207,25 @@ export function App() {
                 aria-live="polite"
               >
                 {messages.map((m, i) => (
-                  <div key={i} className={`message ${m.role}`}>
-                    {m.role === "assistant" &&
-                      messages[i - 1]?.role !== "assistant" && (
-                        <small>{name}</small>
+                  <div key={i} className="conversation-turn">
+                    <div className={`message ${m.role}`}>
+                      {m.role === "assistant" && (
+                        <span className="message-portrait">
+                          <CompanionPortrait />
+                        </span>
                       )}
-                    {m.role === "assistant" ? (
-                      <Markdown text={m.text} />
-                    ) : (
-                      <p>{m.text}</p>
-                    )}
+                      {m.role === "assistant" ? (
+                        <Markdown text={m.text} />
+                      ) : (
+                        <p>{m.text}</p>
+                      )}
+                    </div>
+                    {taskRuns.filter((run) => run.anchor === i).map(renderTask)}
                   </div>
                 ))}
+                {taskRuns
+                  .filter((run) => run.anchor >= messages.length)
+                  .map(renderTask)}
                 {liveTranscript && !busy ? (
                   <div className="message user" aria-live="polite">
                     <small>YOU · listening</small>
@@ -1066,161 +1246,177 @@ export function App() {
                     <span>Thinking…</span>
                   </p>
                 ) : null}
-                {computerTask !== null && (
-                  <ComputerSession
-                    key={computerTask}
-                    inline
-                    initialTask={computerTask}
-                    onClose={() => setComputerTask(null)}
-                    onProgress={(answer) => {
-                      publishPet("thinking", answer);
-                      if (preferences.voice !== "off" && isNative)
-                        void voice.speak(answer, preferences.volume, "curious");
-                    }}
-                    onResult={(answer) => add(answer)}
-                  />
-                )}
               </div>
               {error ? (
                 <p className="error" role="alert">
                   {error}
                 </p>
               ) : null}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void send();
-                }}
-              >
-                <label className="sr" htmlFor="message">
-                  Message Mivuneko
-                </label>
-                <textarea
-                  id="message"
-                  maxLength={4000}
-                  placeholder={`Message ${name}…`}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      void send();
-                    }
+              {taskQuestion && <QuestionPanel question={taskQuestion} />}
+              {pending && (
+                <QuestionPanel
+                  question={{
+                    kind: "permission",
+                    title: `Open ${pending.app.name}?`,
+                    description:
+                      pending.app.location ||
+                      "Open the requested app on this computer.",
+                    resolve: (answer) => {
+                      void resolve(answer === "allow");
+                    },
                   }}
                 />
-                <div className="composer-actions">
-                  <button
-                    type="button"
-                    aria-label="Apps"
-                    title="Open an app"
-                    disabled={busy || !!pending || voice.recording}
-                    onClick={() => setShowApps(true)}
-                  >
-                    <Icon name="plus" />
-                  </button>
-                  <small className="composer-status" role="status">
-                    {openMicActive && openMic.working
-                      ? "transcribing locally"
-                      : openMicActive && !busy && !voice.speaking
-                        ? "open mic on"
-                        : voice.recording
-                          ? "microphone recording"
-                          : voice.preparing
-                            ? "preparing voice…"
-                            : voice.speaking
-                              ? "speaking"
-                              : ""}
-                  </small>
-                  {preferences.voice === "open-mic" && (
-                    <MicButton
-                      compact
-                      active={openMicActive}
-                      phase={openMic.phase}
-                      waiting={busy || !!pending}
-                      speaking={voice.speaking}
-                      disabled={!isNative}
-                      onClick={() => {
-                        setError("");
-                        setOpenMicActive((active) => !active);
-                      }}
-                    />
-                  )}
-                  {preferences.voice === "open-mic" && openMicActive && (
+              )}
+              <div className="composer-row">
+                {" "}
+                <button
+                  type="button"
+                  className="composer-add"
+                  aria-label="Apps"
+                  title="Open an app"
+                  disabled={busy || !!pending || voice.recording}
+                  onClick={() => setShowApps(true)}
+                >
+                  <Icon name="plus" />
+                </button>{" "}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void send();
+                  }}
+                >
+                  <label className="sr" htmlFor="message">
+                    Message Mivuneko
+                  </label>
+                  <textarea
+                    id="message"
+                    maxLength={4000}
+                    placeholder={`Message ${name}…`}
+                    value={input}
+                    onChange={(e) => {
+                      setInput(e.target.value);
+                      e.target.style.height = "auto";
+                      e.target.style.height = `${Math.min(140, Math.max(40, e.target.scrollHeight))}px`;
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        void send();
+                      }
+                    }}
+                  />
+                  <div className="composer-actions">
+                    <small className="composer-status" role="status">
+                      {openMicActive && openMic.working
+                        ? "transcribing locally"
+                        : openMicActive && !busy && !voice.speaking
+                          ? "open mic on"
+                          : voice.recording
+                            ? "microphone recording"
+                            : voice.preparing
+                              ? "preparing voice…"
+                              : voice.speaking
+                                ? "speaking"
+                                : ""}
+                    </small>
+                    {preferences.voice === "open-mic" && (
+                      <MicButton
+                        compact
+                        active={openMicActive}
+                        phase={openMic.phase}
+                        waiting={busy || !!pending}
+                        speaking={voice.speaking}
+                        disabled={!isNative}
+                        onClick={() => {
+                          setError("");
+                          setOpenMicActive((active) => !active);
+                        }}
+                      />
+                    )}
+                    {preferences.voice === "open-mic" && openMicActive && (
+                      <button
+                        type="button"
+                        aria-label="Done speaking"
+                        title="Finish speaking"
+                        disabled={
+                          openMic.phase !== "hearing" || busy || !!pending
+                        }
+                        onClick={() => openMic.finish()}
+                      >
+                        <Icon name="send" />
+                      </button>
+                    )}
+                    {preferences.voice !== "open-mic" && (
+                      <button
+                        type="button"
+                        aria-label={
+                          voice.recording ? "Finish recording" : "Record"
+                        }
+                        title={
+                          !isNative
+                            ? "Recording requires the native app"
+                            : busy || pending
+                              ? "Wait for the current request"
+                              : "Record your voice"
+                        }
+                        disabled={!isNative || busy}
+                        onClick={() =>
+                          voice.recording
+                            ? voice.finishRecording()
+                            : void voice.record()
+                        }
+                      >
+                        <Icon name="mic" />
+                      </button>
+                    )}
                     <button
                       type="button"
-                      aria-label="Done speaking"
-                      title="Finish speaking"
+                      aria-label="Stop"
+                      title="Interrupt response"
                       disabled={
-                        openMic.phase !== "hearing" || busy || !!pending
+                        !busy &&
+                        !voice.speaking &&
+                        !voice.preparing &&
+                        !voice.recording &&
+                        !taskRunning &&
+                        !taskQuestion &&
+                        !pending
                       }
-                      onClick={() => openMic.finish()}
+                      onClick={() =>
+                        void (pending || taskRunning || taskQuestion
+                          ? stop()
+                          : interrupt())
+                      }
+                    >
+                      <Icon name="stop" />
+                    </button>
+                    <button
+                      className="primary"
+                      aria-label="Send"
+                      title="Send message"
+                      disabled={
+                        busy ||
+                        !!pending ||
+                        !input.trim() ||
+                        !historyReady ||
+                        voice.recording
+                      }
                     >
                       <Icon name="send" />
                     </button>
-                  )}
-                  {preferences.voice !== "open-mic" && (
-                    <button
-                      type="button"
-                      aria-label={
-                        voice.recording ? "Finish recording" : "Record"
-                      }
-                      title={
-                        !isNative
-                          ? "Recording requires the native app"
-                          : busy || pending
-                            ? "Wait for the current request"
-                            : "Record your voice"
-                      }
-                      disabled={!isNative || busy || !!pending}
-                      onClick={() =>
-                        voice.recording
-                          ? voice.finishRecording()
-                          : void voice.record()
-                      }
-                    >
-                      <Icon name="mic" />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    aria-label="Stop"
-                    title="Interrupt response"
-                    disabled={
-                      !busy &&
-                      !voice.speaking &&
-                      !voice.preparing &&
-                      !voice.recording &&
-                      computerTask === null &&
-                      !pending
-                    }
-                    onClick={() =>
-                      void (pending || computerTask !== null
-                        ? stop()
-                        : interrupt())
-                    }
-                  >
-                    <Icon name="stop" />
-                  </button>
-                  <button
-                    className="primary"
-                    aria-label="Send"
-                    title="Send message"
-                    disabled={
-                      busy ||
-                      !!pending ||
-                      !input.trim() ||
-                      !historyReady ||
-                      voice.recording
-                    }
-                  >
-                    <Icon name="send" />
-                  </button>
-                </div>
-              </form>
+                  </div>
+                </form>
+              </div>
             </section>
           </div>
         ) : tab === "Characters" ? (
-          <CharacterStudio onOpenGuide={() => setTab("Character guide")} />
+          <CharacterStudio
+            onOpenGuide={() => setTab("Character guide")}
+            onOpenVoice={() => {
+              openSettingsCategory("Voice & input");
+              setTab("Settings");
+            }}
+          />
         ) : tab === "Character guide" ? (
           <CharacterGuide onBack={() => setTab("Characters")} />
         ) : (
@@ -1233,34 +1429,7 @@ export function App() {
                   : "Your preferences"}
             </h2>
             {tab === "Activity" ? (
-              <>
-                <p>
-                  Session-only tool activity. No message contents in the tool
-                  log.
-                </p>
-                <button
-                  onClick={() => {
-                    const url = URL.createObjectURL(
-                      new Blob([logs.join("\n")], { type: "text/plain" }),
-                    );
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = "mivuneko-activity.txt";
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                >
-                  Export log
-                </button>{" "}
-                <button onClick={() => setLogs([])}>Delete log</button>
-                <ul>
-                  {logs.length ? (
-                    logs.map((l, i) => <li key={i}>{l}</li>)
-                  ) : (
-                    <li>No tools have run this session.</li>
-                  )}
-                </ul>
-              </>
+              <ActivityView entries={logs} onClear={() => setLogs([])} />
             ) : tab === "Permissions" ? (
               <>
                 <p>
@@ -1280,7 +1449,7 @@ export function App() {
                 </label>
                 <label className="setting">
                   Approval mode
-                  <select
+                  <CustomSelect
                     aria-label="Approval mode"
                     value={preferences.approvalMode}
                     disabled={busy || !!pending}
@@ -1296,7 +1465,7 @@ export function App() {
                       Automatically approve app launches
                     </option>
                     <option value="deny">Deny app launches</option>
-                  </select>
+                  </CustomSelect>
                 </label>
                 <p>
                   Automatic approval opens recognized installed apps without
@@ -1304,7 +1473,7 @@ export function App() {
                 </p>
                 <label className="setting">
                   Computer tasks
-                  <select
+                  <CustomSelect
                     aria-label="Computer task approval"
                     value={preferences.computerApproval}
                     onChange={(e) =>
@@ -1318,7 +1487,22 @@ export function App() {
                       Complete routine steps automatically
                     </option>
                     <option value="review">Review every step</option>
-                  </select>
+                  </CustomSelect>
+                </label>
+                <label className="setting">
+                  Action reviewer
+                  <CustomSelect
+                    aria-label="Action reviewer"
+                    value={preferences.actionReview}
+                    onChange={(e) =>
+                      updatePreferences({
+                        actionReview: e.target.value as "auto" | "bypass",
+                      })
+                    }
+                  >
+                    <option value="auto">Automatically review actions</option>
+                    <option value="bypass">Bypass the reviewer</option>
+                  </CustomSelect>
                 </label>
                 <p>
                   Computer tasks prefer background controls. Visible mouse and
@@ -1348,6 +1532,14 @@ export function App() {
                 </button>
                 <button
                   onClick={() => {
+                    window.dispatchEvent(new Event("mivuneko-computer-stop"));
+                    controller.current?.abort();
+                    activeRun.current = 0;
+                    setComputerTask(null);
+                    setTaskRunning(false);
+                    setTaskQuestion(null);
+                    setTaskRuns([]);
+                    taskContext.current = "";
                     setMessages([]);
                     void clearHistory().catch((e) => setError(String(e)));
                     setLogs([]);
@@ -1360,6 +1552,9 @@ export function App() {
             )}
           </section>
         )}
+        {taskRuns
+          .filter((run) => run.id === activeRun.current)
+          .map(renderTaskEngine)}
       </main>
       <SpeechDownloadDock />
       {screenRequest && (
@@ -1385,69 +1580,6 @@ export function App() {
           onClose={() => setShowApps(false)}
           onRequest={(app) => void requestApp(app)}
         />
-      ) : null}
-      {pending ? (
-        <div className="scrim">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="approval-title"
-            className="modal"
-          >
-            <span className="modal-icon">
-              <Icon name="shield" />
-            </span>
-            <h2 id="approval-title">Open {pending.app.name}?</h2>
-            <p>Mivuneko requests a one-time app launch in {mode} mode.</p>
-            <dl>
-              <dt>Target</dt>
-              <dd>
-                {pending.app.name}
-                <small>{pending.app.location}</small>
-              </dd>
-              <dt>Data affected</dt>
-              <dd>Starts an app process. No messages or files are read.</dd>
-            </dl>
-            <p>
-              {isNative
-                ? "This will open an application on this computer."
-                : "Browser preview: this will simulate the launch."}
-            </p>
-            <div className="actions">
-              <button autoFocus onClick={() => void resolve(false)}>
-                Deny
-              </button>
-              <button className="primary" onClick={() => void resolve(true)}>
-                Allow once
-              </button>
-            </div>
-            <button
-              type="button"
-              disabled={!isNative || preferences.voice === "off"}
-              onClick={() =>
-                approvalVoice.recording
-                  ? approvalVoice.finishRecording()
-                  : void approvalVoice.record()
-              }
-            >
-              {approvalVoice.recording
-                ? "Finish voice decision"
-                : "Decide by voice"}
-            </button>
-            <p>
-              Say “approve” or “deny”.{" "}
-              {preferences.voice === "off"
-                ? "Enable a voice mode in Characters first."
-                : ""}
-            </p>
-            {approvalError && (
-              <p className="error" role="alert">
-                {approvalError}
-              </p>
-            )}
-            <button onClick={() => void stop()}>Cancel request</button>
-          </section>
-        </div>
       ) : null}
     </div>
   );

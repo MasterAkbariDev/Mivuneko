@@ -23,6 +23,11 @@ export type DesktopIntent =
   | { kind: "hide" }
   | { kind: "expression"; expression: import("./preferences.ts").PetExpression }
   | { kind: "stand" }
+  | { kind: "lie" }
+  | ({ kind: "gesture" } & Omit<
+      import("./procedural-gesture.ts").ProceduralGesture,
+      "started"
+    >)
   | { kind: "sit" }
   | { kind: "automatic" }
   | { kind: "screen" }
@@ -37,8 +42,51 @@ export function desktopIntent(input: string): DesktopIntent | null {
     .replace(/[.!?]+$/, "")
     .replace(/\s+please$/i, "")
     .trim();
+  if (
+    /^(?:(?:please|can you|could you)\s+)?(?:lie|lay)(?: yourself)? down(?: and relax)?[.!?]*$/i.test(
+      text,
+    )
+  )
+    return { kind: "lie" };
+  const gesture =
+    /^(?:please |can you |could you )?(wave(?: (?:at|to) me)?|nod(?: your head)?|shake your head|shrug|stretch|bow|clap|cheer|point left|point right|yawn)[.!?]*$/i.exec(
+      text,
+    );
+  if (gesture) {
+    const verb = gesture[1].toLowerCase();
+    return {
+      kind: "gesture",
+      arms: verb.startsWith("wave")
+        ? "wave"
+        : verb === "stretch"
+          ? "stretch"
+          : verb === "shrug"
+            ? "open"
+            : verb === "clap"
+              ? "clap"
+              : verb === "cheer"
+                ? "raised"
+                : verb === "point left"
+                  ? "point-left"
+                  : verb === "point right"
+                    ? "point-right"
+                    : "rest",
+      head: verb.startsWith("nod")
+        ? "nod"
+        : verb === "shake your head"
+          ? "shake"
+          : verb === "bow"
+            ? "bow"
+            : verb === "yawn"
+              ? "tilt"
+              : "neutral",
+      intensity: 0.65,
+      tempo: verb === "yawn" ? 0.5 : 1,
+      duration: 4,
+    };
+  }
   const emotion =
-    /^(?:(?:show|look|act|be|feel|make (?:yourself|a))\s+)?(?:an?\s+)?(cry(?:ing)?|sleepy|sleeping|happy|sad|angry|surprised|shy|excited|confused|curious|thinking|love(?: me)?|loving|wink|proud|determined|dance|dancing|teasing|joking)(?:\s+(?:face|expression|mood|for me|please|now))?$/i.exec(
+    /^(?:(?:show|look|act|be|feel|make (?:yourself|a))\s+)?(?:an?\s+)?(cry(?:ing)?|sleepy|sleeping|happy|sad|angry|surprised|shy|excited|confused|curious|thinking|love(?: me)?|loving|wink|proud|determined|dance|dancing|teasing|joking|bored|nervous|relieved|embarrassed)(?:\s+(?:face|expression|mood|for me|please|now))?$/i.exec(
       text,
     );
   if (emotion) {

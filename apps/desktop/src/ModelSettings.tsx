@@ -123,6 +123,13 @@ export function ModelSettings({ only3D = false }: { only3D?: boolean }) {
           }
           aria-pressed={p.renderer === "sample-vrm"}
         >
+          <span className="model-art">
+            <img
+              className="model-thumbnail"
+              src="/models/haru-preview.png"
+              alt="Haru"
+            />
+          </span>
           <b>Haru</b>
           <small>Expressions, gestures & character voice</small>
         </button>
@@ -158,6 +165,15 @@ export function ModelSettings({ only3D = false }: { only3D?: boolean }) {
             </button>
           </div>
         ))}
+        <div className="model-actions import-tile">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => input.current?.click()}
+          >
+            {busy ? "Importing characters…" : "Import VRM character"}
+          </button>
+        </div>{" "}
       </div>
       <input
         ref={input}
@@ -170,15 +186,7 @@ export function ModelSettings({ only3D = false }: { only3D?: boolean }) {
           if (e.target.files?.length) void upload(e.target.files);
         }}
       />
-      <div className="model-actions">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => input.current?.click()}
-        >
-          {busy ? "Importing characters…" : "Import VRM character"}
-        </button>
-      </div>
+
       <p className="hint">
         Select one or more .vrm files. Files stay on this device. Importing the
         same file again creates another slot. Removing one slot leaves the

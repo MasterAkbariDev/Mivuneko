@@ -1,3 +1,4 @@
+import { CustomSelect } from "./CustomSelect";
 import { CompanionControls } from "./CompanionControls";
 import { isNative } from "./broker";
 import { usePreferences, updatePreferences } from "./preferences";
@@ -9,7 +10,7 @@ export function PetSettings() {
       <CompanionControls />
       <label className="setting">
         Movement
-        <select
+        <CustomSelect
           aria-label="Movement"
           value={p.movement}
           onChange={(e) =>
@@ -18,7 +19,7 @@ export function PetSettings() {
         >
           <option value="stationary">Stationary</option>
           <option value="roaming">Roam screen edge</option>
-        </select>
+        </CustomSelect>
       </label>
       <label className="setting">
         Occasional check-ins

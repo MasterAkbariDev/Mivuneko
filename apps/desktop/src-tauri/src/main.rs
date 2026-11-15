@@ -902,48 +902,105 @@ async fn record_spans(
         .map_err(|_| "Metrics worker failed")?
 }
 #[cfg(any(target_os = "windows", target_os = "macos"))]
-fn install_tray(app: &tauri::App) -> tauri::Result<()> {
-    use tauri::{
-        menu::{Menu, MenuItem},
-        tray::TrayIconBuilder,
-        Manager,
-    };
-    let pet = MenuItem::with_id(app, "show-pet", "Show pet", true, None::<&str>)?;
-    let chat = MenuItem::with_id(app, "show-chat", "Show app", true, None::<&str>)?;
-    let hide = MenuItem::with_id(app, "hide-pet", "Hide pet", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Mivuneko", true, None::<&str>)?;
-    let reset = MenuItem::with_id(
-        app,
-        "reset-pet",
-        "Reset size & find pet",
-        true,
-        None::<&str>,
-    )?;
-    let menu = Menu::with_items(app, &[&pet, &chat, &reset, &hide, &quit])?;
+#[tauri::command]
+fn tray_action(window: tauri::Window, app: tauri::AppHandle, action: String) -> Result<(), String> {
+    if !matches!(window.label(), "main" | "tray") {
+        return Err("Tray actions only".into());
+    }
+    if let Some(popup) = app.get_webview_window("tray") {
+        let _ = popup.hide();
+    }
+    match action.as_str() {
+        "dismiss" => {}
+        "chat" | "settings" => {
+            let _ = app.emit_to("main", "global-action", action.as_str());
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.show();
+                let _ = main.set_focus();
+            }
+        }
+        "pet" => {
+            pet_displays::recover(&app, true)?;
+        }
+        "voice" => {
+            let _ = app.emit_to("main", "global-action", "voice-toggle");
+        }
+        "edit" => {
+            let _ = app.emit_to("main", "global-action", "edit");
+        }
+        "reset" => {
+            let _ = app.emit_to("main", "global-action", "reset");
+            pet_displays::recover(&app, true)?;
+        }
+        "hide" => {
+            if let Some(pet) = app.get_webview_window("pet") {
+                let _ = pet.hide();
+            }
+        }
+        "quit" => app.exit(0),
+        _ => return Err("Unknown tray action".into()),
+    }
+    Ok(())
+}
+fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+    use tauri::tray::{MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    let popup = app
+        .get_webview_window("tray")
+        .ok_or(tauri::Error::WindowNotFound)?;
+    let blur = popup.clone();
+    popup.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::Focused(false)) {
+            let _ = blur.hide();
+        }
+    });
     let mut tray = TrayIconBuilder::new()
         .tooltip("Mivuneko")
-        .menu(&menu)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "show-pet" => {
-                let _ = pet_displays::recover(app, true);
-            }
-            "reset-pet" => {
-                let _ = app.emit_to("main", "global-action", "reset");
-                let _ = pet_displays::recover(app, true);
-            }
-            "show-chat" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                position,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let app = tray.app_handle();
+                if let Some(popup) = app.get_webview_window("tray") {
+                    if popup.is_visible().unwrap_or(false) {
+                        let _ = popup.hide();
+                        return;
+                    }
+                    let scale = popup.scale_factor().unwrap_or(1.0);
+                    let (mut x, mut y) = (
+                        position.x as i32 - (292.0 * scale) as i32,
+                        position.y as i32 - (422.0 * scale) as i32 - 8,
+                    );
+                    if let Ok(monitors) = popup.available_monitors() {
+                        for m in monitors {
+                            let r = m.work_area();
+                            if position.x >= r.position.x as f64
+                                && position.x < (r.position.x + r.size.width as i32) as f64
+                                && position.y >= m.position().y as f64
+                                && position.y < (m.position().y + m.size().height as i32) as f64
+                            {
+                                x = x.clamp(
+                                    r.position.x,
+                                    (r.position.x + r.size.width as i32 - (292.0 * scale) as i32)
+                                        .max(r.position.x),
+                                );
+                                y = y.clamp(
+                                    r.position.y,
+                                    (r.position.y + r.size.height as i32 - (422.0 * scale) as i32)
+                                        .max(r.position.y),
+                                );
+                                break;
+                            }
+                        }
+                    }
+                    let _ = popup.set_position(tauri::PhysicalPosition::new(x, y));
+                    let _ = popup.show();
+                    let _ = popup.set_focus();
                 }
             }
-            "hide-pet" => {
-                if let Some(w) = app.get_webview_window("pet") {
-                    let _ = w.hide();
-                }
-            }
-            "quit" => app.exit(0),
-            _ => {}
         });
     if let Some(icon) = app.default_window_icon() {
         tray = tray.icon(icon.clone());
@@ -951,6 +1008,7 @@ fn install_tray(app: &tauri::App) -> tauri::Result<()> {
     tray.build(app)?;
     Ok(())
 }
+
 fn main() {
     let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
     if args.get(1).is_some_and(|a| a == "--luna-tts") {
@@ -976,7 +1034,7 @@ fn main() {
                 }
             }
             #[cfg(any(target_os = "windows", target_os = "macos"))]
-            install_tray(_app)?;
+            install_tray(_app.handle())?;
             #[cfg(target_os = "macos")]
             let _ = _app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             Ok(())
@@ -993,6 +1051,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            tray_action,
             local_ai::ollama_models,
             computer::computer_resolve_page,
             computer::computer_select_target,

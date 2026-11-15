@@ -21,4 +21,8 @@ export const illustratedExpressions: string[] = [
   "proud",
   "crying",
   "determined",
+  "bored",
+  "nervous",
+  "relieved",
+  "embarrassed",
 ];

@@ -112,3 +112,9 @@ test("every command the pet's code can call is allowed for the pet", () => {
         assert.ok(pet.has(c), `${path.basename(file)} uses ${c}`);
   }
 });
+
+test("the styled tray has only fixed companion navigation authority", () => {
+  assert.deepEqual(allowed("tray.json"), ["tray_action"]);
+  for (const command of sensitive)
+    assert.ok(!allowed("tray.json").includes(command));
+});

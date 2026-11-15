@@ -176,18 +176,21 @@ export function CompanionVisual({
     characterFor(
       mood,
       body ??
-        (p.petMode === "sleep"
-          ? "sleep"
-          : p.petMode === "dance"
-            ? "dance"
-            : p.petMode === "walk" || p.petMode === "run"
-              ? "walk"
-              : p.petMode === "sit"
-                ? "sit"
-                : "idle"),
+        (p.petMode === "lie"
+          ? "lie"
+          : p.petMode === "sleep"
+            ? "sleep"
+            : p.petMode === "dance"
+              ? "dance"
+              : p.petMode === "walk" || p.petMode === "run"
+                ? "walk"
+                : p.petMode === "sit"
+                  ? "sit"
+                  : "idle"),
     ),
     mouth,
   );
+  state.gesture = p.petGesture;
   state.expression = p.petEdit && !dragging ? "idle" : emotion;
   if (p.petEdit && !dragging) state.mouth = 0;
   return (

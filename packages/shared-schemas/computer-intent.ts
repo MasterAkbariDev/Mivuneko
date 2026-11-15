@@ -1,6 +1,13 @@
 /** Only direct user requests enter computer sessions; model output cannot start one. */
 export function computerIntent(text: string): boolean {
   if (browserTask(text)) return true;
+  if (
+    !/\b(?:explain|what is|how (?:do|can|to)|why)\b/i.test(text) &&
+    /\b(?:create|write|build|implement|code)\b.*\b(?:function|example|script|program|code|directory|folder)\b/i.test(
+      text,
+    )
+  )
+    return true;
   return /\b(?:use (?:my |the )?computer|computer (?:use|control)|control (?:my |the )?(?:computer|desktop)|click (?:on |the |that |this )|(?:create|edit|write|rename|move|organize|delete) (?:a |the |my |this |these )?(?:file|folder|document)|(?:type|write) .+ (?:in|into) (?:notepad|the editor|the app)|help me .+ (?:in|with) (?:the ide|notepad|my editor))\b/i.test(
     text,
   );

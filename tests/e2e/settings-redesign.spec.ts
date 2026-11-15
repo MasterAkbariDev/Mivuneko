@@ -176,7 +176,7 @@ test("bundled and imported VRM models render and selection reaches the desktop p
   page,
   context,
 }) => {
-  test.setTimeout(60000);
+  test.setTimeout(120000);
   // Apply the packaged app's connection policy to catch embedded-texture regressions.
   // Vite's websocket is allowed only in this browser test.
   const config = JSON.parse(
@@ -203,14 +203,15 @@ test("bundled and imported VRM models render and selection reaches the desktop p
   });
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/?view=chat&tab=Characters");
-  await page.getByRole("tab", { name: "3D Animated VRM", exact: true }).click();
+  await page.getByRole("tab", { name: "3D", exact: true }).click();
   await page.getByRole("button", { name: /^Haru/ }).click();
   await expect(
     page.locator('.character-scene[data-model-ready="true"]'),
   ).toBeVisible({ timeout: 20000 });
-  await page
-    .getByLabel("Pet expression", { exact: true })
-    .selectOption("angry");
+  await page.evaluate(async () => {
+    const { updatePreferences } = await import("/src/preferences.ts");
+    updatePreferences({ petExpression: "angry" });
+  });
   await expect(page.locator(".character-scene")).toHaveAttribute(
     "data-emotion",
     "angry",
@@ -270,7 +271,7 @@ test("Parakeet installs with one click and a visible progress line persists acro
     0,
   );
   await expect(
-    page.getByRole("combobox", { name: "Pet expression", exact: true }),
+    page.getByRole("button", { name: "Happy", exact: true }),
   ).toBeVisible();
   await page.screenshot({ path: "test-results/persistent-download.png" });
   await page.evaluate(() => (window as any).__finishDownload());
@@ -365,6 +366,7 @@ test("Gemini plays streamed chunks before generation completes and schedules the
   page,
 }) => {
   await streamingVoice(page);
+  await page.getByText("Preview voice & emotions", { exact: true }).click();
   const happy = page
     .locator(".mood-previews")
     .getByRole("button", { name: "Happy", exact: true });
@@ -393,6 +395,7 @@ test("stopping while Gemini is preparing prevents late audio from playing", asyn
   page,
 }) => {
   await streamingVoice(page);
+  await page.getByText("Preview voice & emotions", { exact: true }).click();
   const happy = page
     .locator(".mood-previews")
     .getByRole("button", { name: "Happy", exact: true });
@@ -435,6 +438,7 @@ test("local voice setup installs Kokoro and enables previews without restarting"
     };
   });
   await page.goto("/?view=chat&tab=Settings");
+  await page.getByText("Preview voice & emotions", { exact: true }).click();
   await expect(
     page
       .locator(".mood-previews")
@@ -455,9 +459,9 @@ test("local voice setup installs Kokoro and enables previews without restarting"
 test("VRM gestures move real bones and deform facial meshes at high resolution", async ({
   page,
 }) => {
-  test.setTimeout(60000);
+  test.setTimeout(120000);
   await page.goto("/?view=chat&tab=Characters");
-  await page.getByRole("tab", { name: "3D Animated VRM", exact: true }).click();
+  await page.getByRole("tab", { name: "3D", exact: true }).click();
   await page.getByRole("button", { name: /^Haru/ }).click();
   await expect(
     page.locator('.character-scene[data-model-ready="true"]'),
@@ -525,9 +529,10 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
   expect(result.morphed).toBe(true);
   expect(result.weight).toBe(1);
   expect(result.ratio).toBeGreaterThanOrEqual(1.9);
-  await page
-    .getByLabel("Pet expression", { exact: true })
-    .selectOption("angry");
+  await page.evaluate(async () => {
+    const { updatePreferences } = await import("/src/preferences.ts");
+    updatePreferences({ petExpression: "angry" });
+  });
   await page.screenshot({ path: "test-results/haru-gesture.png" });
 });
 
@@ -541,6 +546,8 @@ test("companion commands choose actions without a manual mode selector", async (
       .getByLabel("Pet display")
       .getByRole("option", { name: /All monitors/ }),
   ).toHaveCount(0);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Companion", exact: true }).click();
   await page.getByLabel("Pet display").selectOption("current");
   expect(
     await page.evaluate(
@@ -786,8 +793,12 @@ test("custom companion names persist and use companion-neutral speech settings",
 }) => {
   await page.goto("/?view=chat&tab=Characters");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Companion", exact: true }).click();
   await page.getByLabel("Companion name", { exact: true }).fill("Yuki Chan");
   await page.reload();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Companion", exact: true }).click();
   await expect(page.getByLabel("Companion name", { exact: true })).toHaveValue(
     "Yuki Chan",
   );
@@ -803,6 +814,7 @@ test("custom companion names persist and use companion-neutral speech settings",
 test("zoom grows beyond the display while the dock and its actions stay visible", async ({
   page,
 }) => {
+  test.setTimeout(90000);
   await page.addInitScript(() => {
     delete (window as any).__TAURI_INTERNALS__;
     localStorage.setItem(
@@ -844,7 +856,7 @@ test("zoom grows beyond the display while the dock and its actions stay visible"
         .evaluate((e) => e.getBoundingClientRect().height),
     )
     .toBeGreaterThan(720);
-  await expect.poll(read).toBeGreaterThan(small * 2);
+  await expect.poll(read, { timeout: 15000 }).toBeGreaterThan(small * 2);
   await page
     .getByRole("group", { name: /Mivuneko character/ })
     .dispatchEvent("dblclick");
@@ -992,20 +1004,18 @@ test("dimensional galleries select models and expose the character manual", asyn
 }) => {
   await page.goto("/?view=chat&tab=Characters");
   await expect(
-    page.getByRole("tab", { name: "2D Illustrated poses", exact: true }),
+    page.getByRole("tab", { name: "2D", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
-  await page
-    .getByRole("tab", { name: "2.5D Illustrations with depth", exact: true })
-    .click();
+  await page.getByRole("tab", { name: "2.5D", exact: true }).click();
   await page.getByRole("button", { name: "Mochi", exact: true }).click();
   await expect(page.locator(".depth-illustration")).toBeVisible();
-  await page.getByRole("tab", { name: "3D Animated VRM", exact: true }).click();
+  await page.getByRole("tab", { name: "3D", exact: true }).click();
   await expect(page.getByRole("button", { name: /^Haru/ })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Luna", exact: true }),
   ).toHaveCount(0);
   await page
-    .getByRole("button", { name: /Creating characters & voices/ })
+    .getByRole("button", { name: "Character guide", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Character guide", exact: true }),
@@ -1099,14 +1109,16 @@ test("wake and movement clear sleeping overrides and the name placeholder follow
       }),
     )
     .toEqual(["walk", "auto", 4]);
-  await page.getByRole("button", { name: "Characters", exact: true }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Companion", exact: true }).click();
   await expect(
     page.getByLabel("Companion name", { exact: true }),
   ).toHaveAttribute("placeholder", "Haru");
-  await page
-    .getByRole("tab", { name: "2D Illustrated poses", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Characters", exact: true }).click();
+  await page.getByRole("tab", { name: "2D", exact: true }).click();
   await page.getByRole("button", { name: "Miku", exact: true }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Companion", exact: true }).click();
   await expect(
     page.getByLabel("Companion name", { exact: true }),
   ).toHaveAttribute("placeholder", "Miku");

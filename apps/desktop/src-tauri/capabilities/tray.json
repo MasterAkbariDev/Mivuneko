@@ -1,0 +1,6 @@
+{
+  "identifier": "tray-menu",
+  "description": "Styled tray popup; only fixed companion and app navigation actions. No model, file, credential, or computer-session access.",
+  "windows": ["tray"],
+  "permissions": ["core:default", "allow-tray-action"]
+}

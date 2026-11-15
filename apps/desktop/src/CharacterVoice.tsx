@@ -1,3 +1,4 @@
+import { CustomSelect } from "./CustomSelect";
 import { packInfo, type PackSummary } from "./characterPackStore";
 import { voiceIdentity, voiceKey } from "./voiceIdentity";
 import { useEffect, useState } from "react";
@@ -157,7 +158,7 @@ export function CharacterVoice({
     <section className="settings-group" aria-label="Character voice">
       <label className="setting">
         Speech engine
-        <select
+        <CustomSelect
           aria-label="Speech engine"
           value={preferences.voiceProvider}
           onChange={(e) =>
@@ -174,18 +175,21 @@ export function CharacterVoice({
               System voice{!systemSpeech ? " · unavailable on this device" : ""}
             </option>
           )}
-        </select>
+        </CustomSelect>
       </label>
-      <label className="setting">
-        Pronunciation hints for {name}
-        <textarea
-          aria-label="Character pronunciation hints"
-          value={identity.pronunciations}
-          placeholder="word=how it should sound"
-          maxLength={2000}
-          onChange={(e) => saveIdentity({ pronunciations: e.target.value })}
-        />
-      </label>
+      <details className="voice-detail">
+        <summary>Pronunciation</summary>
+        <label className="setting">
+          Pronunciation hints for {name}
+          <textarea
+            aria-label="Character pronunciation hints"
+            value={identity.pronunciations}
+            placeholder="word=how it should sound"
+            maxLength={2000}
+            onChange={(e) => saveIdentity({ pronunciations: e.target.value })}
+          />
+        </label>
+      </details>
       {preferences.voiceProvider === "qwen" && (
         <>
           <p className="hint">
@@ -195,7 +199,7 @@ export function CharacterVoice({
           </p>
           <label className="setting">
             Voice
-            <select
+            <CustomSelect
               aria-label="Qwen voice"
               value={identity.speaker}
               onChange={(e) => saveIdentity({ speaker: e.target.value })}
@@ -213,7 +217,7 @@ export function CharacterVoice({
               ].map((s) => (
                 <option key={s}>{s}</option>
               ))}
-            </select>
+            </CustomSelect>
           </label>
           <label className="setting">
             Delivery direction
@@ -273,33 +277,36 @@ export function CharacterVoice({
           {installError}
         </p>
       )}
-      <div className="mood-previews">
-        {SAMPLES.map(([mood, label, line]) => (
+      <details className="voice-detail">
+        <summary>Preview voice & emotions</summary>
+        <div className="mood-previews">
+          {SAMPLES.map(([mood, label, line]) => (
+            <button
+              key={mood}
+              type="button"
+              disabled={
+                !isNative ||
+                preview.speaking ||
+                preview.preparing ||
+                (preferences.voiceProvider === "local" && own !== true)
+              }
+              onClick={() => {
+                preview.prepare();
+                void preview.speak(line, volume, mood);
+              }}
+            >
+              {label}
+            </button>
+          ))}
           <button
-            key={mood}
             type="button"
-            disabled={
-              !isNative ||
-              preview.speaking ||
-              preview.preparing ||
-              (preferences.voiceProvider === "local" && own !== true)
-            }
-            onClick={() => {
-              preview.prepare();
-              void preview.speak(line, volume, mood);
-            }}
+            disabled={!preview.speaking && !preview.preparing}
+            onClick={() => void preview.stop()}
           >
-            {label}
+            Stop
           </button>
-        ))}
-        <button
-          type="button"
-          disabled={!preview.speaking && !preview.preparing}
-          onClick={() => void preview.stop()}
-        >
-          Stop
-        </button>
-      </div>
+        </div>
+      </details>
     </section>
   );
 }

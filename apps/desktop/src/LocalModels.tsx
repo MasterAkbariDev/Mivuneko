@@ -1,3 +1,4 @@
+import { CustomSelect } from "./CustomSelect";
 import { useEffect, useState } from "react";
 import { isNative } from "./broker";
 import { usePreferences, updatePreferences } from "./preferences";
@@ -60,7 +61,7 @@ export function LocalModels() {
       </p>
       <label className="setting">
         Ollama model
-        <select
+        <CustomSelect
           aria-label="Ollama model"
           value={p.ollamaModel}
           onChange={(e) => updatePreferences({ ollamaModel: e.target.value })}
@@ -69,7 +70,7 @@ export function LocalModels() {
           {models.map((m) => (
             <option key={m}>{m}</option>
           ))}
-        </select>
+        </CustomSelect>
       </label>
       <button disabled={!isNative} onClick={() => void refresh()}>
         Refresh local models

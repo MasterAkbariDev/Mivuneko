@@ -1,16 +1,24 @@
+import { Icon } from "./Icon";
 import { CharacterPackLibrary } from "./CharacterPackLibrary";
 import { SpriteCanvas } from "./SpriteCanvas";
 import { spriteFrame } from "./spriteFrames";
 import { useState } from "react";
 import { characters } from "./lunaModel";
-import { PetSettings } from "./PetSettings";
+import { companionName } from "./companionName";
+import { gestureConfig } from "../../../packages/shared-schemas/procedural-gesture";
 import { updatePreferences, usePreferences } from "./preferences";
 import type { CharacterId } from "../../../packages/shared-schemas/preferences.ts";
 import { ModelSettings } from "./ModelSettings";
 import { usePetSession } from "./session";
 import { CompanionVisual } from "./CompanionVisual";
 
-export function CharacterStudio({ onOpenGuide }: { onOpenGuide: () => void }) {
+export function CharacterStudio({
+  onOpenGuide,
+  onOpenVoice,
+}: {
+  onOpenGuide: () => void;
+  onOpenVoice?: () => void;
+}) {
   const p = usePreferences();
   const session = usePetSession();
   const [format, setFormat] = useState<"2D" | "2.5D" | "3D">(
@@ -19,13 +27,24 @@ export function CharacterStudio({ onOpenGuide }: { onOpenGuide: () => void }) {
   return (
     <section className="character-studio" aria-label="Character studio">
       <div className="character-studio-head">
-        <div>
-          <h2>Meet your companions</h2>
-          <p>
-            Choose a character, then try expressions, movement and effects
-            below. Changes update the desktop pet live.
-          </p>
-        </div>
+        <button
+          className="primary"
+          onClick={() => {
+            document
+              .querySelector<HTMLInputElement>(
+                format === "3D"
+                  ? 'input[aria-label="Import VRM file"]'
+                  : '.pack-library input[type="file"]',
+              )
+              ?.click();
+          }}
+        >
+          <Icon name="plus" />
+          Import character
+        </button>
+      </div>
+      <aside className="character-inspector">
+        <h2>{companionName(p)}</h2>
         <div
           className="character-live-preview"
           aria-label="Live character preview"
@@ -36,7 +55,117 @@ export function CharacterStudio({ onOpenGuide }: { onOpenGuide: () => void }) {
             emotion={session.emotion}
           />
         </div>
-      </div>
+        <h3>Expressions</h3>
+        <div className="inspector-expressions">
+          {[
+            "happy",
+            "sad",
+            "sleeping",
+            "love",
+            "thinking",
+            "excited",
+            ...(p.renderer !== "2d"
+              ? ["bored", "nervous", "relieved", "embarrassed"]
+              : []),
+          ].map((expression) => (
+            <button
+              key={expression}
+              aria-pressed={p.petExpression === expression}
+              onClick={() =>
+                updatePreferences({
+                  petExpression: expression as typeof p.petExpression,
+                })
+              }
+            >
+              {p.renderer === "2d" && !p.activePackId ? (
+                <SpriteCanvas
+                  className="expression-tile-art"
+                  frame={spriteFrame(
+                    p.character,
+                    expression as any,
+                    "stand",
+                    0,
+                    0,
+                  )}
+                />
+              ) : p.renderer === "sample-vrm" &&
+                ["happy", "sad", "sleeping"].includes(expression) ? (
+                <img
+                  className="expression-tile-art"
+                  src={`/models/haru-${["happy", "sad", "sleeping"].includes(expression) ? expression : "happy"}.png`}
+                  alt=""
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              ) : (
+                <Icon name="sparkle" />
+              )}
+              <span>
+                {expression === "sleeping"
+                  ? "Sleepy"
+                  : expression.charAt(0).toUpperCase() + expression.slice(1)}
+              </span>
+            </button>
+          ))}
+        </div>
+        {p.renderer !== "2d" && (
+          <>
+            <details className="gesture-options">
+              <summary>Live gestures</summary>
+              <div className="inspector-expressions">
+                {[
+                  ["Wave", "wave", "neutral"],
+                  ["Nod", "rest", "nod"],
+                  ["Bow", "rest", "bow"],
+                  ["Stretch", "stretch", "tilt"],
+                  ["Clap", "clap", "neutral"],
+                ].map(([label, arms, head]) => (
+                  <button
+                    key={label}
+                    onClick={() =>
+                      updatePreferences({
+                        petGesture: gestureConfig({
+                          arms,
+                          head,
+                          intensity: 0.65,
+                          tempo: 1,
+                          duration: 4,
+                        }),
+                      })
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button
+                  onClick={() =>
+                    updatePreferences({ petMode: "lie", petExpression: "auto" })
+                  }
+                >
+                  Lie down
+                </button>
+              </div>
+            </details>
+          </>
+        )}
+        <h3>Voice</h3>
+        <button className="inspector-voice" onClick={onOpenVoice}>
+          Character voice settings ↗
+        </button>
+        <button
+          className="primary"
+          onClick={() => {
+            if ("__TAURI_INTERNALS__" in window)
+              void import("@tauri-apps/api/core").then(({ invoke }) =>
+                invoke("recover_pet", { center: false }),
+              );
+          }}
+        >
+          Use character
+        </button>
+        <button onClick={onOpenGuide}>Character guide</button>
+      </aside>
       <div
         className="character-format-tabs"
         role="tablist"
@@ -132,7 +261,6 @@ export function CharacterStudio({ onOpenGuide }: { onOpenGuide: () => void }) {
           setFormat(value === "3d" ? "3D" : value === "2.5d" ? "2.5D" : "2D")
         }
       />
-      <PetSettings />
     </section>
   );
 }

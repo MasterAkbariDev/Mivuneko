@@ -2,6 +2,7 @@
 // denies it to any window whose capability (capabilities/*.json) does not list it.
 // tests/unit/acl.test.mjs keeps this list, the handler list and the capabilities in sync.
 const COMMANDS: &[&str] = &[
+    "tray_action",
     "pet_rest_surfaces",
     "ollama_models",
     "ollama_chat",

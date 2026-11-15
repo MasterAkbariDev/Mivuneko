@@ -20,3 +20,9 @@ Say **cry**, **show love**, **look sleepy**, **be happy** or **wink** to choose 
 **Go outside of my screen** intentionally walks to a quiet edge and hides the pet; **Show pet** or **Reset size & find pet** in the tray brings it back. Ordinary movement remains inside the usable screen area. Feet dropped onto the taskbar settle upward gently instead of abruptly snapping the window.
 
 Double-click opens quick chat. Right-click opens pet controls. The pencil unlocks dragging and resizing. **Ctrl+Alt+0** restores a usable size and brings the pet back to the active display.
+
+## Live 3D gestures
+
+VRM gestures are composed at runtime from bounded arm and head controls, intensity, tempo and duration. They do not execute model-generated JavaScript. The assistant can combine a wave with a nod, a bow, a stretch or directional pointing. Locomotion and dragging take priority; reduced-animation mode suppresses procedural gesture motion. Models lacking an optional bone retain their supported movement.
+
+Example companion action: `{"kind":"gesture","arms":"wave","head":"nod","intensity":0.65,"tempo":1,"duration":4}`. The supported actions also include lying down. Facial presets include bored, nervous, relieved and embarrassed, with distinct blends and body reactions. A VRM's available morphs determine its expression fidelity; importing a VRM cannot invent missing facial geometry.

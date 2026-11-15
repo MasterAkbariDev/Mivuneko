@@ -10,19 +10,23 @@ export interface RestSurface {
   left: number;
   right: number;
   y: number;
-  kind: "window" | "icon";
+  kind: "window" | "icon" | "taskbar";
 }
 export function restPoint(
   surface: RestSurface,
   position: Point,
   size: Size,
   seatOffset: number,
+  feetOffset = size.height - 20,
 ): Point {
   const center = Math.max(
     surface.left + 8,
     Math.min(surface.right - 8, position.x + size.width / 2),
   );
-  return { x: center - size.width / 2, y: surface.y - seatOffset };
+  return {
+    x: center - size.width / 2,
+    y: surface.y - (surface.kind === "taskbar" ? feetOffset : seatOffset),
+  };
 }
 export function chooseRestSurface(
   surfaces: RestSurface[],
@@ -30,19 +34,21 @@ export function chooseRestSurface(
   size: Size,
   area: Area,
   seatOffset = PET_TOP + (size.height - PET_EXTRA) * 0.62,
+  bounds = { top: 0, bottom: size.height },
 ) {
   return (
     surfaces
-      .filter(
-        (s) =>
-          s.right - s.left >= 24 &&
-          s.y >= area.y + seatOffset + 8 &&
-          s.y + size.height - seatOffset <= area.y + area.height - 8,
-      )
+      .filter((s) => s.right - s.left >= 24)
       .map((surface) => ({
         surface,
-        point: restPoint(surface, position, size, seatOffset),
+        point: restPoint(surface, position, size, seatOffset, bounds.bottom),
       }))
+      .filter(
+        ({ surface, point }) =>
+          surface.kind === "taskbar" ||
+          (point.y + bounds.top >= area.y + 6 &&
+            point.y + bounds.bottom <= area.y + area.height - 6),
+      )
       .sort(
         (a, b) =>
           Math.hypot(a.point.x - position.x, a.point.y - position.y) -

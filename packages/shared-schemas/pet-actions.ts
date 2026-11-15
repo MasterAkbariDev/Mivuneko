@@ -1,3 +1,4 @@
+import { gestureConfig } from "./procedural-gesture.ts";
 import type { CompanionAction } from "./companion-actions.ts";
 import { illustratedExpressions } from "./pet-expressions.ts";
 export function parseCompanionActions(value: unknown): CompanionAction[] {
@@ -8,6 +9,12 @@ export function parseCompanionActions(value: unknown): CompanionAction[] {
     if (!item || typeof item !== "object")
       throw Error("Invalid companion action");
     const a = item as Record<string, unknown>;
+    if (a.kind === "gesture") {
+      const g = gestureConfig(a);
+      if (!g) throw Error("Invalid procedural gesture");
+      const { started, ...fields } = g;
+      return { kind: "gesture", ...fields } as CompanionAction;
+    }
     if (
       a.kind === "move" &&
       (a.gait === "walk" || a.gait === "run") &&
@@ -23,6 +30,7 @@ export function parseCompanionActions(value: unknown): CompanionAction[] {
       } as CompanionAction;
     if (
       a.kind === "sit" ||
+      a.kind === "lie" ||
       a.kind === "stand" ||
       a.kind === "automatic" ||
       a.kind === "hide"

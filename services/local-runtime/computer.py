@@ -90,6 +90,13 @@ def file_action(req, action):
         p = Path(root).resolve(strict=True)
     else: p = file_path(root, action.get("path", ""))
     if kind == "list_files": return {"files": [{"name": e.name, "directory": e.is_dir()} for e in sorted(p.iterdir()) if not e.name.startswith(".")][:200]}
+    if kind == "open_file":
+        if not p.is_file():raise ValueError("The file must exist before opening it")
+        if action.get("program") != "notepad":raise ValueError("Select a supported editor")
+        import subprocess
+        executable=Path(os.environ.get("WINDIR",r"C:\Windows"))/"System32"/"notepad.exe"
+        subprocess.Popen([str(executable),str(p)],creationflags=subprocess.CREATE_NO_WINDOW)
+        return {"opened":str(p.relative_to(Path(root).resolve())),"program":"Notepad"}
     if kind == "read_file":
         if p.stat().st_size > 131072: raise ValueError("Read files in sections; this file exceeds 128 KB")
         return {"text": p.read_text(encoding="utf-8")}
@@ -123,7 +130,7 @@ def act(req):
     if kind == "system_info":
         import psutil
         return {"cpuPercent":psutil.cpu_percent(interval=.2),"memory":dict(psutil.virtual_memory()._asdict()),"disks":[{"drive":p.mountpoint,"free":shutil.disk_usage(p.mountpoint).free,"total":shutil.disk_usage(p.mountpoint).total} for p in psutil.disk_partitions() if "fixed" in p.opts]}
-    if kind in {"read_file", "write_file", "list_files", "move_file", "trash_file"}: return file_action(req, a)
+    if kind in {"read_file", "open_file", "write_file", "list_files", "move_file", "trash_file"}: return file_action(req, a)
     w = target(req["window"], focus=not background)
     expected=req.get("expected")
     if expected:
@@ -222,6 +229,9 @@ def run(req):
     if sys.platform != "win32": raise ValueError("Computer control currently requires Windows")
     try: ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
     except Exception: pass
+    if req["op"] == "nonce":return {"nonce":secrets.token_hex(32)}
+    if req["op"] == "workspace":
+        return {"title":"Requested workspace","width":0,"height":0,"image":"","elements":[],"workspaceFiles":file_action({"workspace":req["workspace"]},{"kind":"list_files"})["files"],"observation":secrets.token_hex(16)}
     if req["op"] == "web_results":
         from urllib.request import Request,build_opener,ProxyHandler
         from urllib.parse import urlencode,urlparse

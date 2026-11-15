@@ -5,7 +5,10 @@ import type {
   PetExpression,
   PetMode,
 } from "../../../packages/shared-schemas/preferences.ts";
-export type LunaPose = Exclude<PetExpression, "auto">;
+export type LunaPose = Exclude<
+  PetExpression,
+  "auto" | "bored" | "nervous" | "relieved" | "embarrassed"
+>;
 export const lunaModel = {
   id: "mivuneko.luna.2d",
   version: 1,
@@ -272,6 +275,9 @@ export function lunaPose(
   mode: PetMode,
   expression: PetExpression,
 ): LunaPose {
+  if (expression === "bored") return "idle";
+  if (expression === "nervous" || expression === "embarrassed") return "shy";
+  if (expression === "relieved") return "happy";
   if (expression !== "auto") return expression;
   if (mode === "sleep") return "sleeping";
   if (mode === "focus") return "thinking";

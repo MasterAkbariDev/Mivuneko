@@ -30,6 +30,15 @@ export async function performCompanionActions(
             `This character does not include a ${a.expression} pose.`,
           );
   }
+  if (
+    p.renderer === "2d" &&
+    actions.some(
+      (a) =>
+        a.kind === "expression" &&
+        ["bored", "nervous", "relieved", "embarrassed"].includes(a.expression),
+    )
+  )
+    throw Error("This expression is available for 3D characters.");
   await runCompanionSequence(
     actions,
     async (action, index) => {
@@ -43,7 +52,23 @@ export async function performCompanionActions(
         "happy",
         `Step ${index + 1} of ${actions.length}: ${describeAction(action)}.`,
       );
-      if (action.kind === "move" || action.kind === "hide") {
+      if (action.kind === "gesture") {
+        updatePreferences({ petGesture: { ...action, started: Date.now() } });
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(resolve, action.duration * 1000);
+          signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer);
+              reject(signal.reason);
+            },
+            { once: true },
+          );
+        });
+      } else if (action.kind === "lie") {
+        cancelCompanionTask();
+        updatePreferences({ petMode: "lie" });
+      } else if (action.kind === "move" || action.kind === "hide") {
         const destination =
           action.kind === "hide" ? "unobtrusive" : action.destination;
         const { invoke } = await import("@tauri-apps/api/core");

@@ -70,7 +70,7 @@ pub async fn pet_rest_surfaces(
     );
     tauri::async_runtime::spawn_blocking(move||{
   let mut windows:Vec<(isize,Rect)>=Vec::new();#[cfg(windows)]unsafe{EnumWindows(collect,&mut windows as *mut _ as isize);}
-  let mut result=Vec::new();
+  let mut result=vec![json!({"id":format!("taskbar:{x}:{y}"),"left":x+8,"right":x+width-8,"y":y+height-3,"kind":"taskbar"})];
   for (index,(id,r)) in windows.iter().enumerate() {
     if r.top<=y+80 || r.top>=y+height-30 || r.right<=x || r.left>=x+width {continue;}
     // EnumWindows follows Z order. Split the ledge around foreground windows,

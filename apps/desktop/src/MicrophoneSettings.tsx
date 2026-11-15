@@ -1,3 +1,4 @@
+import { CustomSelect } from "./CustomSelect";
 import { useEffect, useRef, useState } from "react";
 import { updatePreferences, usePreferences } from "./preferences";
 import { microphoneConstraints } from "./microphone";
@@ -106,7 +107,7 @@ export function MicrophoneSettings() {
       </div>
       <label className="setting">
         Input device
-        <select
+        <CustomSelect
           aria-label="Microphone"
           value={p.microphoneId}
           onChange={(e) => updatePreferences({ microphoneId: e.target.value })}
@@ -125,7 +126,7 @@ export function MicrophoneSettings() {
                 Selected microphone · unavailable
               </option>
             )}
-        </select>
+        </CustomSelect>
       </label>
       <div className="mic-test-row">
         <button

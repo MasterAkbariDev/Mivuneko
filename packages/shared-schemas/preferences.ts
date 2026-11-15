@@ -1,3 +1,4 @@
+import { gestureConfig, type ProceduralGesture } from "./procedural-gesture.ts";
 export type PetMode =
   | "auto"
   | "stand"
@@ -8,7 +9,8 @@ export type PetMode =
   | "dance"
   | "walk"
   | "run"
-  | "sit";
+  | "sit"
+  | "lie";
 export type PetExpression =
   | "auto"
   | "idle"
@@ -31,7 +33,11 @@ export type PetExpression =
   | "wink"
   | "proud"
   | "crying"
-  | "determined";
+  | "determined"
+  | "bored"
+  | "nervous"
+  | "relieved"
+  | "embarrassed";
 export type CharacterId =
   | "luna"
   | "miku"
@@ -73,6 +79,7 @@ export interface Preferences {
   >;
   version: 1;
   petMode: PetMode;
+  petGesture: ProceduralGesture | null;
   petExpression: PetExpression;
   petEffects: boolean;
   illustrationDepth: boolean;
@@ -96,6 +103,7 @@ export interface Preferences {
   appLaunching: boolean;
   approvalMode: "ask" | "auto" | "deny";
   computerApproval: "automatic" | "review";
+  actionReview: "auto" | "bypass";
   rememberHistory: boolean;
   character: CharacterId;
   movement: "stationary" | "roaming";
@@ -148,6 +156,7 @@ export const defaults: Preferences = {
   },
   version: 1,
   petMode: "auto",
+  petGesture: null,
   petExpression: "auto",
   petEffects: true,
   illustrationDepth: false,
@@ -168,6 +177,7 @@ export const defaults: Preferences = {
   appLaunching: true,
   approvalMode: "ask",
   computerApproval: "automatic",
+  actionReview: "auto",
   rememberHistory: false,
   character: "luna",
   movement: "stationary",
@@ -239,6 +249,7 @@ export function parsePreferences(raw: unknown): Preferences {
         ];
       }),
     ) as Preferences["shortcuts"],
+    petGesture: gestureConfig(p.petGesture),
     petMode: [
       "auto",
       "stand",
@@ -250,6 +261,7 @@ export function parsePreferences(raw: unknown): Preferences {
       "walk",
       "run",
       "sit",
+      "lie",
     ].includes(p.petMode ?? "")
       ? p.petMode!
       : "auto",
@@ -277,6 +289,10 @@ export function parsePreferences(raw: unknown): Preferences {
       "proud",
       "crying",
       "determined",
+      "bored",
+      "nervous",
+      "relieved",
+      "embarrassed",
     ].includes(p.petExpression ?? "")
       ? p.petExpression!
       : "auto",
@@ -385,6 +401,7 @@ export function parsePreferences(raw: unknown): Preferences {
       ? p.localVoiceLanguage!
       : "en",
     appLaunching: p.appLaunching !== false,
+    actionReview: p.actionReview === "bypass" ? "bypass" : "auto",
     computerApproval: p.computerApproval === "review" ? "review" : "automatic",
     approvalMode:
       p.approvalMode === "auto" || p.approvalMode === "deny"

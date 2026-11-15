@@ -1,3 +1,4 @@
+import { CustomSelect } from "./CustomSelect";
 import { companionName } from "./companionName";
 import { useEffect, useState } from "react";
 import { isNative } from "./broker";
@@ -72,7 +73,7 @@ export function CompanionControls() {
       </p>
       <label className="setting">
         Expression preview
-        <select
+        <CustomSelect
           aria-label="Pet expression"
           value={p.petExpression}
           onChange={(e) =>
@@ -82,12 +83,17 @@ export function CompanionControls() {
           }
         >
           <option value="auto">Automatic</option>
-          {Object.keys(lunaModel.poses).map((pose) => (
+          {[
+            ...Object.keys(lunaModel.poses),
+            ...(p.renderer !== "2d"
+              ? ["bored", "nervous", "relieved", "embarrassed"]
+              : []),
+          ].map((pose) => (
             <option key={pose} value={pose}>
               {pose.charAt(0).toUpperCase() + pose.slice(1)}
             </option>
           ))}
-        </select>
+        </CustomSelect>
       </label>
       <label className="setting">
         Hearts, sparkles & mood effects
@@ -155,7 +161,7 @@ export function CompanionControls() {
       {isNative && (
         <label className="setting">
           Display
-          <select
+          <CustomSelect
             aria-label="Pet display"
             value={p.monitor}
             onChange={(e) => updatePreferences({ monitor: e.target.value })}
@@ -167,7 +173,7 @@ export function CompanionControls() {
                 {m.split(":")[0]}
               </option>
             ))}
-          </select>
+          </CustomSelect>
         </label>
       )}
     </section>

@@ -17,6 +17,7 @@ export function animateVrm(
   const wave = Math.sin(t * 3),
     breath = Math.sin(t * 1.8);
   const pose: Record<string, [number, number, number]> = {
+    hips: [0, 0, 0],
     leftUpperArm: [0, 0, -1.42],
     rightUpperArm: [0, 0, 1.42],
     leftLowerArm: [0, 0, 0],
@@ -63,6 +64,30 @@ export function animateVrm(
     pose.rightUpperArm = [0.1, -0.35, 0.65];
     pose.rightLowerArm = [0, -1.65, -0.5];
     pose.rightHand = [0.15, 0, -0.25];
+  }
+  if (mood === "bored") {
+    pose.head = [0.13, 0.18, 0.12];
+    pose.chest = [0.06, 0, 0];
+    pose.rightHand = [0, 0, Math.sin(t * 0.8) * 0.08];
+  }
+  if (mood === "nervous") {
+    pose.head = [0.09, Math.sin(t * 1.3) * 0.12, 0];
+    pose.leftLowerArm = [0, -1.15, 0.15];
+    pose.rightLowerArm = [0, 1.15, -0.15];
+    pose.leftHand = [0, 0.12, Math.sin(t * 7) * 0.05];
+    pose.rightHand = [0, -0.12, -Math.sin(t * 7) * 0.05];
+  }
+  if (mood === "relieved") {
+    pose.head = [0.1, 0, 0];
+    pose.chest = [-0.04 + Math.sin(t * 0.8) * 0.025, 0, 0];
+    pose.leftUpperArm = [0, 0, -1.5];
+    pose.rightUpperArm = [0, 0, 1.5];
+  }
+  if (mood === "embarrassed") {
+    pose.head = [0.18, -0.22, -0.08];
+    pose.rightUpperArm = [-0.1, 0.2, 0.7];
+    pose.rightLowerArm = [0, 1.65, -0.2];
+    pose.rightHand = [0.15, 0, 0.15];
   }
   // Individual reactions layer over the base pose; never substitute a head icon.
   if (mood === "crying") {
@@ -145,9 +170,85 @@ export function animateVrm(
     pose.chest = [0, Math.sin(t * 2) * 0.15, wave * 0.12];
     pose.leftUpperLeg = [wave * 0.15, 0, -0.06];
     pose.rightUpperLeg = [-wave * 0.15, 0, 0.06];
+  } else if (state.body === "lie") {
+    pose.hips = [0, 0, -1.45];
+    pose.spine = [0, 0, 0];
+    pose.chest = [0.05, 0, 0];
+    pose.head = [-0.05, 0.08, 0.15];
+    pose.leftUpperArm = [-0.2, 0, -1.1];
+    pose.leftLowerArm = [0, -1.3, 0];
+    pose.rightUpperArm = [0, 0, 1.1];
+    pose.rightLowerArm = [0, 0.4, 0];
+    pose.leftUpperLeg = [-0.1, 0, -0.12];
+    pose.rightUpperLeg = [-0.24, 0, 0.12];
+    pose.leftLowerLeg = [0.2, 0, 0];
+    pose.rightLowerLeg = [0.4, 0, 0];
   } else if (state.body === "sleep") pose.head = [0.25, 0, 0.22];
+  const gesture = state.gesture;
+  if (
+    gesture &&
+    !reduced &&
+    !dragging &&
+    !["walk", "run"].includes(state.body)
+  ) {
+    const elapsed = (Date.now() - gesture.started) / 1000;
+    if (elapsed >= 0 && elapsed < gesture.duration) {
+      const envelope =
+        Math.min(1, elapsed * 3, (gesture.duration - elapsed) * 3) *
+        gesture.intensity;
+      const swing = Math.sin(elapsed * gesture.tempo * 5),
+        slow = Math.sin(elapsed * gesture.tempo * 2);
+      const apply = (bone: string, angles: [number, number, number]) => {
+        pose[bone] = pose[bone].map((v, i) =>
+          THREE.MathUtils.lerp(v, angles[i], envelope),
+        ) as [number, number, number];
+      };
+      if (gesture.arms === "wave") {
+        apply("rightUpperArm", [0, 0, 0.2]);
+        apply("rightLowerArm", [0, 1.5, -0.4]);
+        apply("rightHand", [0.1, 0, swing * 0.45]);
+      }
+      if (gesture.arms === "open" || gesture.arms === "stretch") {
+        const raised = gesture.arms === "stretch";
+        apply("leftUpperArm", [-0.1, 0, raised ? 0.1 : -0.6]);
+        apply("rightUpperArm", [-0.1, 0, raised ? -0.1 : 0.6]);
+        apply("leftLowerArm", [0, -0.7, slow * 0.1]);
+        apply("rightLowerArm", [0, 0.7, -slow * 0.1]);
+      }
+      if (gesture.arms === "raised") {
+        apply("leftUpperArm", [0, 0, 0.2]);
+        apply("rightUpperArm", [0, 0, -0.2]);
+        apply("leftLowerArm", [0, -0.6, 0.3]);
+        apply("rightLowerArm", [0, 0.6, -0.3]);
+      }
+      if (gesture.arms === "folded" || gesture.arms === "clap") {
+        const clap =
+          gesture.arms === "clap" ? 0.25 + 0.2 * Math.abs(swing) : 0.55;
+        apply("leftUpperArm", [-0.3, -0.2, -0.8]);
+        apply("rightUpperArm", [-0.3, 0.2, 0.8]);
+        apply("leftLowerArm", [0, -1.65, clap]);
+        apply("rightLowerArm", [0, 1.65, -clap]);
+      }
+      if (gesture.arms === "point-left") {
+        apply("leftUpperArm", [0, 0, -0.05]);
+        apply("leftLowerArm", [0, -0.1, 0]);
+      }
+      if (gesture.arms === "point-right") {
+        apply("rightUpperArm", [0, 0, 0.05]);
+        apply("rightLowerArm", [0, 0.1, 0]);
+      }
+      if (gesture.head === "nod") apply("head", [swing * 0.16, 0, 0]);
+      if (gesture.head === "shake") apply("head", [0, swing * 0.25, 0]);
+      if (gesture.head === "tilt") apply("head", [0.05, 0, 0.2 + slow * 0.05]);
+      if (gesture.head === "bow") {
+        apply("spine", [0.32, 0, 0]);
+        apply("head", [0.25, 0, 0]);
+      }
+    }
+  }
   if (state.activity === "speaking") pose.head[0] += Math.sin(t * 4) * 0.035;
   if (dragging) {
+    pose.hips = [0, 0, 0];
     const swing = Math.sin(t * 4) * 0.12;
     pose.leftUpperArm = [0.18 + swing, 0, -1.65];
     pose.rightUpperArm = [0.18 - swing, 0, 1.65];
@@ -177,7 +278,12 @@ export function animateVrm(
   if (hips) {
     if (!origins.has(vrm)) origins.set(vrm, hips.position.clone());
     hips.position.copy(origins.get(vrm)!);
-    const target = state.body === "sit" && !dragging ? -0.38 : breath * 0.004;
+    const target =
+      state.body === "lie" && !dragging
+        ? -0.5
+        : state.body === "sit" && !dragging
+          ? -0.38
+          : breath * 0.004;
     const previous = hipOffsets.get(vrm) ?? target;
     const next = THREE.MathUtils.lerp(previous, target, alpha);
     hipOffsets.set(vrm, next);

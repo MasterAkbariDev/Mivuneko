@@ -1,3 +1,4 @@
+import { CustomSelect } from "./CustomSelect";
 import { RangeSlider } from "./RangeSlider";
 import { useEffect, useRef, useState } from "react";
 import { isNative } from "./broker";
@@ -239,7 +240,7 @@ export function SpeechSettings() {
         <h4>Microphone & turn-taking</h4>
         <label className="setting">
           Microphone sensitivity
-          <select
+          <CustomSelect
             aria-label="Microphone sensitivity"
             value={p.micSensitivity}
             onChange={(e) =>
@@ -251,7 +252,7 @@ export function SpeechSettings() {
             <option value="low">Low — noisy room</option>
             <option value="normal">Normal</option>
             <option value="high">High — quiet or distant voice</option>
-          </select>
+          </CustomSelect>
         </label>
         <p className="hint">
           How loud you must be, relative to the room, before open mic starts
@@ -278,7 +279,7 @@ export function SpeechSettings() {
         </p>
         <label className="setting">
           Send my voice message
-          <select
+          <CustomSelect
             aria-label="Voice message submission"
             value={p.turnTaking}
             onChange={(e) =>
@@ -289,7 +290,7 @@ export function SpeechSettings() {
           >
             <option value="automatic">After a quiet pause</option>
             <option value="manual">Only when I press Done speaking</option>
-          </select>
+          </CustomSelect>
         </label>
         <p className="hint">
           Manual mode lets you think for as long as you need. Recordings are
