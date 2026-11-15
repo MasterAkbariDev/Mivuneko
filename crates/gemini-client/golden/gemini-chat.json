@@ -18,10 +18,7 @@
                   "type": "STRING"
                 },
                 "gait": {
-                  "enum": [
-                    "walk",
-                    "run"
-                  ],
+                  "enum": ["walk", "run"],
                   "type": "STRING"
                 },
                 "kind": {
@@ -36,9 +33,7 @@
                   "type": "STRING"
                 }
               },
-              "required": [
-                "kind"
-              ],
+              "required": ["kind"],
               "type": "OBJECT"
             },
             "maxItems": 8,
@@ -85,12 +80,7 @@
           "appQuery",
           "companionActions"
         ],
-        "required": [
-          "text",
-          "emotion",
-          "appQuery",
-          "companionActions"
-        ],
+        "required": ["text", "emotion", "appQuery", "companionActions"],
         "type": "OBJECT"
       }
     },
@@ -121,10 +111,7 @@
                   "type": "STRING"
                 },
                 "gait": {
-                  "enum": [
-                    "walk",
-                    "run"
-                  ],
+                  "enum": ["walk", "run"],
                   "type": "STRING"
                 },
                 "kind": {
@@ -139,9 +126,7 @@
                   "type": "STRING"
                 }
               },
-              "required": [
-                "kind"
-              ],
+              "required": ["kind"],
               "type": "OBJECT"
             },
             "maxItems": 8,
@@ -188,12 +173,7 @@
           "appQuery",
           "companionActions"
         ],
-        "required": [
-          "text",
-          "emotion",
-          "appQuery",
-          "companionActions"
-        ],
+        "required": ["text", "emotion", "appQuery", "companionActions"],
         "type": "OBJECT"
       }
     },
@@ -224,10 +204,7 @@
                   "type": "STRING"
                 },
                 "gait": {
-                  "enum": [
-                    "walk",
-                    "run"
-                  ],
+                  "enum": ["walk", "run"],
                   "type": "STRING"
                 },
                 "kind": {
@@ -242,9 +219,7 @@
                   "type": "STRING"
                 }
               },
-              "required": [
-                "kind"
-              ],
+              "required": ["kind"],
               "type": "OBJECT"
             },
             "maxItems": 8,
@@ -291,12 +266,7 @@
           "appQuery",
           "companionActions"
         ],
-        "required": [
-          "text",
-          "emotion",
-          "appQuery",
-          "companionActions"
-        ],
+        "required": ["text", "emotion", "appQuery", "companionActions"],
         "type": "OBJECT"
       }
     },
@@ -327,10 +297,7 @@
                   "type": "STRING"
                 },
                 "gait": {
-                  "enum": [
-                    "walk",
-                    "run"
-                  ],
+                  "enum": ["walk", "run"],
                   "type": "STRING"
                 },
                 "kind": {
@@ -345,9 +312,7 @@
                   "type": "STRING"
                 }
               },
-              "required": [
-                "kind"
-              ],
+              "required": ["kind"],
               "type": "OBJECT"
             },
             "maxItems": 8,
@@ -394,12 +359,7 @@
           "appQuery",
           "companionActions"
         ],
-        "required": [
-          "text",
-          "emotion",
-          "appQuery",
-          "companionActions"
-        ],
+        "required": ["text", "emotion", "appQuery", "companionActions"],
         "type": "OBJECT"
       }
     },
