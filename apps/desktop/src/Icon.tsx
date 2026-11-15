@@ -1,4 +1,5 @@
 export type IconName =
+  | "waveform"
   | "search"
   | "frame"
   | "eye-off"
@@ -25,6 +26,7 @@ export type IconName =
   | "volume"
   | "sun";
 const paths: Record<IconName, string> = {
+  waveform: "M4 10v4m4-7v10m4-14v18m4-14v10m4-7v4",
   search: "M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15ZM16 16l5 5",
   frame:
     "M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3",

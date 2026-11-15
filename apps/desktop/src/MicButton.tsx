@@ -64,7 +64,7 @@ export function MicButton({
     >
       <i ref={fill} className="mic-fill" />
       <span className="mic-icon">
-        <Icon name="mic" />
+        <Icon name={active && phase === "hearing" ? "waveform" : "mic"} />
       </span>
       <span className="mic-label">{label}</span>
       {active && <em className="mic-stop">Stop</em>}

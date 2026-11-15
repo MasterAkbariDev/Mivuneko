@@ -137,7 +137,7 @@ test("voice controls show one send, icon-only microphone and aligned external pl
     form = row.locator("form");
   const a = await plus.boundingBox(),
     f = await form.boundingBox();
-  expect(Math.abs(a!.y + a!.height - f!.y - f!.height)).toBeLessThan(1);
+  expect(Math.abs(a!.y + a!.height / 2 - f!.y - f!.height / 2)).toBeLessThan(1);
   expect(a!.x + a!.width).toBeLessThan(f!.x);
   await expect(
     page.getByRole("button", { name: "Send", exact: true }),
@@ -149,4 +149,80 @@ test("voice controls show one send, icon-only microphone and aligned external pl
   await page.screenshot({ path: "test-results/layout-composer.png" });
   await settings(page, "Voice & input");
   await page.screenshot({ path: "test-results/layout-voice.png" });
+});
+
+test("format tabs center their text and mic hover keeps the same circular silhouette", async ({
+  page,
+}) => {
+  const mic = page.locator(".mic-compact");
+  const before = await mic.evaluate((el) => getComputedStyle(el).borderRadius);
+  await mic.hover();
+  expect(await mic.evaluate((el) => getComputedStyle(el).borderRadius)).toBe(
+    before,
+  );
+  expect(before).toBe("50%");
+  expect(
+    await mic
+      .locator(".mic-icon")
+      .evaluate((el) => getComputedStyle(el).backgroundColor),
+  ).toBe("rgba(0, 0, 0, 0)");
+  await page.getByRole("button", { name: "Characters", exact: true }).click();
+  for (const tab of await page.getByRole("tab").all()) {
+    const offsets = await tab.evaluate((el) => {
+      const text = Array.from(el.childNodes).find(
+        (n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim(),
+      )!;
+      const r = document.createRange();
+      r.selectNodeContents(text);
+      const a = r.getBoundingClientRect(),
+        b = el.getBoundingClientRect();
+      return {
+        x: Math.abs(a.x + a.width / 2 - b.x - b.width / 2),
+        y: Math.abs(a.y + a.height / 2 - b.y - b.height / 2),
+      };
+    });
+    expect(offsets.x).toBeLessThan(1);
+    expect(offsets.y).toBeLessThan(2);
+  }
+});
+
+test("gesture composer applies bounded live combinations and voice delivery stays per character", async ({
+  page,
+}) => {
+  await settings(page, "Voice & input");
+  await page
+    .getByLabel("Voice delivery", { exact: true })
+    .selectOption("playful");
+  await page.getByRole("button", { name: "Characters", exact: true }).click();
+  await page.getByRole("tab", { name: "3D", exact: true }).click();
+  await page.getByText("Live performance", { exact: true }).click();
+  await page.getByLabel("Gesture arms", { exact: true }).selectOption("clap");
+  await page.getByLabel("Gesture head", { exact: true }).selectOption("tilt");
+  await page.getByRole("button", { name: "Play gesture", exact: true }).click();
+  const gesture = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!).petGesture,
+  );
+  expect(gesture.arms).toBe("clap");
+  expect(gesture.head).toBe("tilt");
+  expect(gesture.duration).toBe(5);
+  await page.getByRole("button", { name: "Stop gesture", exact: true }).click();
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!).petGesture,
+    ),
+  ).toBeNull();
+  await page.getByRole("button", { name: /Character voice settings/ }).click();
+  await expect(page.getByLabel("Voice delivery", { exact: true })).toHaveValue(
+    "custom",
+  );
+  await page.getByLabel("Voice delivery", { exact: true }).selectOption("warm");
+  const voices = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!)
+        .characterVoices,
+  );
+  expect(voices.luna.instruction).toContain("playful live-host");
+  expect(voices.haru.instruction).toContain("Warm, reassuring");
 });

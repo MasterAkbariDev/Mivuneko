@@ -31,6 +31,24 @@ pub fn terminate_owned(pid: u32) {
         return;
     }
     #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let executable =
+            PathBuf::from(std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into()))
+                .join("System32")
+                .join("taskkill.exe");
+        if Command::new(executable)
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .creation_flags(0x08000000)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|result| result.success())
+        {
+            return;
+        }
+    }
+    #[cfg(windows)]
     unsafe {
         #[link(name = "kernel32")]
         extern "system" {
@@ -44,6 +62,32 @@ pub fn terminate_owned(pid: u32) {
             CloseHandle(h);
         }
     }
+}
+fn voice_line_with_deadline(
+    reader: &mut impl BufRead,
+    pid: u32,
+    timeout: std::time::Duration,
+) -> Result<String, String> {
+    let (done, waiting) = std::sync::mpsc::channel();
+    let expired = std::sync::Arc::new(AtomicBool::new(false));
+    let timed_out = expired.clone();
+    std::thread::spawn(move || {
+        if matches!(
+            waiting.recv_timeout(timeout),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ) {
+            timed_out.store(true, Ordering::SeqCst);
+            terminate_owned(pid);
+        }
+    });
+    let mut line = String::new();
+    let read = reader.read_line(&mut line);
+    let _ = done.send(());
+    if expired.load(Ordering::SeqCst) {
+        return Err("Local expressive voice took too long. Choose fast local voice or Gemini for quicker replies.".into());
+    }
+    read.map_err(|e| e.to_string())?;
+    Ok(line)
 }
 pub fn config(app: &tauri::AppHandle) -> Result<Config, String> {
     let mut paths = vec![app
@@ -177,11 +221,11 @@ impl Runtime {
             let worker = voice.as_mut().unwrap();
             writeln!(worker.input, "{}", request).map_err(|e| e.to_string())?;
             worker.input.flush().map_err(|e| e.to_string())?;
-            let mut line = String::new();
-            worker
-                .output
-                .read_line(&mut line)
-                .map_err(|e| e.to_string())?;
+            let line = voice_line_with_deadline(
+                &mut worker.output,
+                worker.child.id(),
+                std::time::Duration::from_secs(240),
+            )?;
             if line.len() > 24_000_000 {
                 return Err("Voice audio exceeded its limit".into());
             }
@@ -335,4 +379,45 @@ pub async fn qwen_synthesize(
         let result=runtime.call(&app,json!({"action":"speak","text":text,"mood":mood,"speaker":speaker,"language":language,"instruction":instruction,"modelDir":c.model_dir}))?;
         base64::engine::general_purpose::STANDARD.decode(result["audio"].as_str().ok_or("No local speech returned")?).map_err(|_|"Invalid local audio".into())
     }).await.map_err(|_|"Local voice worker failed")?
+}
+
+#[cfg(test)]
+mod response_deadline_tests {
+    use super::*;
+    #[test]
+    fn complete_response_does_not_wait_for_the_deadline() {
+        let mut input = std::io::Cursor::new(b"{\"ok\":true}\n".to_vec());
+        assert_eq!(
+            voice_line_with_deadline(&mut input, 0, std::time::Duration::from_secs(1)).unwrap(),
+            "{\"ok\":true}\n"
+        );
+    }
+    #[cfg(windows)]
+    #[test]
+    fn stalled_owned_response_is_terminated() {
+        use std::os::windows::process::CommandExt;
+        let mut child = Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Start-Sleep -Seconds 30",
+            ])
+            .creation_flags(0x08000000)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let mut input = BufReader::new(child.stdout.take().unwrap());
+        let start = std::time::Instant::now();
+        assert!(voice_line_with_deadline(
+            &mut input,
+            child.id(),
+            std::time::Duration::from_millis(100)
+        )
+        .unwrap_err()
+        .contains("took too long"));
+        child.wait().unwrap();
+        assert!(start.elapsed() < std::time::Duration::from_secs(5));
+    }
 }

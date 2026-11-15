@@ -1,3 +1,9 @@
+import {
+  voiceDeliveries,
+  applyVoiceDelivery,
+  deliverySelection,
+  type VoiceDelivery,
+} from "../../../packages/shared-schemas/voice-performance";
 import { CustomSelect } from "./CustomSelect";
 import { packInfo, type PackSummary } from "./characterPackStore";
 import { voiceIdentity, voiceKey } from "./voiceIdentity";
@@ -178,6 +184,40 @@ export function CharacterVoice({
           )}
         </CustomSelect>
       </label>
+      <label className="setting">
+        Voice delivery
+        <CustomSelect
+          aria-label="Voice delivery"
+          value={deliverySelection(identity.instruction)}
+          disabled={
+            preferences.voiceProvider === "local" ||
+            preferences.voiceProvider === "system"
+          }
+          onChange={(e) => {
+            if (e.target.value !== "custom")
+              saveIdentity({
+                instruction: applyVoiceDelivery(
+                  identity.instruction,
+                  e.target.value as VoiceDelivery,
+                ),
+              });
+          }}
+        >
+          <option value="custom">Character direction</option>
+          {Object.entries(voiceDeliveries).map(([key, preset]) => (
+            <option key={key} value={key}>
+              {preset.label}
+            </option>
+          ))}
+        </CustomSelect>
+      </label>
+      {(preferences.voiceProvider === "local" ||
+        preferences.voiceProvider === "system") && (
+        <p className="hint">
+          Free-form emotional voice direction is available with Gemini or Qwen.
+          Fast local voice uses its character recipe and pacing.
+        </p>
+      )}
       <details className="voice-detail">
         <summary>Pronunciation</summary>
         <label className="setting">
@@ -196,7 +236,8 @@ export function CharacterVoice({
           <p className="hint">
             Runs locally with emotion and delivery instructions. The model
             shares GPU memory with Ollama; the app unloads one before loading
-            the other.
+            the other. Generation can be slow. For quick conversation, choose
+            fast local voice or Gemini.
           </p>
           <label className="setting">
             Voice

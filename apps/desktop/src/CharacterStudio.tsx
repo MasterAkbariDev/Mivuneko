@@ -1,3 +1,6 @@
+import { CustomSelect } from "./CustomSelect";
+import { RangeSlider } from "./RangeSlider";
+import { cancelCompanionTask } from "./companionTask";
 import { Icon } from "./Icon";
 import { CharacterPackLibrary } from "./CharacterPackLibrary";
 import { SpriteCanvas } from "./SpriteCanvas";
@@ -21,6 +24,24 @@ export function CharacterStudio({
 }) {
   const p = usePreferences();
   const session = usePetSession();
+  const [arms, setArms] = useState("wave"),
+    [head, setHead] = useState("nod"),
+    [strength, setStrength] = useState(0.65),
+    [tempo, setTempo] = useState(1);
+  function playGesture(nextArms = arms, nextHead = head) {
+    cancelCompanionTask();
+    updatePreferences({
+      petGesture: gestureConfig({
+        arms: nextArms,
+        head: nextHead,
+        intensity: strength,
+        tempo,
+        duration: 5,
+      }),
+      petMode: "stand",
+      petExpression: p.petExpression === "sleeping" ? "auto" : p.petExpression,
+    });
+  }
   const [format, setFormat] = useState<"2D" | "2.5D" | "3D">(
     p.renderer !== "2d" ? "3D" : p.illustrationDepth ? "2.5D" : "2D",
   );
@@ -152,33 +173,45 @@ export function CharacterStudio({
             ),
           )}
         </div>
-        {p.renderer !== "2d" && (
+        {(!p.activePackId || p.renderer !== "2d") && (
           <details className="extra-expressions">
             <summary>More expressions</summary>
             <div className="inspector-expressions">
-              {["bored", "nervous", "relieved", "embarrassed"].map(
-                (expression) => (
-                  <button
-                    key={expression}
-                    data-expression={expression}
-                    aria-pressed={p.petExpression === expression}
-                    onClick={() =>
-                      updatePreferences({
-                        petExpression: expression as typeof p.petExpression,
-                      })
-                    }
-                  >
-                    {expression.charAt(0).toUpperCase() + expression.slice(1)}
-                  </button>
-                ),
-              )}
+              {[
+                "crying",
+                "angry",
+                "surprised",
+                "shy",
+                "proud",
+                "wink",
+                "confused",
+                "determined",
+                "joking",
+                "teasing",
+                ...(p.renderer !== "2d"
+                  ? ["bored", "nervous", "relieved", "embarrassed"]
+                  : []),
+              ].map((expression) => (
+                <button
+                  key={expression}
+                  data-expression={expression}
+                  aria-pressed={p.petExpression === expression}
+                  onClick={() =>
+                    updatePreferences({
+                      petExpression: expression as typeof p.petExpression,
+                    })
+                  }
+                >
+                  {expression.charAt(0).toUpperCase() + expression.slice(1)}
+                </button>
+              ))}
             </div>
           </details>
         )}
         {p.renderer !== "2d" && (
           <>
             <details className="gesture-options">
-              <summary>Live gestures</summary>
+              <summary>Live performance</summary>
               <div className="inspector-expressions">
                 {[
                   ["Wave", "wave", "neutral"],
@@ -187,20 +220,7 @@ export function CharacterStudio({
                   ["Stretch", "stretch", "tilt"],
                   ["Clap", "clap", "neutral"],
                 ].map(([label, arms, head]) => (
-                  <button
-                    key={label}
-                    onClick={() =>
-                      updatePreferences({
-                        petGesture: gestureConfig({
-                          arms,
-                          head,
-                          intensity: 0.65,
-                          tempo: 1,
-                          duration: 4,
-                        }),
-                      })
-                    }
-                  >
+                  <button key={label} onClick={() => playGesture(arms, head)}>
                     {label}
                   </button>
                 ))}
@@ -211,6 +231,81 @@ export function CharacterStudio({
                 >
                   Lie down
                 </button>
+              </div>
+              <div className="gesture-composer">
+                <label>
+                  Arms
+                  <CustomSelect
+                    aria-label="Gesture arms"
+                    value={arms}
+                    onChange={(e) => setArms(e.target.value)}
+                  >
+                    {[
+                      "rest",
+                      "open",
+                      "raised",
+                      "folded",
+                      "point-left",
+                      "point-right",
+                      "wave",
+                      "clap",
+                      "stretch",
+                    ].map((v) => (
+                      <option key={v} value={v}>
+                        {v.replaceAll("-", " ")}
+                      </option>
+                    ))}
+                  </CustomSelect>
+                </label>
+                <label>
+                  Head
+                  <CustomSelect
+                    aria-label="Gesture head"
+                    value={head}
+                    onChange={(e) => setHead(e.target.value)}
+                  >
+                    {["neutral", "nod", "shake", "tilt", "bow"].map((v) => (
+                      <option key={v}>{v}</option>
+                    ))}
+                  </CustomSelect>
+                </label>
+                <label>
+                  Strength · {Math.round(strength * 100)}%
+                  <RangeSlider
+                    aria-label="Gesture strength"
+                    min="0.1"
+                    max="1"
+                    step="0.05"
+                    value={strength}
+                    onChange={(e) => setStrength(Number(e.target.value))}
+                  />
+                </label>
+                <label>
+                  Tempo · {tempo.toFixed(1)}×
+                  <RangeSlider
+                    aria-label="Gesture tempo"
+                    min="0.3"
+                    max="2"
+                    step="0.1"
+                    value={tempo}
+                    onChange={(e) => setTempo(Number(e.target.value))}
+                  />
+                </label>
+                <div className="gesture-playback">
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => playGesture()}
+                  >
+                    Play gesture
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updatePreferences({ petGesture: null })}
+                  >
+                    Stop gesture
+                  </button>
+                </div>
               </div>
             </details>
           </>

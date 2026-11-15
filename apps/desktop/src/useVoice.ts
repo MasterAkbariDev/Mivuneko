@@ -427,7 +427,8 @@ export function useVoice(
           requestId,
           text: part,
           emotion,
-          voicePrompt: packVoicePrompt.current,
+          voicePrompt:
+            packVoicePrompt.current ?? voiceIdentity(preferences).instruction,
           character: preferences.activePackId
             ? "custom-pack"
             : preferences.renderer === "sample-vrm"

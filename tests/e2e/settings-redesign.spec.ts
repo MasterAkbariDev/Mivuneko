@@ -512,7 +512,42 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
     const canvas = document.querySelector(
       ".character-scene canvas",
     ) as HTMLCanvasElement;
+    const headBone = vrm.humanoid.getNormalizedBoneNode("head");
+    animateVrm(
+      vrm,
+      { ...state, activity: "speaking", mouth: 0 },
+      0.5,
+      1,
+      false,
+    );
+    const silentHead = headBone.quaternion.clone(),
+      silentHand = arm.quaternion.clone();
+    animateVrm(
+      vrm,
+      { ...state, activity: "speaking", mouth: 1 },
+      0.5,
+      1,
+      false,
+    );
+    const speechHeadMotion = silentHead.angleTo(headBone.quaternion);
+    const lowerArm = vrm.humanoid.getNormalizedBoneNode("rightLowerArm");
+    const speakingElbow = lowerArm.quaternion.clone();
+    animateVrm(
+      vrm,
+      { ...state, activity: "speaking", mouth: 0 },
+      0.5,
+      1,
+      false,
+    );
+    const speechArmMotion = speakingElbow.angleTo(lowerArm.quaternion);
+    animateVrm(vrm, { ...state, activity: "speaking", mouth: 0 }, 1, 1, true);
+    const reducedHead = headBone.quaternion.clone();
+    animateVrm(vrm, { ...state, activity: "speaking", mouth: 1 }, 1, 1, true);
+    const reducedSpeechMotion = reducedHead.angleTo(headBone.quaternion);
     return {
+      speechHeadMotion,
+      speechArmMotion,
+      reducedSpeechMotion,
       forwardHand,
       dragLift,
       restoredPose,
@@ -522,6 +557,9 @@ test("VRM gestures move real bones and deform facial meshes at high resolution",
       ratio: canvas.width / canvas.getBoundingClientRect().width,
     };
   });
+  expect(result.speechHeadMotion).toBeGreaterThan(0.01);
+  expect(result.speechArmMotion).toBeGreaterThan(0.01);
+  expect(result.reducedSpeechMotion).toBeLessThan(0.001);
   expect(result.dragLift).toBeGreaterThan(0.3);
   expect(result.restoredPose).toBeLessThan(0.01);
   expect(result.gesture).toBeGreaterThan(0.5);
@@ -1403,3 +1441,32 @@ for (const voiceKind of ["none", "prompt"] as const)
       expect(call.args.character).toBe("custom-pack");
     }
   });
+
+test("Gemini receives the selected per-character performance direction", async ({
+  page,
+}) => {
+  await streamingVoice(page);
+  await page
+    .getByLabel("Voice delivery", { exact: true })
+    .selectOption("playful");
+  await page.getByText("Preview voice & emotions", { exact: true }).click();
+  const happy = page
+    .locator(".mood-previews")
+    .getByRole("button", { name: "Happy", exact: true });
+  await happy.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).__speechRequest?.voicePrompt ?? ""),
+    )
+    .toContain("playful live-host");
+  await page.evaluate(() => {
+    const w = window as any;
+    w.__emit("voice-audio", {
+      requestId: w.__speechRequest.requestId,
+      pcm: Array(4800).fill(0),
+      sampleRate: 24000,
+    });
+    w.__finishSpeech();
+  });
+  await expect(happy).toBeEnabled();
+});

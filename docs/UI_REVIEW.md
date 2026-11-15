@@ -36,3 +36,11 @@ The user's 1280 × 890 captures at 110% text size revealed layout defects missed
 Voice settings use one separator per meaningful group with a Character voice heading. The composer is a flex row with aligned external plus and form hit targets. Microphone status remains accessible without visible text; the single send action finalizes an active spoken turn or sends typed text. Both manual and automatic voice endpointing are covered by tests. The obsolete empty computer-session launcher was removed from Local models; tasks begin through conversation.
 
 New layout regression tests cover button padding and gaps, settings ownership, Activity search width, compatible character previews and sticky inspector, and composer/microphone geometry at the user's viewport. Captures are generated in test-results/layout-*.png during verification.
+
+## Composer and performance refinement
+
+Format labels are centered with explicit grid alignment and tested using their text bounds. The composer uses a rounded input dock, a separate circular add action, circular mic/send hit targets, consistent hover clipping and restrained focus/press transitions; reduced-motion settings suppress animation. Regression checks assert the mic keeps the same circular silhouette on hover.
+
+The performance inspector exposes the available additional emotions and a procedural arm/head composer with strength and tempo. Spoken amplitude drives subtle 3D head, chest and wrist/elbow beats, with locomotion, dragging and reduced-motion taking priority. Per-character Natural/Playful/Warm/Expressive voice directions reach both Qwen and Gemini streaming; fast Kokoro/system speech does not offer equivalent free-form emotional synthesis. Existing 2D artwork remains pose-based, not a newly authored Live2D rig.
+
+The real local Qwen smoke run returned a valid 4.8-second waveform with peak amplitude 0.604 after 182 seconds while browser regressions were also running. This was not an isolated latency benchmark or a listening-quality assessment. Qwen therefore remains explicitly experimental; these delivery controls do not establish real-time local VTuber speech. The run also prompted process-tree cancellation for Python launchers and a bounded 240-second voice-worker response deadline.

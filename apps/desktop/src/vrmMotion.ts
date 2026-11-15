@@ -246,7 +246,23 @@ export function animateVrm(
       }
     }
   }
-  if (state.activity === "speaking") pose.head[0] += Math.sin(t * 4) * 0.035;
+  if (
+    state.activity === "speaking" &&
+    !reduced &&
+    !dragging &&
+    ["idle", "sit"].includes(state.body)
+  ) {
+    const amplitude = THREE.MathUtils.clamp(state.mouth, 0, 1);
+    const beat = amplitude * (0.5 + 0.5 * Math.sin(t * 4.3));
+    pose.head[0] += Math.sin(t * 4.3) * amplitude * 0.055;
+    pose.chest[1] += Math.sin(t * 1.7) * amplitude * 0.025;
+    if (!gesture || Date.now() - gesture.started >= gesture.duration * 1000) {
+      pose.rightLowerArm[1] += beat * 0.18;
+      pose.leftLowerArm[1] -= (amplitude - beat) * 0.12;
+      pose.rightHand[2] += Math.sin(t * 3.1) * amplitude * 0.075;
+      pose.leftHand[2] -= Math.sin(t * 2.7) * amplitude * 0.05;
+    }
+  }
   if (dragging) {
     pose.hips = [0, 0, 0];
     const swing = Math.sin(t * 4) * 0.12;
