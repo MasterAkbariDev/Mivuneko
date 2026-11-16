@@ -1,6 +1,11 @@
+export function terminalTask(text: string): boolean {
+  return /^(?:please |can you |could you )?(?:(?:run|execute) (?:npm|pnpm|yarn|npx|git|python|node|cargo|dotnet|go|pytest|a command|the command|tests?|the tests?|a build|the build)\b|install (?:the )?dependencies\b|build (?:this|the) project\b)/i.test(
+    text.trim(),
+  );
+}
 /** Only direct user requests enter computer sessions; model output cannot start one. */
 export function computerIntent(text: string): boolean {
-  if (browserTask(text)) return true;
+  if (browserTask(text) || terminalTask(text)) return true;
   if (
     !/\b(?:explain|what is|how (?:do|can|to)|why)\b/i.test(text) &&
     /\b(?:create|write|build|implement|code)\b.*\b(?:function|example|script|program|code|directory|folder)\b/i.test(

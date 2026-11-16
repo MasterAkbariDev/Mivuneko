@@ -66,13 +66,13 @@ def observe(req):
             if rect.width() <= 0 or rect.height() <= 0: continue
             items.append({"id": element_id(e), "role": info.control_type, "name": "Protected input" if protected else info.name[:260], "protected": protected, "enabled": e.is_enabled(), "bounds": [rect.left-r.left, rect.top-r.top, rect.right-r.left, rect.bottom-r.top]})
         except Exception: continue
-    return {"window": str(w.handle), "processId": w.process_id(), "title": w.window_text()[:200], "width": r.width(), "height": r.height(), "imageWidth": image.width, "imageHeight": image.height, "image": base64.b64encode(output.getvalue()).decode(), "elements": items[:100], "workspaceFiles":file_action({"workspace":req["workspace"]},{"kind":"list_files"})["files"] if req.get("workspace") else [], "windows":windows()["windows"], "observation": secrets.token_hex(16)}
+    return {"window": str(w.handle), "processId": w.process_id(), "title": w.window_text()[:200], "width": r.width(), "height": r.height(), "imageWidth": image.width, "imageHeight": image.height, "image": base64.b64encode(output.getvalue()).decode(), "elements": items[:100], "tools":tool_environment(),"workspaceFiles":file_action({"workspace":req["workspace"]},{"kind":"list_files"})["files"] if req.get("workspace") else [], "windows":windows()["windows"], "observation": secrets.token_hex(16)}
 
-def file_path(root, value):
+def file_path(root, value, allow_root=False):
     if not root: raise ValueError("This session has no folder access")
     root = Path(root).resolve(strict=True)
     path = (root / value).resolve()
-    if path == root or root not in path.parents: raise ValueError("The path must stay inside the selected folder")
+    if (path == root and not allow_root) or (path != root and root not in path.parents): raise ValueError("The path must stay inside the selected folder")
     for part in path.relative_to(root).parts:
         if part.lower() in {".env", ".ssh", ".aws", ".git", "credentials", "secrets"} or part.lower().startswith(".env.") or part.lower().endswith((".pem", ".key", ".pfx")): raise ValueError("Credential and repository-internal files are not available to computer sessions")
     # Reject junctions and symlinks along the path, including final files.
@@ -82,10 +82,115 @@ def file_path(root, value):
         if current.is_symlink() or (hasattr(current, "is_junction") and current.is_junction()): raise ValueError("Linked paths are not supported")
     return path
 
+def vscode_executable():
+    candidates = []
+    for base in (os.environ.get("LOCALAPPDATA"), os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)")):
+        if base:
+            candidates.extend([Path(base)/"Programs"/"Microsoft VS Code"/"Code.exe", Path(base)/"Microsoft VS Code"/"Code.exe"])
+    found = shutil.which("Code.exe") or shutil.which("code")
+    if found:
+        entry = Path(found)
+        candidates.extend([entry, entry.parent.parent/"Code.exe"])
+    if os.name == "nt":
+        import winreg
+        for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            try:
+                with winreg.OpenKey(hive, r"Software\Microsoft\Windows\CurrentVersion\App Paths\Code.exe") as key:
+                    candidates.append(Path(winreg.QueryValueEx(key, "")[0]))
+            except OSError:
+                pass
+    for candidate in candidates:
+        if candidate.name.lower() == "code.exe" and candidate.is_file():
+            return candidate.resolve()
+    raise ValueError("Visual Studio Code is not installed or its executable could not be found")
+
+def powershell_executable():
+    candidates = []
+    if os.environ.get("ProgramFiles"):
+        candidates.append(Path(os.environ["ProgramFiles"])/"PowerShell"/"7"/"pwsh.exe")
+    found = shutil.which("pwsh")
+    if found: candidates.append(Path(found))
+    candidates.append(Path(os.environ.get("SystemRoot", r"C:\Windows"))/"System32"/"WindowsPowerShell"/"v1.0"/"powershell.exe")
+    for candidate in candidates:
+        if candidate.is_file(): return candidate
+    raise ValueError("PowerShell is unavailable")
+
+def tool_environment():
+    tools = {name: shutil.which(name) for name in ("git", "node", "npm", "python", "cargo", "dotnet")}
+    tools["python"] = sys.executable
+    try: tools["powershell"] = str(powershell_executable())
+    except ValueError: tools["powershell"] = None
+    try: tools["vscode"] = str(vscode_executable())
+    except ValueError: tools["vscode"] = None
+    return {"shell": "powershell" if tools["powershell"] else None, "executables": tools, "vscodeOnPath": bool(shutil.which("code") or shutil.which("Code.exe")), "powershellVersion": 7 if tools["powershell"] and Path(tools["powershell"]).name.lower() == "pwsh.exe" else 5}
+
+def shell_path(path):
+    value = str(path)
+    prefix = "\\\\?\\"
+    if value.startswith(prefix + "UNC\\"):
+        return "\\\\" + value[len(prefix) + 4:]
+    return value[len(prefix):] if value.startswith(prefix) else value
+
+def run_command(req, action):
+    import subprocess
+    import tempfile
+    command = action.get("command", "")
+    runtime = action.get("executable")
+    args = action.get("args", [])
+    if runtime:
+        if runtime not in {"node", "python", "git", "npm", "cargo", "dotnet"} or not isinstance(args, list) or len(args) > 128 or any(not isinstance(arg, str) or len(arg) > 16000 or "\0" in arg for arg in args):
+            raise ValueError("Choose a discovered executable and a bounded literal argument list")
+        if command: raise ValueError("Use a shell command or executable arguments, not both")
+    elif not isinstance(command, str) or not command.strip() or len(command) > 16000 or "\0" in command:
+        raise ValueError("A terminal command must contain 1–16000 characters")
+    cwd = file_path(req.get("workspace", ""), action.get("cwd", "."), allow_root=True)
+    if not cwd.is_dir(): raise ValueError("The terminal working directory must be an existing folder")
+    timeout = max(1, min(300, float(action.get("seconds", 120))))
+    env = {key: value for key, value in os.environ.items() if not any(word in key.upper() for word in ("API_KEY", "TOKEN", "SECRET", "PASSWORD", "PRIVATE_KEY", "ACCESS_KEY")) and key.upper() not in {"GEMINI_KEYS", "MIVUNEKO_GEMINI_KEYS", "SSH_AUTH_SOCK"}}
+    try: env["MIVUNEKO_VSCODE"] = str(vscode_executable())
+    except ValueError: env.pop("MIVUNEKO_VSCODE", None)
+    if runtime:
+        tools = tool_environment()["executables"]
+        executable = tools.get(runtime)
+        if not executable: return {"exitCode":127,"stdout":"","stderr":f"{runtime} executable was not discovered","cwd":shell_path(cwd),"command":runtime,"timedOut":False,"truncated":False}
+        argv = [executable, *args]
+        if runtime == "npm" and Path(executable).suffix.lower() == ".cmd":
+            cli = Path(executable).parent/"node_modules"/"npm"/"bin"/"npm-cli.js"
+            node = tools.get("node") or str(Path(executable).parent/"node.exe")
+            if not cli.is_file(): raise ValueError("The npm CLI entrypoint was not found")
+            argv = [node, str(cli), *args]
+        command = subprocess.list2cmdline(argv)
+    else:
+        executable = powershell_executable()
+        script = "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $global:LASTEXITCODE=0; try { & {\n" + command + "\n}; $commandSucceeded=$?; if($LASTEXITCODE -ne 0) {exit $LASTEXITCODE}; if(-not $commandSucceeded) {exit 1}; exit 0 } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }"
+        encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+        argv = [str(executable), "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
+    with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+        child = subprocess.Popen(argv, cwd=shell_path(cwd), env=env, stdin=subprocess.DEVNULL, stdout=output, stderr=errors, creationflags=subprocess.CREATE_NO_WINDOW)
+        timed_out = False
+        try: code = child.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            subprocess.run([str(Path(os.environ.get("SystemRoot", r"C:\Windows"))/"System32"/"taskkill.exe"), "/PID", str(child.pid), "/T", "/F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW, timeout=5, check=False)
+            child.wait(timeout=5)
+            code = -1
+        def read(stream):
+            length = stream.tell();stream.seek(0)
+            return stream.read(8192).decode("utf-8", errors="replace"), length > 8192
+        stdout, out_cut = read(output);stderr, err_cut = read(errors)
+    return {"command": command, "cwd": shell_path(cwd), "exitCode": code, "stdout": stdout, "stderr": stderr, "timedOut": timed_out, "truncated": out_cut or err_cut, "text": stdout + ("\n" + stderr if stderr else "")}
+
 def file_action(req, action):
     root = req.get("workspace", "")
     if not root: raise ValueError("This session has no folder access")
     kind = action["kind"]
+    if kind == "open_folder":
+        p = file_path(root, action.get("path", "."), allow_root=True)
+        if not p.is_dir(): raise ValueError("Choose an existing workspace directory, not a file")
+        if action.get("program") != "vscode": raise ValueError("Select a supported folder editor")
+        import subprocess
+        child = subprocess.Popen([str(vscode_executable()), "--new-window", shell_path(p)], creationflags=subprocess.CREATE_NO_WINDOW)
+        return {"openedFolder": str(p), "program": "vscode", "processId": child.pid}
     if kind == "list_files" and not action.get("path"):
         p = Path(root).resolve(strict=True)
     else: p = file_path(root, action.get("path", ""))
@@ -124,13 +229,14 @@ def act(req):
     a = req["action"]
     kind = a["kind"]
     background = req.get("background", False)
+    if kind == "run_command": return run_command(req, a)
     if kind == "switch_window":
         w=target(a["window"], focus=not background)
         return {"switched":str(w.handle)}
     if kind == "system_info":
         import psutil
         return {"cpuPercent":psutil.cpu_percent(interval=.2),"memory":dict(psutil.virtual_memory()._asdict()),"disks":[{"drive":p.mountpoint,"free":shutil.disk_usage(p.mountpoint).free,"total":shutil.disk_usage(p.mountpoint).total} for p in psutil.disk_partitions() if "fixed" in p.opts]}
-    if kind in {"read_file", "open_file", "write_file", "list_files", "move_file", "trash_file"}: return file_action(req, a)
+    if kind in {"read_file", "open_file", "open_folder", "write_file", "list_files", "move_file", "trash_file"}: return file_action(req, a)
     w = target(req["window"], focus=not background)
     expected=req.get("expected")
     if expected:
@@ -231,7 +337,7 @@ def run(req):
     except Exception: pass
     if req["op"] == "nonce":return {"nonce":secrets.token_hex(32)}
     if req["op"] == "workspace":
-        return {"title":"Requested workspace","width":0,"height":0,"image":"","elements":[],"workspaceFiles":file_action({"workspace":req["workspace"]},{"kind":"list_files"})["files"],"observation":secrets.token_hex(16)}
+        return {"title":"Requested workspace","width":0,"height":0,"image":"","elements":[],"tools":tool_environment(),"workspaceFiles":file_action({"workspace":req["workspace"]},{"kind":"list_files"})["files"],"observation":secrets.token_hex(16)}
     if req["op"] == "web_results":
         from urllib.request import Request,build_opener,ProxyHandler
         from urllib.parse import urlencode,urlparse

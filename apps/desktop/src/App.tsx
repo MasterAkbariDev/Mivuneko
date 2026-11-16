@@ -1514,7 +1514,7 @@ export function App() {
                     }
                   >
                     <option value="auto">Automatically review actions</option>
-                    <option value="bypass">Bypass the reviewer</option>
+                    <option value="bypass">Bypass non-terminal review</option>
                   </CustomSelect>
                 </label>
                 <p>

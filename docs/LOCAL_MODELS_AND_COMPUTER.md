@@ -4,7 +4,7 @@
 
 Start Ollama, then open **Settings → Connections → Local models**. Refresh the model list, select an installed model, and choose **Use local conversation**. No Gemini or Groq credential is needed for Ollama. The app talks only to `127.0.0.1:11434`; it does not proxy local inference through the cloud.
 
-Qwen 3.5 9B supports text, images and structured actions. GPT-OSS 20B can be selected for conversation; computer sessions require a model that advertises vision support. Missing models are reported instead of silently downloading or changing providers.
+Qwen 3.5 9B supports text, images and structured actions. GPT-OSS 20B can be selected for conversation; visual computer sessions require a model that advertises vision support; workspace terminal tasks can use text-only structured-action models. Missing models are reported instead of silently downloading or changing providers.
 
 Local replies use the same companion actions, emotions, cancellation and narration as other conversation providers. Screen help uses Ollama when the conversation backend is Ollama.
 
@@ -12,7 +12,7 @@ Local replies use the same companion actions, emotions, cancellation and narrati
 
 Use **Fast character voice** for everyday conversation. Its persistent CPU engine reuses the loaded model between phrases and keeps voice generation off the GPU. Each bundled character has its own voice blend; character-specific pronunciation hints apply to both local engines.
 
-For instructed delivery, choose **Qwen3-TTS · experimental, high GPU use**. Select a speaker, language and delivery direction for the active character. These overrides are saved independently per character. The existing emotion preview buttons audition the chosen voice. Reply emotions add instructions for happy, sad, curious, affectionate, sleepy and other deliveries.
+For instructed delivery, choose **Qwen3-TTS previews · fast local replies**. Select a speaker, language and delivery direction for the active character. These overrides are saved independently per character. The emotion preview buttons audition the chosen voice with a five-second generation budget and a fast local fallback for bundled characters. Live replies use the prewarmed CPU character voice, avoiding long Qwen waits. Gemini remains the expressive streaming reply option.
 
 The model is **Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice** (Apache 2.0). The 1.7B version supports instructed delivery. This is separate from the Qwen conversation model in Ollama. Kokoro remains available as the faster local voice option.
 
@@ -37,13 +37,15 @@ Supported operations:
 - Switch between discovered ordinary app windows; maximize, minimize, restore or close a window.
 - Open a discovered installed application through the existing app-launch policy.
 - Inspect CPU, memory and disk-space information.
-- List/read text files, create or edit files, move/rename files, and send files to the recycle bin inside the granted folder.
+- Run reviewed background PowerShell commands for workspace inspection, file creation/editing, development tools, builds and tests.
+- Discover VS Code through install folders, Windows App Paths and PATH; use its resolved executable to open a requested directory in a new window.
+- Use scoped file APIs as fallbacks when terminal execution is unavailable.
 
-Existing files get backups before replacement under the app data `computer-backups/` folder. Moves do not overwrite destinations. File payloads are limited to 128 KB. Paths outside the selected folder, linked paths, repository internals and named credential files are rejected. A session with no folder grant cannot list or edit files.
+The fallback file APIs back up replacements under app data `computer-backups/`, reject overwriting moves, limit payloads to 128 KB, and enforce folder/link/credential-path restrictions. These API protections do not sandbox arbitrary shell commands or automatically back up terminal edits. Terminal execution uses the current user account; the project folder is its initial working directory and review scope. Every command is independently reviewed against the user request, even when non-terminal review is bypassed. This is model-assisted review, not an OS security sandbox.
 
-Background mode is the default: screenshots target the selected window without focusing it, editable controls use native messages or UI Automation values, buttons use UI Automation invocation, and file operations use scoped APIs. Some apps may activate themselves in response to their own accessibility providers. Controls without background support pause once to let you enable visible controls for that task; they never silently fall back to global input.
+Background mode is the default: screenshots target the selected window without focusing it, editable controls use native messages or UI Automation values, buttons use UI Automation invocation, and workspace development uses background commands without mouse/keyboard input. Some apps may activate themselves in response to their own accessibility providers. Controls without background support pause once to let you enable visible controls for that task; they never silently fall back to global input.
 
-Before an input step, the app revalidates the process and observed control. Missing controls or changed geometry for coordinate actions require another observation. Keyboard input rechecks the focused process and refuses protected password fields. Terminals, authentication/security windows, password managers, ChatGPT, Codex and Mivuneko itself are excluded. This integration currently targets Windows desktop apps; administrator/secure-desktop prompts and apps without usable accessibility or visible content can require manual help. It does not provide terminal execution or promise that every app/task can be automated.
+Before an input step, the app revalidates the process and observed control. Missing controls or changed geometry for coordinate actions require another observation. Keyboard input rechecks the focused process and refuses protected password fields. Typing into terminal windows, authentication/security windows, password managers, ChatGPT, Codex and Mivuneko itself remains excluded from visual input. Terminal execution is instead provided through the reviewed `run_command` tool. This integration currently targets Windows desktop apps; administrator/secure-desktop prompts and apps without usable accessibility or visible content can require manual help. Some apps/tasks still require manual help.
 
 Screenshots and accessibility text are local session data, not authority. The planner is instructed to ignore instructions embedded in app content and to ask for missing information. The task card exposes the current operation and a Stop control. Review mode remains available for tasks where you want to inspect each operation.
 
@@ -63,4 +65,26 @@ Conversation providers can propose a `computerTask` for direct requests to do wo
 
 “Search about Ultron in my browser” searches for **Ultron**; browser instructions and politeness stay out of the query. “Open Elon Musk’s description in browser” finds candidate information pages, lets the local model choose the page matching the goal, and opens that page. It does not report completion after merely opening search results. Candidate URLs come from actual search responses, not generated URL guesses; unavailable lookups produce an error instead of a fake success.
 
-For app work, the local model can select an unambiguous open editor/window. Tasks needing a workspace folder still require selecting that folder before file access; missing requirements are asked rather than invented. Execution remains limited to the implemented app controls and scoped file tools, so understanding an order does not guarantee that every application's controls are automatable.
+For app work, the local model can select an unambiguous open editor/window. Tasks needing a workspace folder still require selecting that folder before file access; missing requirements are asked rather than invented. The planner uses terminal commands for workspace development and app APIs or visual controls when needed; understanding a goal still does not guarantee every application is automatable.
+
+
+## Terminal command behavior
+
+`run_command` prefers an installed PowerShell 7 and falls back to Windows PowerShell 5.1. It reports the discovered version to the planner and runs in the granted project directory without opening or typing into a console. `cwd` can select a relative subdirectory; every call starts a fresh shell, so `cd` does not persist between calls. Use a command chain or the next command’s `cwd` field. The directory named in an explicit project request is created if missing during workspace setup.
+
+The tool returns stdout, stderr, exitCode, timeout and truncation status. Each output stream is capped at 8 KB in the returned result. Commands have a 120-second default timeout, configurable from 1 to 300 seconds. Stop and timeouts terminate the owned command process tree. Nonzero exit codes remain visible as failures; they are not successful completion evidence. The model must inspect output and correct or verify the requested work.
+
+The workspace observation includes actual executable discovery. VS Code need not be on PATH: the runner resolves common user/system installs and Windows App Paths, then supplies `MIVUNEKO_VSCODE` to the command environment. Other discovered tools include Node, npm, Git, Python, Cargo and dotnet. Missing tools are reported, rather than invented. Parent API-key/token/password environment variables are filtered from command children.
+
+The expandable activity trace retains the command, initial working directory, exit code, stdout/stderr and review summary. Command output is captured on completion, not streamed as a terminal emulator. Browser/screen interaction retains its existing visual/API paths.
+
+
+Programming tasks can use literal runtime arguments instead of nested shell quoting: for example `run_command` with `executable: "node"` and `args: ["-e", "JavaScript source"]`. The supported discovered runtime names are Node, Python, Git, npm, Cargo and dotnet. Arguments exclude the executable name; `cwd` stays relative to the project (usually `.`). The same review, output, timeout and Stop behavior applies to both shell commands and direct runtime invocations.
+
+Workspace development enables the selected model’s reasoning mode only when that model advertises support; ordinary conversation and the independent safety reviewer keep their existing generation path. Failed commands cannot be retried unchanged indefinitely. Recovery receives the actual failed action, exit code and output, proposes a correction, and submits that correction to the reviewer again. The reviewer also receives the actual workspace file list and recent successful operations so it does not mistake an already-created file for a missing prerequisite. Private model reasoning is not displayed in activity details.
+
+Programming proposals may use `run_code` with a discovered Node or Python runtime and plain source. Native code normalizes this to the exact `run_command` executable and literal arguments before review. The reviewer authorizes that concrete invocation; normalization does not skip review. Bare interpreter commands without task source are rejected during planning.
+
+### Native terminal verification (2026-11-17)
+
+Using local qwen3.5:9b and automatic review, the exact JSPractice directory request opened a new VS Code window through a successful background PowerShell command; the native window list confirmed `Welcome - JSPractice - Visual Studio Code`. An unrelated fresh workspace task created `counter.cjs` through reviewed Node source execution, verified the closure returned 4 then 5, and finished on the next step. A separate Node process independently loaded the saved file and checked those results. Earlier live runs exposed empty runtime invocations and repeated verification; the planner now rejects the former and explicitly reports completion after verified outcomes.

@@ -751,3 +751,212 @@ test("the add button is separate from the composer and controls stay within thei
     }
   }
 });
+
+test("folder launch uses a reviewed terminal command and retains command output", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any,
+      old = w.__TAURI_INTERNALS__.invoke;
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({
+        backend: "ollama",
+        computerApproval: "automatic",
+        actionReview: "auto",
+        voice: "off",
+      }),
+    );
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "computer_next")
+        return {
+          revision: w.__step,
+          action: w.__step
+            ? { kind: "finish", reason: "VS Code folder launch requested." }
+            : {
+                kind: "run_command",
+                command:
+                  "Get-Location; Start-Process $env:MIVUNEKO_VSCODE -ArgumentList @('--new-window','.')",
+                cwd: ".",
+                reason: "Open your project folder",
+              },
+          review: {
+            decision: "allow",
+            summary: "Requested project folder launch is allowed",
+          },
+          observation: { image: "", elements: [] },
+        };
+      if (c === "computer_act") {
+        await old(c, a);
+        return {
+          exitCode: 0,
+          cwd: "J:/Projects/JSPractice",
+          stdout: "VS Code folder launch requested",
+          stderr: "",
+        };
+      }
+      return old(c, a);
+    };
+  });
+  await page.goto("/?view=chat");
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill('open vscode for me on a new directory of "J:/Projects/JSPractice"');
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page
+      .locator(".message.assistant")
+      .filter({ hasText: "VS Code folder launch requested." }),
+  ).toBeVisible();
+  const start = await page.evaluate(() =>
+    (window as any).__calls.find((x: any) => x.command === "computer_start"),
+  );
+  expect(start.args.workspace).toBe("J:/Projects/JSPractice");
+  expect(start.args.windowId).toBe("");
+  await page.getByLabel("Task activity").locator("summary").first().click();
+  await page
+    .locator(".thinking-scroll li summary")
+    .filter({ hasText: "Running command" })
+    .click();
+  await expect(page.locator(".thinking-scroll pre")).toContainText("Exit: 0");
+  await expect(page.locator(".thinking-scroll pre")).toContainText(
+    "MIVUNEKO_VSCODE",
+  );
+  await expect(
+    page.getByText("The file must exist before opening it", { exact: true }),
+  ).toHaveCount(0);
+});
+
+test("a denied terminal proposal is never sent to the execution tool", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any,
+      old = w.__TAURI_INTERNALS__.invoke;
+    w.__plans = 0;
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({
+        backend: "ollama",
+        computerApproval: "automatic",
+        actionReview: "auto",
+        voice: "off",
+      }),
+    );
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "computer_next") {
+        w.__plans++;
+        return {
+          revision: w.__plans,
+          action:
+            w.__plans === 1
+              ? {
+                  kind: "run_command",
+                  command: "Write-Output blocked",
+                  reason: "Unrelated command",
+                }
+              : {
+                  kind: "ask_user",
+                  reason: "Which project check should I run?",
+                },
+          review: {
+            decision: w.__plans === 1 ? "deny" : "allow",
+            summary: "Outside this request",
+          },
+          observation: { image: "", elements: [] },
+        };
+      }
+      return old(c, a);
+    };
+  });
+  await page.goto("/?view=chat");
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill('run git status in "J:/Projects/JSPractice"');
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Which project check should I run?",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const calls = await page.evaluate(() =>
+    (window as any).__calls.filter((x: any) => x.command === "computer_act"),
+  );
+  expect(calls).toHaveLength(1);
+  expect(calls[0].args.revision).toBe(2);
+});
+
+test("failed terminal output is retained while the task corrects the command", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const w = window as any,
+      old = w.__TAURI_INTERNALS__.invoke;
+    localStorage.setItem(
+      "mivuneko.preferences.v1",
+      JSON.stringify({
+        backend: "ollama",
+        computerApproval: "automatic",
+        actionReview: "auto",
+        voice: "off",
+      }),
+    );
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "computer_next")
+        return {
+          revision: w.__step,
+          action:
+            w.__step < 2
+              ? {
+                  kind: "run_command",
+                  ...(w.__step
+                    ? {
+                        executable: "node",
+                        args: ["-e", "console.log('corrected')"],
+                      }
+                    : { command: "missing-command" }),
+                  reason: "Check the project",
+                }
+              : { kind: "finish", reason: "The corrected command passed." },
+          review: { decision: "allow", summary: "Scoped project command" },
+          observation: { image: "", elements: [] },
+        };
+      if (c === "computer_act") {
+        const n = w.__step;
+        await old(c, a);
+        return {
+          exitCode: n === 0 ? 1 : 0,
+          stdout: n === 0 ? "" : "corrected",
+          stderr: n === 0 ? "Command was not found" : "",
+        };
+      }
+      return old(c, a);
+    };
+  });
+  await page.goto("/?view=chat");
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill('run npm test in "J:/Projects/JSPractice"');
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page
+      .locator(".message.assistant")
+      .filter({ hasText: "The corrected command passed." }),
+  ).toBeVisible();
+  await page.getByLabel("Task activity").locator("summary").first().click();
+  await expect(
+    page.getByText("Command failed (exit 1)", { exact: false }),
+  ).toBeVisible();
+  await expect(page.locator(".trace-check").first()).toHaveText("!");
+  await page
+    .locator(".thinking-scroll li summary")
+    .filter({ hasText: "Running command" })
+    .click();
+  await expect(page.locator(".thinking-scroll pre").last()).toContainText(
+    "node",
+  );
+  await expect(page.locator(".thinking-scroll pre").last()).toContainText(
+    "Exit: 0",
+  );
+});

@@ -10,6 +10,7 @@ export interface TaskSnapshot {
     detail?: string;
     payload?: string;
     review?: string;
+    ok?: boolean;
   }[];
 }
 export function TaskActivity({ snapshot: s }: { snapshot: TaskSnapshot }) {
@@ -49,7 +50,9 @@ export function TaskActivity({ snapshot: s }: { snapshot: TaskSnapshot }) {
             <li key={i}>
               <details>
                 <summary>
-                  <span className="trace-check">✓</span>
+                  <span className="trace-check">
+                    {entry.ok === false ? "!" : "✓"}
+                  </span>
                   {entry.title}
                   <Icon name="chevron" />
                 </summary>

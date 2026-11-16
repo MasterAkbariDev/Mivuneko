@@ -1,3 +1,4 @@
+import { terminalTask } from "../../../packages/shared-schemas/computer-intent";
 import { TaskActivity, type TaskSnapshot } from "./TaskActivity";
 import type { TaskQuestion } from "./QuestionPanel";
 import { logActivity } from "./activity";
@@ -55,7 +56,13 @@ export function ComputerSession({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [log, setLog] = useState<
-      { title: string; detail?: string; payload?: string; review?: string }[]
+      {
+        title: string;
+        detail?: string;
+        payload?: string;
+        review?: string;
+        ok?: boolean;
+      }[]
     >([]),
     [done, setDone] = useState(false);
   const [workLabel, setWorkLabel] = useState("Thinking…"),
@@ -95,6 +102,8 @@ export function ComputerSession({
       read_file: "Reading",
       write_file: "Saving",
       open_file: "Opening",
+      open_folder: "Opening folder in VS Code",
+      run_command: "Running command",
       list_files: "Checking folder",
       move_file: "Moving",
       trash_file: "Recycling",
@@ -117,6 +126,8 @@ export function ComputerSession({
       read_file: "Reading",
       write_file: "Saving",
       open_file: "Opening",
+      open_folder: "Opening folder in VS Code",
+      run_command: "Running command",
       list_files: "Checking folder contents",
       move_file: "Moving",
       trash_file: "Recycling",
@@ -131,9 +142,25 @@ export function ComputerSession({
     setLog((old) => [
       ...old,
       {
-        title,
+        title:
+          plan.review?.decision === "deny"
+            ? "Action blocked"
+            : a.kind === "run_command" &&
+                result?.exitCode !== undefined &&
+                result.exitCode !== 0
+              ? `Command failed (exit ${result.exitCode})`
+              : title,
+        ok:
+          plan.review?.decision === "deny"
+            ? false
+            : a.kind === "run_command" && result?.exitCode !== undefined
+              ? result.exitCode === 0
+              : undefined,
         detail: a.reason?.startsWith("The user") ? undefined : a.reason,
-        payload: (result?.text || a.text || a.key || "").slice(0, 4000),
+        payload: (a.kind === "run_command"
+          ? `PS ${result?.cwd || a.cwd || "."}> ${result?.command || a.command || `${a.executable} ${JSON.stringify(a.args)}`}\nExit: ${result?.exitCode ?? "not run"}\n${result?.stdout || ""}${result?.stderr ? "\n" + result.stderr : ""}`
+          : result?.text || a.text || a.key || ""
+        ).slice(0, 12000),
         review: plan.review?.summary,
       },
     ]);
@@ -241,6 +268,11 @@ export function ComputerSession({
           autoStarted.current = true;
           void start("");
         }
+      });
+    } else if (terminalTask(initialTask)) {
+      void Promise.resolve().then(() => {
+        if (!disposed)
+          question("Which project folder should I run the command in?");
       });
     } else if (
       /\b(?:create|write|save|generate|build|implement)\b.*\b(?:function|example|script|program|file|folder|directory)\b/i.test(

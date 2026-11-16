@@ -1,3 +1,4 @@
+import { terminalTask } from "./computer-intent.ts";
 /** Task context is separate from the visible conversation so short follow-ups keep their goal. */
 export function requestedFolder(text: string): string {
   const match =
@@ -17,18 +18,22 @@ export function requestedFolder(text: string): string {
 export function fileTask(text: string): boolean {
   return (
     !!requestedFolder(text) &&
-    /\b(?:create|write|save|implement|generate|build|code|example|file|folder|directory)\b/i.test(
+    (/\b(?:create|write|save|implement|generate|build|code|example|file|folder|directory)\b/i.test(
       text,
-    )
+    ) ||
+      terminalTask(text) ||
+      /^(?:please |can you |could you )?(?:open|launch) (?:vscode|vs code|visual studio code)\b/i.test(
+        text.trim(),
+      ))
   );
 }
 export function isTaskFollowup(text: string): boolean {
-  return /\b(?:for (?:that|this)(?: matter)?|instead|same (?:task|file|folder)|as (?:I|we) (?:said|discussed))\b|^(?:yes|no|continue|go ahead|notepad|use notepad)[.!?]*$/i.test(
+  return /\b(?:for (?:that|this)(?: matter)?|instead|same (?:task|file|folder)|as (?:I|we) (?:said|discussed))\b|^(?:yes|no|continue|go ahead|notepad|use notepad|run tests|run the tests|install dependencies|build it|run it|run (?:npm|pnpm|yarn|git|cargo|pytest) .+)[.!?]*$/i.test(
     text.trim(),
   );
 }
 export function taskWithContext(text: string, previous: string): string {
-  return previous && isTaskFollowup(text)
+  return previous && isTaskFollowup(text) && !requestedFolder(text)
     ? `${previous.slice(-2800)}\nUser clarification: ${text}`
     : text;
 }

@@ -85,3 +85,15 @@ test("procedural gestures are bounded, composable and new expressions are unique
   );
   assert.equal(new Set(faces).size, 4);
 });
+
+test("terminal tasks use explicit folders and retain only relevant follow-up context", () => {
+  const goal =
+    'open vscode for me on a new directory of "J:/Projects/JSPractice"';
+  assert.equal(fileTask(goal), true);
+  assert.equal(fileTask('run npm test in "J:/Projects/JSPractice"'), true);
+  assert.ok(
+    taskWithContext("run npm test", goal).includes("J:/Projects/JSPractice"),
+  );
+  const other = 'run git status in "J:/Projects/other"';
+  assert.equal(taskWithContext(other, goal), other);
+});

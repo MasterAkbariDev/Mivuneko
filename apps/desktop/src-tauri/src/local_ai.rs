@@ -20,10 +20,18 @@ pub fn client() -> Result<reqwest::Client, String> {
         .map_err(|e| e.to_string())
 }
 pub async fn generate(model: &str, messages: Value, format: Value) -> Result<Value, String> {
+    generate_with_reasoning(model, messages, format, false).await
+}
+pub async fn generate_with_reasoning(
+    model: &str,
+    messages: Value,
+    format: Value,
+    reasoning: bool,
+) -> Result<Value, String> {
     if model.is_empty() || model.len() > 120 {
         return Err("Choose an installed Ollama model".into());
     }
-    let response=client()?.post("http://127.0.0.1:11434/api/chat").json(&json!({"model":model,"messages":messages,"stream":false,"think":false,"format":format,"options":{"num_ctx":8192,"num_predict":1600,"temperature":0.3},"keep_alive":"15s"})).send().await.map_err(|_|"Ollama is unavailable. Start Ollama on this device.".to_string())?;
+    let response=client()?.post("http://127.0.0.1:11434/api/chat").json(&json!({"model":model,"messages":messages,"stream":false,"think":reasoning,"format":format,"options":{"num_ctx":8192,"num_predict":if reasoning {4096} else {1600},"temperature":0.3},"keep_alive":"15s"})).send().await.map_err(|_|"Ollama is unavailable. Start Ollama on this device.".to_string())?;
     if !response.status().is_success() {
         return Err(format!("Ollama returned HTTP {}", response.status()));
     }
