@@ -20,6 +20,17 @@ class TerminalTests(unittest.TestCase):
         self.temp.cleanup()
     def command(self, command, **fields):
         return worker.run_command({'workspace': str(self.root)}, {'command': command, **fields})
+    def test_editor_folder_requires_matching_live_window(self):
+        import json
+        project=self.root/'JSPractice'; project.mkdir()
+        storage=self.root/'Code/User/globalStorage/storage.json'; storage.parent.mkdir(parents=True)
+        storage.write_text(json.dumps({'windowsState':{'lastActiveWindow':{'folder':project.as_uri()},'openedWindows':[]}}),encoding='utf-8')
+        with patch.dict(os.environ,{'APPDATA':str(self.root)}), patch.object(worker,'windows',return_value={'windows':[{'id':'1','title':'Welcome - JSPractice - Visual Studio Code','process':'code.exe'}]}):
+            found=worker.vscode_workspaces()['workspaces']
+            self.assertEqual(len(found),1)
+            self.assertEqual(Path(found[0]['path']),project)
+        with patch.dict(os.environ,{'APPDATA':str(self.root)}), patch.object(worker,'windows',return_value={'windows':[]}):
+            self.assertEqual(worker.vscode_workspaces()['workspaces'],[])
     def test_create_read_and_capture_output_in_folder_with_spaces(self):
         result = self.command("Set-Content -LiteralPath 'example.js' -Value 'console.log(42)'; Get-Content -LiteralPath 'example.js'")
         self.assertEqual(result['exitCode'], 0)

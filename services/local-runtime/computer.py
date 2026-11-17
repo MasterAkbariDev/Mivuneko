@@ -37,6 +37,28 @@ def windows():
         except Exception: continue
     return {"windows": result[:80], "nonce": secrets.token_hex(32)}
 
+def vscode_workspaces():
+    """Resolve local folders only when saved VS Code state matches a currently open window."""
+    from urllib.parse import urlparse, unquote
+    visible = [w for w in windows()["windows"] if w["process"] == "code.exe"]
+    storage = Path(os.environ.get("APPDATA", ""))/"Code"/"User"/"globalStorage"/"storage.json"
+    try: state = json.loads(storage.read_text(encoding="utf-8")).get("windowsState", {})
+    except (OSError, ValueError): return {"workspaces": []}
+    entries = [state.get("lastActiveWindow", {}), *state.get("openedWindows", [])]
+    result = []
+    for entry in entries:
+        uri = entry.get("folder", "")
+        parsed = urlparse(uri)
+        if parsed.scheme != "file" or parsed.netloc: continue
+        value = unquote(parsed.path)
+        if len(value)>2 and value[0]=='/' and value[2]==':': value=value[1:]
+        folder = Path(value)
+        if not folder.is_dir(): continue
+        matching = [w for w in visible if folder.name.lower() in [part.strip().lower() for part in w["title"].split(" - ")]]
+        if matching and not any(x["path"].lower() == str(folder).lower() for x in result):
+            result.append({"path": str(folder), "title": matching[0]["title"], "windowId": matching[0]["id"]})
+    return {"workspaces": result}
+
 def target(handle, focus=True):
     from pywinauto import Desktop
     found = next((w for w in windows()["windows"] if w["id"] == str(handle)), None)
@@ -386,6 +408,7 @@ def run(req):
             subprocess.Popen([path,url],startupinfo=startup,creationflags=subprocess.CREATE_NO_WINDOW)
         return {"opened":True,"url":url,"background":True}
     if req["op"] == "windows": return windows()
+    if req["op"] == "editor_workspaces": return vscode_workspaces()
     if req["op"] == "surfaces":
         from pywinauto import Desktop
         user=ctypes.windll.user32

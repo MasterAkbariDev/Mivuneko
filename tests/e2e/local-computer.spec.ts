@@ -46,6 +46,8 @@ test.beforeEach(async ({ page }) => {
               },
             ],
           };
+        if (command === "computer_editor_workspaces")
+          return { workspaces: w.__editorWorkspaces ?? [] };
         if (command === "computer_select_target")
           return { windowId: "qa-window", needsWorkspace: false };
         if (command === "computer_resolve_page")
@@ -1014,4 +1016,58 @@ test("missing editor window is reported without claiming its process is closed",
       .filter({ hasText: "I don't see an open vscode window" })
       .last(),
   ).toBeVisible();
+});
+
+test("an app check followed by coding in its project resolves the actual editor folder", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page.evaluate(() => {
+    const w = window as any;
+    w.__checkWindows = [
+      {
+        id: "editor",
+        title: "Welcome - JSPractice - Visual Studio Code",
+        process: "code.exe",
+      },
+    ];
+    w.__editorWorkspaces = [
+      {
+        path: "J:/Projects/JSPractice",
+        title: "Welcome - JSPractice - Visual Studio Code",
+      },
+    ];
+  });
+  const input = page.getByLabel("Message Mivuneko", { exact: true });
+  await input.fill("hey haru can you check if my vscode is open?");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page
+      .locator(".message.assistant")
+      .filter({ hasText: "Yes, vscode is open" })
+      .last(),
+  ).toBeVisible();
+  await input.fill(
+    'I want you to create a folder inside the project named "closure" and create a closure.js file and add examples via comments to it',
+  );
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        () =>
+          (window as any).__calls.filter(
+            (c: any) => c.command === "computer_start",
+          ).length,
+      ),
+    )
+    .toBe(1);
+  const call = await page.evaluate(() =>
+    (window as any).__calls.find((c: any) => c.command === "computer_start"),
+  );
+  expect(call.args.workspace).toBe("J:/Projects/JSPractice");
+  expect(call.args.task).toContain("closure.js");
+  expect(call.args.task).toContain("Observed result:");
+  await expect(
+    page.getByText("Where should I save the files?", { exact: true }),
+  ).toHaveCount(0);
 });

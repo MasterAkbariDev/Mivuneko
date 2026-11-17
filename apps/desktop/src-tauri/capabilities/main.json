@@ -16,6 +16,7 @@
     "allow-computer-select-target",
     "allow-computer-open-browser",
     "allow-computer-windows",
+    "allow-computer-editor-workspaces",
     "allow-computer-start",
     "allow-computer-next",
     "allow-computer-act",

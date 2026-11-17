@@ -287,6 +287,42 @@ export function ComputerSession({
             },
           });
       });
+    } else if (
+      !requestedFolder(initialTask) &&
+      /\b(?:project|vscode|visual studio code)\b/i.test(initialTask) &&
+      /\b(?:create|write|code|implement|edit|folder|file)\b/i.test(initialTask)
+    ) {
+      setBusy(true);
+      setWorkLabel("Finding the open project…");
+      void call<{ workspaces: { path: string; title: string }[] }>(
+        "computer_editor_workspaces",
+      )
+        .then((v) => {
+          if (disposed || ticket !== generation.current) return;
+          if (v.workspaces.length === 1) {
+            const root = v.workspaces[0].path;
+            setWorkspace(root);
+            void start("", root);
+          } else {
+            setBusy(false);
+            question(
+              v.workspaces.length
+                ? "Which open project should I use?"
+                : "I couldn't resolve the open editor's local project folder. What is its full path?",
+              v.workspaces.map((w) => ({
+                label: w.title,
+                value: w.path,
+                description: w.path,
+              })),
+            );
+          }
+        })
+        .catch((e) => {
+          if (!disposed) {
+            setBusy(false);
+            setError(String(e));
+          }
+        });
     } else if (fileTask(initialTask)) {
       void Promise.resolve().then(() => {
         if (!disposed && !autoStarted.current) {
@@ -490,7 +526,7 @@ export function ComputerSession({
       if (ticket === generation.current) setBusy(false);
     }
   }
-  async function start(selectedTarget = target) {
+  async function start(selectedTarget = target, projectWorkspace = workspace) {
     const ticket = ++generation.current;
     setBusy(true);
     setError("");
@@ -501,7 +537,7 @@ export function ComputerSession({
     try {
       const s = await call<{ sessionId: string }>("computer_start", {
         windowId: selectedTarget,
-        workspace,
+        workspace: projectWorkspace,
         task: browserTask(task)?.url
           ? `Open a new browser tab and navigate to ${browserTask(task)!.url}. User request: ${task}. Keep existing tabs open. Verify the requested website has loaded.`
           : task,
