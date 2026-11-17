@@ -1,4 +1,8 @@
-import { terminalTask } from "../../../packages/shared-schemas/computer-intent";
+import {
+  appWindowQuery,
+  matchingAppWindows,
+  terminalTask,
+} from "../../../packages/shared-schemas/computer-intent";
 import { TaskActivity, type TaskSnapshot } from "./TaskActivity";
 import type { TaskQuestion } from "./QuestionPanel";
 import { logActivity } from "./activity";
@@ -242,7 +246,28 @@ export function ComputerSession({
   useEffect(() => {
     let disposed = false;
     const ticket = generation.current;
-    if (browserTask(initialTask)) {
+    const appQuery = appWindowQuery(initialTask);
+    if (appQuery) {
+      setBusy(true);
+      setWorkLabel("Checking open windows…");
+      void call<{ windows: Target[] }>("computer_windows")
+        .then((result) => {
+          if (disposed || ticket !== generation.current) return;
+          const found = matchingAppWindows(appQuery, result.windows);
+          const answer = found.length
+            ? `Yes, ${appQuery} is open. ${found.map((w) => w.title).join("; ")}. What would you like me to do in it?`
+            : `I don't see an open ${appQuery} window. It could be running without a visible window; I haven't launched anything.`;
+          setLog([{ title: "Checked open windows", detail: answer }]);
+          setDone(true);
+          onResult?.(answer);
+        })
+        .catch((e) => {
+          if (!disposed) setError(String(e));
+        })
+        .finally(() => {
+          if (!disposed) setBusy(false);
+        });
+    } else if (browserTask(initialTask)) {
       void Promise.resolve().then(() => {
         if (disposed || autoStarted.current) return;
         autoStarted.current = true;

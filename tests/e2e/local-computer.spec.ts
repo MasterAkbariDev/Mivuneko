@@ -38,7 +38,7 @@ test.beforeEach(async ({ page }) => {
           });
         if (command === "computer_windows")
           return {
-            windows: [
+            windows: w.__checkWindows ?? [
               {
                 id: "qa-window",
                 title: "Local test app",
@@ -959,4 +959,59 @@ test("failed terminal output is retained while the task corrects the command", a
   await expect(page.locator(".thinking-scroll pre").last()).toContainText(
     "Exit: 0",
   );
+});
+
+test("checking an open editor reports observed windows without speculative chat or launching", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page.evaluate(() => {
+    (window as any).__checkWindows = [
+      {
+        id: "editor",
+        title: "practice - Visual Studio Code",
+        process: "code.exe",
+      },
+    ];
+  });
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("hey haru can you check if my vscode is open?");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page
+      .locator(".message.assistant")
+      .filter({ hasText: "Yes, vscode is open" })
+      .last(),
+  ).toBeVisible();
+  const calls = await page.evaluate(() => (window as any).__calls);
+  expect(calls.some((c: any) => c.command === "computer_windows")).toBe(true);
+  expect(
+    calls.some((c: any) =>
+      [
+        "ollama_chat",
+        "computer_start",
+        "computer_select_target",
+        "computer_act",
+      ].includes(c.command),
+    ),
+  ).toBe(false);
+});
+test("missing editor window is reported without claiming its process is closed", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page.evaluate(() => {
+    (window as any).__checkWindows = [];
+  });
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("can you check if vscode is open?");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page
+      .locator(".message.assistant")
+      .filter({ hasText: "I don't see an open vscode window" })
+      .last(),
+  ).toBeVisible();
 });

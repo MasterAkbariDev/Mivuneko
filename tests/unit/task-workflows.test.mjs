@@ -97,3 +97,32 @@ test("terminal tasks use explicit folders and retain only relevant follow-up con
   const other = 'run git status in "J:/Projects/other"';
   assert.equal(taskWithContext(other, goal), other);
 });
+
+import {
+  appWindowQuery,
+  matchingAppWindows,
+  computerIntent,
+} from "../../packages/shared-schemas/computer-intent.ts";
+test("app checks inspect actual windows and keep coding follow-up context", () => {
+  const request = "hey haru can you check if my vscode is open?";
+  assert.equal(appWindowQuery(request), "vscode");
+  assert.equal(computerIntent(request), true);
+  assert.equal(appWindowQuery("how do I check if vscode is open?"), null);
+  assert.equal(appWindowQuery("check if vscode is open and write code"), null);
+  const windows = [
+    { title: "project - Visual Studio Code", process: "code.exe" },
+    { title: "Notes", process: "notepad.exe" },
+  ];
+  assert.equal(matchingAppWindows("vscode", windows).length, 1);
+  assert.equal(matchingAppWindows("Edge", windows).length, 0);
+  assert.ok(
+    taskWithContext(
+      "write a closure example in it",
+      request + "\nObserved result: VS Code is open",
+    ).includes(request),
+  );
+  assert.equal(
+    taskWithContext('create code in "J:/other"', request),
+    'create code in "J:/other"',
+  );
+});

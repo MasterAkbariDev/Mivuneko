@@ -1,4 +1,4 @@
-import { terminalTask } from "./computer-intent.ts";
+import { appWindowQuery, terminalTask } from "./computer-intent.ts";
 /** Task context is separate from the visible conversation so short follow-ups keep their goal. */
 export function requestedFolder(text: string): string {
   const match =
@@ -33,7 +33,11 @@ export function isTaskFollowup(text: string): boolean {
   );
 }
 export function taskWithContext(text: string, previous: string): string {
-  return previous && isTaskFollowup(text) && !requestedFolder(text)
+  return previous &&
+    (isTaskFollowup(text) ||
+      (!!appWindowQuery(previous.split("\nObserved result:")[0]) &&
+        /\b(?:code|create|write|implement|edit|build)\b/i.test(text))) &&
+    !requestedFolder(text)
     ? `${previous.slice(-2800)}\nUser clarification: ${text}`
     : text;
 }
