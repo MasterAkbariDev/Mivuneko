@@ -1,3 +1,4 @@
+import { parseAgentReply } from "../../packages/shared-schemas/agent.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mockHermes } from "../../services/agent-adapter/mock.ts";
@@ -37,4 +38,28 @@ test("cancelled requests do not produce replies", async () => {
   const c = new AbortController();
   c.abort();
   await assert.rejects(mockHermes.reply("Hello", "Assist", c.signal));
+});
+
+test("valid tool-only replies do not require a conversational preamble", () => {
+  assert.equal(
+    parseAgentReply(
+      JSON.stringify({ computerTask: "Update the current project" }),
+    ).computerTask,
+    "Update the current project",
+  );
+  const launch = parseAgentReply(
+    JSON.stringify({ text: "", appQuery: "Calculator" }),
+  );
+  assert.equal(launch.text, "");
+  assert.equal(launch.appQuery, "Calculator");
+  const gesture = parseAgentReply(
+    JSON.stringify({ text: "", companionActions: [{ kind: "stand" }] }),
+  );
+  assert.equal(gesture.companionActions[0].kind, "stand");
+  assert.equal(
+    parseAgentReply(
+      JSON.stringify({ text: "", computerTask: "x".repeat(4001) }),
+    ).computerTask,
+    undefined,
+  );
 });

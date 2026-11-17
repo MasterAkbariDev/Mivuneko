@@ -1,9 +1,12 @@
+import {
+  workContext,
+  updateWorkContext,
+} from "../../packages/shared-schemas/work-context.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
   requestedFolder,
   fileTask,
-  taskWithContext,
 } from "../../packages/shared-schemas/task-context.ts";
 import { gestureConfig } from "../../packages/shared-schemas/procedural-gesture.ts";
 import { parseCompanionActions } from "../../packages/shared-schemas/pet-actions.ts";
@@ -21,16 +24,29 @@ test("an explicit folder creates a file task without an editor requirement", () 
     "J:/Projects/notes with spaces",
   );
 });
-test("a deictic app clarification keeps the original goal while unrelated tasks start fresh", () => {
-  const goal = 'Create a closure example in "J:/Projects/jsPractice/closure/"';
-  const followup = taskWithContext("use notepad for that matter", goal);
-  assert.ok(followup.includes(goal));
-  assert.ok(followup.includes("notepad"));
-  assert.equal(requestedFolder(followup), "J:/Projects/jsPractice/closure");
-  assert.equal(
-    taskWithContext("Open https://www.mozilla.org/", goal),
-    "Open https://www.mozilla.org/",
-  );
+test("task memory keeps confirmed scope and pending questions across lifecycle updates", () => {
+  const initial = workContext({
+    request: "Write a note in the project",
+    goal: "Write a note",
+    workspace: "J:/Projects/notes",
+    status: "working",
+    facts: ["Created note.txt"],
+  });
+  const pending = updateWorkContext(initial, {
+    status: "waiting",
+    question: "Which format?",
+  });
+  assert.equal(pending.workspace, initial.workspace);
+  assert.equal(pending.request, initial.request);
+  assert.deepEqual(pending.facts, initial.facts);
+  const completed = updateWorkContext(pending, {
+    status: "completed",
+    question: "",
+    facts: Array.from({ length: 10 }, (_, i) => "Result " + i),
+  });
+  assert.equal(completed.facts.length, 6);
+  assert.equal(completed.facts.at(-1), "Result 9");
+  assert.equal(completed.question, "");
 });
 test("taskbar lying uses the rendered bottom and remains available to oversized characters", () => {
   const surface = {
@@ -91,38 +107,20 @@ test("terminal tasks use explicit folders and retain only relevant follow-up con
     'open vscode for me on a new directory of "J:/Projects/JSPractice"';
   assert.equal(fileTask(goal), true);
   assert.equal(fileTask('run npm test in "J:/Projects/JSPractice"'), true);
-  assert.ok(
-    taskWithContext("run npm test", goal).includes("J:/Projects/JSPractice"),
-  );
   const other = 'run git status in "J:/Projects/other"';
-  assert.equal(taskWithContext(other, goal), other);
+  assert.equal(fileTask(other), true);
+  assert.equal(requestedFolder(other), "J:/Projects/other");
 });
 
 import {
   appWindowQuery,
-  matchingAppWindows,
   computerIntent,
 } from "../../packages/shared-schemas/computer-intent.ts";
-test("app checks inspect actual windows and keep coding follow-up context", () => {
+test("app status questions are admitted to semantic task preparation", () => {
   const request = "hey haru can you check if my vscode is open?";
   assert.equal(appWindowQuery(request), "vscode");
   assert.equal(computerIntent(request), true);
   assert.equal(appWindowQuery("how do I check if vscode is open?"), null);
   assert.equal(appWindowQuery("check if vscode is open and write code"), null);
-  const windows = [
-    { title: "project - Visual Studio Code", process: "code.exe" },
-    { title: "Notes", process: "notepad.exe" },
-  ];
-  assert.equal(matchingAppWindows("vscode", windows).length, 1);
-  assert.equal(matchingAppWindows("Edge", windows).length, 0);
-  assert.ok(
-    taskWithContext(
-      "write a closure example in it",
-      request + "\nObserved result: VS Code is open",
-    ).includes(request),
-  );
-  assert.equal(
-    taskWithContext('create code in "J:/other"', request),
-    'create code in "J:/other"',
-  );
+  assert.equal(appWindowQuery("is my editor running?"), "editor");
 });

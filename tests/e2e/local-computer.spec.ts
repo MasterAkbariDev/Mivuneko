@@ -1,119 +1,196 @@
 import { test, expect } from "@playwright/test";
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    const w = window as any;
-    w.__calls = [];
-    w.__step = 0;
-    const callbacks = new Map<number, Function>();
-    let next = 1;
-    w.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
-    w.__TAURI_INTERNALS__ = {
-      metadata: {
-        currentWindow: { label: "main" },
-        currentWebview: { label: "main" },
-      },
-      transformCallback: (fn: Function) => {
-        callbacks.set(next, fn);
-        return next++;
-      },
-      unregisterCallback() {},
-      invoke: async (command: string, args: any) => {
-        w.__calls.push({ command, args });
-        if (command === "plugin:event|listen") return args.handler;
-        if (command === "load_history") return "[]";
-        if (command === "get_launch_policy")
-          return { enabled: true, mode: "ask", stored: true };
-        if (command === "voice_capabilities") return { systemSpeech: false };
-        if (command === "voice_engines" || command === "list_apps") return [];
-        if (command === "local_runtime_status")
-          return { installed: true, voiceReady: true };
-        if (command === "ollama_models")
-          return { models: [{ name: "qwen3.5:9b" }, { name: "gpt-oss:20b" }] };
-        if (command === "ollama_chat")
-          return JSON.stringify({
-            text: "This reply was generated locally.",
-            emotion: "happy",
-            appQuery: "",
-            companionActions: [],
-          });
-        if (command === "computer_windows")
-          return {
-            windows: w.__checkWindows ?? [
-              {
-                id: "qa-window",
-                title: "Local test app",
-                process: w.__browserWindow ? "msedge.exe" : "computerqa.exe",
-              },
-            ],
-          };
-        if (command === "computer_editor_workspaces")
-          return { workspaces: w.__editorWorkspaces ?? [] };
-        if (command === "computer_select_target")
-          return { windowId: "qa-window", needsWorkspace: false };
-        if (command === "computer_resolve_page")
-          return {
-            url: "https://en.wikipedia.org/wiki/Elon_Musk",
-            title: "Elon Musk",
-          };
-        if (command === "computer_open_browser") return { opened: true };
-        if (command === "computer_start") return { sessionId: "session-1" };
-        if (command === "computer_next") {
-          if (w.__holdPlan)
-            return await new Promise((resolve) => {
-              w.__releasePlan = () =>
-                resolve({
-                  revision: 0,
-                  step: 1,
-                  action: {
+test.beforeEach(async ({ page }, testInfo) => {
+  await page.addInitScript(
+    ({ actionReplies }: { actionReplies: boolean }) => {
+      const w = window as any;
+      w.__calls = [];
+      w.__step = 0;
+      const callbacks = new Map<number, Function>();
+      let next = 1;
+      w.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
+      w.__TAURI_INTERNALS__ = {
+        metadata: {
+          currentWindow: { label: "main" },
+          currentWebview: { label: "main" },
+        },
+        transformCallback: (fn: Function) => {
+          callbacks.set(next, fn);
+          return next++;
+        },
+        unregisterCallback() {},
+        invoke: async (command: string, args: any) => {
+          w.__calls.push({ command, args });
+          if (command === "plugin:event|listen") return args.handler;
+          if (command === "load_history") return "[]";
+          if (command === "get_launch_policy")
+            return { enabled: true, mode: "ask", stored: true };
+          if (command === "voice_capabilities") return { systemSpeech: false };
+          if (command === "voice_engines" || command === "list_apps") return [];
+          if (command === "local_runtime_status")
+            return { installed: true, voiceReady: true };
+          if (command === "ollama_models")
+            return {
+              models: [{ name: "qwen3.5:9b" }, { name: "gpt-oss:20b" }],
+            };
+          if (command === "ollama_chat")
+            return JSON.stringify({
+              text: "This reply was generated locally.",
+              emotion: "happy",
+              appQuery: "",
+              computerTask: actionReplies
+                ? "Perform the current user request"
+                : "",
+              companionActions: [],
+            });
+          if (command === "computer_windows")
+            return {
+              windows: w.__checkWindows ?? [
+                {
+                  id: "qa-window",
+                  title: "Local test app",
+                  process: w.__browserWindow ? "msedge.exe" : "computerqa.exe",
+                },
+              ],
+            };
+          // Fixtures model semantic preparation; native scenarios separately exercise the real model.
+          if (command === "computer_prepare_task") {
+            if (w.__prepared)
+              return typeof w.__prepared === "function"
+                ? w.__prepared(args)
+                : w.__prepared;
+            const context = {
+              ...args.context,
+              goal: args.task,
+              status: "working",
+              question: "",
+            };
+            const base = { task: args.task, context, windows: [] };
+            if (/check if/i.test(args.task)) {
+              const windows = w.__checkWindows || [];
+              return {
+                ...base,
+                kind: "inspect",
+                result: windows.length
+                  ? "Yes, vscode is open. " +
+                    windows.map((v: any) => v.title).join("; ")
+                  : "I don't see an open vscode window. It could be running without a visible window.",
+              };
+            }
+            if (/wikipedia|search elon|description in browser/i.test(args.task))
+              return {
+                ...base,
+                kind: "browser",
+                browserRequest: /wikipedia/i.test(args.task)
+                  ? {
+                      browser: "edge",
+                      useDefault: true,
+                      query: "Wikipedia",
+                      url: "https://www.wikipedia.org/",
+                    }
+                  : {
+                      browser: "edge",
+                      query: "elon musk",
+                      ...(/description/.test(args.task)
+                        ? { intent: "page" }
+                        : {}),
+                    },
+              };
+            const workspace =
+              args.explicitWorkspace ||
+              w.__editorWorkspaces?.[0]?.path ||
+              args.context?.workspace;
+            if (workspace)
+              return {
+                ...base,
+                kind: "workspace",
+                task: args.explicitWorkspace
+                  ? args.task
+                  : `${args.context.goal}\nUser clarification: ${args.task}`,
+                context: {
+                  ...context,
+                  goal: args.explicitWorkspace
+                    ? args.task
+                    : `${args.context.goal}\n${args.task}`,
+                  workspace,
+                  windowId: "",
+                },
+              };
+            return {
+              ...base,
+              kind: "window",
+              context: { ...context, windowId: "qa-window", workspace: "" },
+            };
+          }
+          if (command === "computer_editor_workspaces")
+            return { workspaces: w.__editorWorkspaces ?? [] };
+          if (command === "computer_select_target")
+            return { windowId: "qa-window", needsWorkspace: false };
+          if (command === "computer_resolve_page")
+            return {
+              url: "https://en.wikipedia.org/wiki/Elon_Musk",
+              title: "Elon Musk",
+            };
+          if (command === "computer_open_browser") return { opened: true };
+          if (command === "computer_start") return { sessionId: "session-1" };
+          if (command === "computer_next") {
+            if (w.__holdPlan)
+              return await new Promise((resolve) => {
+                w.__releasePlan = () =>
+                  resolve({
+                    revision: 0,
+                    step: 1,
+                    action: {
+                      kind: "click",
+                      reason: "Click the visible test button",
+                    },
+                    observation: {
+                      image: "",
+                      title: "Local test app",
+                      elements: [],
+                    },
+                  });
+              });
+            return {
+              revision: w.__step,
+              step: w.__step + 1,
+              action: w.__step
+                ? {
+                    kind: "finish",
+                    reason: "The app displays the requested result.",
+                  }
+                : {
                     kind: "click",
+                    element: "observed-button",
                     reason: "Click the visible test button",
                   },
-                  observation: {
-                    image: "",
-                    title: "Local test app",
-                    elements: [],
-                  },
-                });
-            });
-          return {
-            revision: w.__step,
-            step: w.__step + 1,
-            action: w.__step
-              ? {
-                  kind: "finish",
-                  reason: "The app displays the requested result.",
-                }
-              : {
-                  kind: "click",
-                  element: "observed-button",
-                  reason: "Click the visible test button",
-                },
-            observation: {
-              image:
-                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aB1kAAAAASUVORK5CYII=",
-              title: "Local test app",
-              elements: [],
-            },
-          };
-        }
-        if (command === "computer_act") {
-          w.__step++;
-          return { performed: "click" };
-        }
-        return null;
-      },
-    };
-    sessionStorage.setItem("mivuneko-welcome", "1");
-    localStorage.setItem(
-      "mivuneko.preferences.v1",
-      JSON.stringify({
-        backend: "ollama",
-        computerApproval: "review",
-        voice: "off",
-        rememberHistory: false,
-      }),
-    );
-  });
+              observation: {
+                image:
+                  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aB1kAAAAASUVORK5CYII=",
+                title: "Local test app",
+                elements: [],
+              },
+            };
+          }
+          if (command === "computer_act") {
+            w.__step++;
+            return { performed: "click" };
+          }
+          return null;
+        },
+      };
+      sessionStorage.setItem("mivuneko-welcome", "1");
+      localStorage.setItem(
+        "mivuneko.preferences.v1",
+        JSON.stringify({
+          backend: "ollama",
+          computerApproval: "review",
+          voice: "off",
+          rememberHistory: false,
+        }),
+      );
+    },
+    { actionReplies: !testInfo.title.startsWith("Ollama conversation") },
+  );
 });
 test("Ollama conversation uses the selected installed model without calling cloud providers", async ({
   page,
@@ -228,12 +305,7 @@ test("browser searches open directly without planning, mouse input or step appro
   });
   expect(
     calls.some((v: any) =>
-      [
-        "computer_start",
-        "computer_next",
-        "computer_act",
-        "ollama_chat",
-      ].includes(v.command),
+      ["computer_start", "computer_next", "computer_act"].includes(v.command),
     ),
   ).toBe(false);
 });
@@ -987,15 +1059,14 @@ test("checking an open editor reports observed windows without speculative chat 
       .last(),
   ).toBeVisible();
   const calls = await page.evaluate(() => (window as any).__calls);
-  expect(calls.some((c: any) => c.command === "computer_windows")).toBe(true);
+  expect(calls.some((c: any) => c.command === "computer_prepare_task")).toBe(
+    true,
+  );
   expect(
     calls.some((c: any) =>
-      [
-        "ollama_chat",
-        "computer_start",
-        "computer_select_target",
-        "computer_act",
-      ].includes(c.command),
+      ["computer_start", "computer_select_target", "computer_act"].includes(
+        c.command,
+      ),
     ),
   ).toBe(false);
 });
@@ -1066,8 +1137,134 @@ test("an app check followed by coding in its project resolves the actual editor 
   );
   expect(call.args.workspace).toBe("J:/Projects/JSPractice");
   expect(call.args.task).toContain("closure.js");
-  expect(call.args.task).toContain("Observed result:");
+  const preparation = await page.evaluate(() =>
+    (window as any).__calls
+      .filter((c: any) => c.command === "computer_prepare_task")
+      .at(-1),
+  );
+  expect(preparation.args.context.facts.join(" ")).toContain("vscode is open");
   await expect(
     page.getByText("Where should I save the files?", { exact: true }),
   ).toHaveCount(0);
+});
+
+test("unfamiliar wording and a non-keyword follow-up use model context instead of phrase matching", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page.evaluate(() => {
+    const w = window as any,
+      original = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "ollama_chat") {
+        w.__calls.push({ command: c, args: a });
+        return JSON.stringify({
+          text: "",
+          emotion: "happy",
+          computerTask: "Update the requested document",
+        });
+      }
+      if (c === "computer_start") w.__step = 0;
+      return original(c, a);
+    };
+    w.__prepared = (a: any) => ({
+      kind: "workspace",
+      task: a.task,
+      context: {
+        ...a.context,
+        goal: "Maintain the project note",
+        request: a.context.request || a.task,
+        workspace: "J:/Projects/notes",
+        windowId: "",
+        question: "",
+        status: "working",
+      },
+    });
+    const key = "mivuneko.preferences.v1";
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...JSON.parse(localStorage.getItem(key)!),
+        computerApproval: "automatic",
+      }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key }));
+  });
+  const input = page.getByLabel("Message Mivuneko", { exact: true });
+  let expectedPreparations = 0;
+  for (const text of [
+    "Put a short welcome note in the notes project.",
+    "Make that shorter, keep the meaning.",
+  ]) {
+    await input.fill(text);
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    expectedPreparations++;
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as any).__calls.filter(
+              (c: any) => c.command === "computer_prepare_task",
+            ).length,
+        ),
+      )
+      .toBe(expectedPreparations);
+    await expect(page.locator(".thinking-trace>summary").last()).toContainText(
+      "Completed",
+    );
+  }
+  const calls = await page.evaluate(() => (window as any).__calls);
+  const preparations = calls.filter(
+    (c: any) => c.command === "computer_prepare_task",
+  );
+  expect(preparations).toHaveLength(2);
+  expect(preparations[1].args.context.workspace).toBe("J:/Projects/notes");
+  expect(preparations[1].args.context.request).toContain("welcome note");
+  expect(preparations[1].args.context.facts.length).toBeGreaterThan(0);
+  const chat = calls.filter((c: any) => c.command === "ollama_chat").at(-1);
+  expect(
+    chat.args.messages.some(
+      (m: any) =>
+        m.content.includes("Application task memory") &&
+        m.content.includes("J:/Projects/notes"),
+    ),
+  ).toBe(true);
+});
+
+test("explanation-only wording with action keywords does not start computer work", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page.evaluate(() => {
+    const w = window as any,
+      old = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "ollama_chat") {
+        w.__calls.push({ command: c, args: a });
+        return JSON.stringify({
+          text: "A closure retains its lexical scope.",
+          emotion: "idle",
+          computerTask: "",
+          appQuery: "",
+          companionActions: [],
+        });
+      }
+      return old(c, a);
+    };
+  });
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("Explain closures. Do not edit the file or create a folder.");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page.getByText("A closure retains its lexical scope.", { exact: true }),
+  ).toBeVisible();
+  const calls = await page.evaluate(() => (window as any).__calls);
+  expect(
+    calls.some((c: any) =>
+      ["computer_prepare_task", "computer_start", "computer_act"].includes(
+        c.command,
+      ),
+    ),
+  ).toBe(false);
 });

@@ -12,34 +12,6 @@ export function appWindowQuery(text: string): string | null {
     ? match[1].trim()
     : null;
 }
-export function matchingAppWindows<
-  T extends { title: string; process: string },
->(query: string, windows: T[]): T[] {
-  const normalized = query
-    .toLowerCase()
-    .replace(/\.exe$/, "")
-    .replace(/[^a-z0-9]/g, "");
-  const aliases: Record<string, string> = {
-    vscode: "code",
-    visualstudiocode: "code",
-    microsoftedge: "msedge",
-    edge: "msedge",
-    googlechrome: "chrome",
-    windowsnotepad: "notepad",
-  };
-  const process = aliases[normalized] || normalized;
-  return windows.filter((w) => {
-    const executable = w.process
-      .toLowerCase()
-      .replace(/\.exe$/, "")
-      .replace(/[^a-z0-9]/g, "");
-    const title = w.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-    return (
-      executable === process ||
-      (normalized.length >= 3 && title.includes(normalized))
-    );
-  });
-}
 export function terminalTask(text: string): boolean {
   return /^(?:please |can you |could you )?(?:(?:run|execute) (?:npm|pnpm|yarn|npx|git|python|node|cargo|dotnet|go|pytest|a command|the command|tests?|the tests?|a build|the build)\b|install (?:the )?dependencies\b|build (?:this|the) project\b)/i.test(
     text.trim(),

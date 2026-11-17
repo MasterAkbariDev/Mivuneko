@@ -94,3 +94,5 @@ For requests to create files inside the open VS Code project, the app resolves l
 The native folder lookup is available only to the main chat window. The command reviewer is given the same working-directory convention as the runner: `cwd: "."` resolves to the granted project root, including when Rust canonicalization uses a Windows extended path prefix. Checking whether a requested child folder exists is a preliminary step and does not assume that child already exists.
 
 Native follow-up verification on 2026-11-17 resolved the live JSPractice window to its actual project folder, created `closure/closure.js` with commented closure examples through reviewed commands, corrected an example typo after execution feedback, and finished after successful execution. A separate Node syntax check and execution of the saved file also passed.
+
+Task setup now uses the [contextual task flow](TASK_FLOW.md): resolve the user goal from conversation and task state first, then bind it to observed resources. Follow-ups and question answers share the same state instead of relying on text-concatenation rules. Browser follow-ups use the resolved subject.

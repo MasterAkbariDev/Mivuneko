@@ -17,6 +17,7 @@ const COMMANDS: &[&str] = &[
     "computer_open_browser",
     "computer_windows",
     "computer_editor_workspaces",
+    "computer_prepare_task",
     "computer_start",
     "computer_next",
     "computer_act",

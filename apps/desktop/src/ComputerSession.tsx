@@ -1,25 +1,15 @@
 import {
-  appWindowQuery,
-  matchingAppWindows,
-  terminalTask,
-} from "../../../packages/shared-schemas/computer-intent";
+  workContext,
+  type WorkContext,
+} from "../../../packages/shared-schemas/work-context";
 import { TaskActivity, type TaskSnapshot } from "./TaskActivity";
 import type { TaskQuestion } from "./QuestionPanel";
 import { logActivity } from "./activity";
-import {
-  requestedFolder,
-  fileTask,
-} from "../../../packages/shared-schemas/task-context";
+import { requestedFolder } from "../../../packages/shared-schemas/task-context";
 import { useEffect, useRef, useState } from "react";
-import { updatePreferences, usePreferences } from "./preferences";
-import { Icon } from "./Icon";
+import { usePreferences } from "./preferences";
 import "./computer.css";
 import { browserTask } from "../../../packages/shared-schemas/computer-intent";
-interface Target {
-  id: string;
-  title: string;
-  process: string;
-}
 interface Proposal {
   revision: number;
   step: number;
@@ -38,6 +28,9 @@ export function ComputerSession({
   onBusyChange,
   onSnapshot,
   headless = false,
+  context,
+  conversation = [],
+  onContext,
 }: {
   initialTask?: string;
   onClose: () => void;
@@ -49,12 +42,12 @@ export function ComputerSession({
   onBusyChange?: (busy: boolean) => void;
   onSnapshot?: (snapshot: TaskSnapshot) => void;
   headless?: boolean;
+  context?: WorkContext;
+  conversation?: { role: string; text: string }[];
+  onContext?: (context: WorkContext) => void;
 }) {
+  const observedContext = useRef(workContext(context));
   const p = usePreferences(),
-    [windows, setWindows] = useState<Target[]>([]),
-    [target, setTarget] = useState(""),
-    [workspace, setWorkspace] = useState(requestedFolder(initialTask)),
-    [task, setTask] = useState(initialTask),
     [session, setSession] = useState(""),
     [proposal, setProposal] = useState<Proposal | null>(null),
     [busy, setBusy] = useState(false),
@@ -95,12 +88,10 @@ export function ComputerSession({
     onBusyChange?.(busy);
     return () => onBusyChange?.(false);
   }, [busy]);
-  const autoStarted = useRef(false);
   const settings = useRef(p);
   settings.current = p;
   const interactive = useRef(false);
   const [needsVisible, setNeedsVisible] = useState(false);
-  const desiredBrowser = browserTask(task);
   function actionLabel(a: Record<string, any>) {
     const verbs: Record<string, string> = {
       read_file: "Reading",
@@ -168,6 +159,19 @@ export function ComputerSession({
         review: plan.review?.summary,
       },
     ]);
+    if (
+      plan.review?.decision !== "deny" &&
+      result &&
+      (a.kind !== "run_command" || result.exitCode === 0)
+    ) {
+      const fact = `Tool result: ${a.kind}${a.path ? " " + a.path : ""}; ${a.kind === "run_command" ? "exit code 0" : "succeeded"}. Proposed purpose: ${a.reason || title}.`;
+      observedContext.current = workContext({
+        ...observedContext.current,
+        status: "working",
+        facts: [...observedContext.current.facts, fact],
+      });
+      onContext?.(observedContext.current);
+    }
     logActivity(title);
   }
   function question(title: string, options?: TaskQuestion["options"]) {
@@ -184,8 +188,10 @@ export function ComputerSession({
       },
     });
   }
-  async function openBrowserTask() {
-    const desired = browserTask(task);
+  async function openBrowserTask(
+    desired: NonNullable<ReturnType<typeof browserTask>>,
+    resolvedTask: string,
+  ) {
     if (!desired) return;
     const ticket = ++generation.current;
     setBusy(true);
@@ -202,7 +208,7 @@ export function ComputerSession({
         desired.intent === "page"
           ? await call<{ url: string; title: string }>(
               "computer_resolve_page",
-              { task, model: settings.current.ollamaModel },
+              { task: resolvedTask, model: settings.current.ollamaModel },
             )
           : null;
       if (ticket !== generation.current) return;
@@ -243,149 +249,103 @@ export function ComputerSession({
     const { invoke } = await import("@tauri-apps/api/core");
     return invoke<T>(command, args);
   }
+  const preparation = useRef<Promise<any> | null>(null);
   useEffect(() => {
     let disposed = false;
     const ticket = generation.current;
-    const appQuery = appWindowQuery(initialTask);
-    if (appQuery) {
-      setBusy(true);
-      setWorkLabel("Checking open windows…");
-      void call<{ windows: Target[] }>("computer_windows")
-        .then((result) => {
-          if (disposed || ticket !== generation.current) return;
-          const found = matchingAppWindows(appQuery, result.windows);
-          const answer = found.length
-            ? `Yes, ${appQuery} is open. ${found.map((w) => w.title).join("; ")}. What would you like me to do in it?`
-            : `I don't see an open ${appQuery} window. It could be running without a visible window; I haven't launched anything.`;
-          setLog([{ title: "Checked open windows", detail: answer }]);
+    setBusy(true);
+    setWorkLabel("Understanding your request…");
+    void (preparation.current ??= call<any>("computer_prepare_task", {
+      task: initialTask,
+      context: workContext(context),
+      conversation: conversation
+        .slice(-12)
+        .map((m) => ({ role: m.role, content: m.text.slice(0, 4000) })),
+      explicitWorkspace: requestedFolder(initialTask),
+      conversationWorkspaces: [
+        ...new Set(
+          conversation
+            .slice(-12)
+            .filter((m) => m.role === "user")
+            .map((m) => requestedFolder(m.text))
+            .filter(Boolean),
+        ),
+      ].slice(-8),
+      model: settings.current.ollamaModel,
+    }))
+      .then((prepared) => {
+        if (disposed || ticket !== generation.current) return;
+        const nextContext = workContext({
+          ...prepared.context,
+          status: "working",
+          question: "",
+        });
+        observedContext.current = nextContext;
+        onContext?.(nextContext);
+        if (prepared.kind === "inspect") {
+          setLog([
+            { title: "Checked current desktop state", detail: prepared.result },
+          ]);
           setDone(true);
-          onResult?.(answer);
-        })
-        .catch((e) => {
-          if (!disposed) setError(String(e));
-        })
-        .finally(() => {
-          if (!disposed) setBusy(false);
-        });
-    } else if (browserTask(initialTask)) {
-      void Promise.resolve().then(() => {
-        if (disposed || autoStarted.current) return;
-        autoStarted.current = true;
-        if (
-          settings.current.computerApproval === "automatic" ||
-          settings.current.actionReview === "bypass"
-        )
-          void openBrowserTask();
-        else
-          onQuestion?.({
-            kind: "permission",
-            title: "Open this in your browser?",
-            description: initialTask,
-            resolve: (answer) => {
-              if (answer === "allow") void openBrowserTask();
-              else setDone(true);
-            },
-          });
-      });
-    } else if (
-      !requestedFolder(initialTask) &&
-      /\b(?:project|vscode|visual studio code)\b/i.test(initialTask) &&
-      /\b(?:create|write|code|implement|edit|folder|file)\b/i.test(initialTask)
-    ) {
-      setBusy(true);
-      setWorkLabel("Finding the open project…");
-      void call<{ workspaces: { path: string; title: string }[] }>(
-        "computer_editor_workspaces",
-      )
-        .then((v) => {
-          if (disposed || ticket !== generation.current) return;
-          if (v.workspaces.length === 1) {
-            const root = v.workspaces[0].path;
-            setWorkspace(root);
-            void start("", root);
-          } else {
-            setBusy(false);
-            question(
-              v.workspaces.length
-                ? "Which open project should I use?"
-                : "I couldn't resolve the open editor's local project folder. What is its full path?",
-              v.workspaces.map((w) => ({
-                label: w.title,
-                value: w.path,
-                description: w.path,
-              })),
+          setBusy(false);
+          onContext?.(
+            workContext({
+              ...nextContext,
+              status: "completed",
+              facts: [...nextContext.facts, prepared.result],
+            }),
+          );
+          onResult?.(prepared.result);
+        } else if (prepared.kind === "question") {
+          setBusy(false);
+          onContext?.(
+            workContext({
+              ...nextContext,
+              status: "waiting",
+              question: prepared.question,
+            }),
+          );
+          question(
+            prepared.question,
+            prepared.options?.map((value: string) => ({ label: value, value })),
+          );
+        } else if (prepared.kind === "browser") {
+          const open = () =>
+            void openBrowserTask(
+              prepared.browserRequest,
+              prepared.task || initialTask,
             );
-          }
-        })
-        .catch((e) => {
-          if (!disposed) {
+          if (
+            settings.current.computerApproval === "automatic" ||
+            settings.current.actionReview === "bypass"
+          )
+            open();
+          else {
             setBusy(false);
-            setError(String(e));
+            onQuestion?.({
+              kind: "permission",
+              title: "Open this in your browser?",
+              description: prepared.context.goal,
+              resolve: (answer) => {
+                if (answer === "allow") open();
+                else setDone(true);
+              },
+            });
           }
-        });
-    } else if (fileTask(initialTask)) {
-      void Promise.resolve().then(() => {
-        if (!disposed && !autoStarted.current) {
-          autoStarted.current = true;
-          void start("");
+        } else {
+          void start(
+            prepared.kind === "workspace" ? "" : nextContext.windowId,
+            nextContext.workspace,
+            prepared.task || initialTask,
+          );
+        }
+      })
+      .catch((e) => {
+        if (!disposed) {
+          setError(String(e));
+          setBusy(false);
         }
       });
-    } else if (terminalTask(initialTask)) {
-      void Promise.resolve().then(() => {
-        if (!disposed)
-          question("Which project folder should I run the command in?");
-      });
-    } else if (
-      /\b(?:create|write|save|generate|build|implement)\b.*\b(?:function|example|script|program|file|folder|directory)\b/i.test(
-        initialTask,
-      ) &&
-      !/\b(?:editor|notepad|ide)\b/i.test(initialTask)
-    ) {
-      void Promise.resolve().then(() => {
-        if (!disposed) question("Where should I save the files?");
-      });
-    } else
-      void call<any>("computer_windows")
-        .then(async (v) => {
-          if (disposed || ticket !== generation.current) return;
-          setWindows(v.windows);
-          setTarget(v.windows[0]?.id ?? "");
-          if (initialTask) {
-            setBusy(true);
-            try {
-              const selected = await call<{
-                windowId: string;
-                needsWorkspace: boolean;
-              }>("computer_select_target", {
-                task: initialTask,
-                model: settings.current.ollamaModel,
-              });
-              if (disposed || ticket !== generation.current) return;
-              if (!selected.windowId) {
-                question(
-                  "Which app should I work in?",
-                  v.windows.slice(0, 5).map((w: Target) => ({
-                    label: w.title,
-                    value: `Use ${w.title} for this task`,
-                    description: w.process,
-                  })),
-                );
-              }
-              if (selected.windowId) {
-                setTarget(selected.windowId);
-                if (!selected.needsWorkspace) {
-                  void start(selected.windowId);
-                  return;
-                }
-                question("Which folder should I use?");
-              }
-            } catch (e) {
-              if (!disposed) setError(String(e));
-            }
-            if (!disposed) setBusy(false);
-          }
-        })
-        .catch((e) => setError(String(e)));
     const stop = () => {
       void end();
     };
@@ -405,6 +365,12 @@ export function ComputerSession({
     setProposal(null);
     setNeedsVisible(false);
     setStopped(true);
+    observedContext.current = workContext({
+      ...observedContext.current,
+      status: "stopped",
+      question: "",
+    });
+    onContext?.(observedContext.current);
     await call("computer_stop").catch(() => {});
   }
   function stale(e: unknown) {
@@ -526,7 +492,11 @@ export function ComputerSession({
       if (ticket === generation.current) setBusy(false);
     }
   }
-  async function start(selectedTarget = target, projectWorkspace = workspace) {
+  async function start(
+    selectedTarget: string,
+    projectWorkspace: string,
+    resolvedTask: string,
+  ) {
     const ticket = ++generation.current;
     setBusy(true);
     setError("");
@@ -538,9 +508,7 @@ export function ComputerSession({
       const s = await call<{ sessionId: string }>("computer_start", {
         windowId: selectedTarget,
         workspace: projectWorkspace,
-        task: browserTask(task)?.url
-          ? `Open a new browser tab and navigate to ${browserTask(task)!.url}. User request: ${task}. Keep existing tabs open. Verify the requested website has loaded.`
-          : task,
+        task: resolvedTask,
         model: p.ollamaModel,
         background: true,
         reviewMode: settings.current.actionReview,

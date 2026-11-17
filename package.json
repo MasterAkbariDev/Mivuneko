@@ -21,7 +21,8 @@
     "mac": "./script/build_and_run.sh",
     "setup:voice": "./script/setup_voice.sh",
     "install:voice": "./script/setup_voice.sh",
-    "setup:sherpa": "./scripts/setup-sherpa.sh"
+    "setup:sherpa": "./scripts/setup-sherpa.sh",
+    "test:native:flow": "node tests/native/contextual-flow.cjs"
   },
   "engines": {
     "node": ">=22.18"

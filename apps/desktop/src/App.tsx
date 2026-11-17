@@ -1,3 +1,8 @@
+import {
+  workContext,
+  updateWorkContext,
+  type WorkContext,
+} from "../../../packages/shared-schemas/work-context";
 import { TaskActivity, type TaskSnapshot } from "./TaskActivity";
 import { CustomSelect } from "./CustomSelect";
 import { CompanionPortrait } from "./CompanionPortrait";
@@ -5,7 +10,6 @@ import { ActivityView } from "./ActivityView";
 import { QuestionPanel, type TaskQuestion } from "./QuestionPanel";
 import {
   fileTask,
-  taskWithContext,
   isTaskFollowup,
 } from "../../../packages/shared-schemas/task-context";
 import { CharacterGuide } from "./CharacterGuide";
@@ -75,6 +79,11 @@ export function App() {
   const [screenRequest, setScreenRequest] = useState<string | null>(null);
   const [computerTask, setComputerTask] = useState<string | null>(null);
   const taskContext = useRef("");
+  const workMemory = useRef<WorkContext>(workContext());
+  function rememberWork(patch: Partial<WorkContext>) {
+    workMemory.current = updateWorkContext(workMemory.current, patch);
+  }
+
   const messageCount = useRef(0),
     nextRun = useRef(0),
     activeRun = useRef(0);
@@ -91,12 +100,7 @@ export function App() {
   const [taskRunning, setTaskRunning] = useState(false);
   const [taskQuestion, setTaskQuestion] = useState<TaskQuestion | null>(null);
   function launchTask(request: string, anchor = messageCount.current) {
-    const previous =
-      taskContext.current ||
-      messages.filter((m) => m.role === "user" && fileTask(m.text)).at(-1)
-        ?.text ||
-      "";
-    const goal = taskWithContext(request, previous);
+    const goal = request;
     taskContext.current = goal;
     setTaskQuestion(null);
     beginTask(goal, anchor);
@@ -429,6 +433,7 @@ export function App() {
         setMood("thinking");
       }
       if (
+        preferences.backend === "offline" &&
         (mode === "Assist" || mode === "Autonomous") &&
         (computerIntent(text) ||
           fileTask(text) ||
@@ -440,7 +445,8 @@ export function App() {
         setMood("idle");
         return;
       }
-      const sequence = companionSequence(text);
+      const sequence =
+        preferences.backend === "offline" ? companionSequence(text) : null;
       if (sequence) {
         if (sequence.error) throw Error(sequence.error);
         if (!isNative)
@@ -462,7 +468,13 @@ export function App() {
         setMood("happy");
         return;
       }
-      const intent = desktopIntent(text);
+      const directIntent = desktopIntent(text);
+      const intent =
+        preferences.backend === "offline" ||
+        directIntent?.kind === "locate" ||
+        directIntent?.kind === "screen"
+          ? directIntent
+          : null;
       if (
         intent?.kind === "gesture" ||
         intent?.kind === "lie" ||
@@ -561,28 +573,26 @@ export function App() {
         return;
       }
       startTurn(preferences.backend);
-      const reply = await agentFor(preferences.backend, name).reply(
-        text,
-        mode,
-        c.signal,
-        messages,
-        (partial) => {
-          if (c.signal.aborted) return;
-          if (partial.trim()) markTurn("turn.first_text");
-          setStreaming(partial);
-        },
-      );
+      const reply = await agentFor(
+        preferences.backend,
+        name,
+        workMemory.current,
+      ).reply(text, mode, c.signal, messages, (partial) => {
+        if (c.signal.aborted) return;
+        if (partial.trim()) markTurn("turn.first_text");
+        setStreaming(partial);
+      });
       c.signal.throwIfAborted();
       markTurn("turn.first_text");
       markTurn("turn.reply_done");
       if (reply.computerTask && (mode === "Assist" || mode === "Autonomous")) {
         setStreaming("");
-        launchTask(text, userMessageIndex + 1);
+        launchTask(text, userMessageIndex);
         setMood("idle");
         return;
       }
       setStreaming("");
-      if (!reply.appQuery) add(reply.text, false);
+      if (!reply.appQuery && reply.text.trim()) add(reply.text, false);
       if (reply.companionActions?.length && !fileTask(text)) {
         if (!isNative)
           throw Error("Desktop actions require the installed app.");
@@ -723,6 +733,7 @@ export function App() {
     setMood("idle");
   }
   async function stop() {
+    rememberWork({ status: "stopped", question: "" });
     setTaskQuestion(null);
     window.dispatchEvent(new Event("mivuneko-computer-stop"));
     if (isNative)
@@ -1000,6 +1011,9 @@ export function App() {
             inline
             headless
             initialTask={run.task}
+            context={workMemory.current}
+            conversation={messages}
+            onContext={(value) => rememberWork(value)}
             onClose={() => {
               setTaskQuestion(null);
               setComputerTask(null);
@@ -1013,6 +1027,8 @@ export function App() {
               )
             }
             onQuestion={(question) => {
+              if (question.kind === "question")
+                rememberWork({ status: "waiting", question: question.title });
               if (question.kind === "question") add(question.title);
               setTaskQuestion({
                 ...question,
@@ -1025,7 +1041,7 @@ export function App() {
             onClarification={(answer) => {
               const answerIndex = messageCount.current;
               setMessages((m) => [...m, { role: "user", text: answer }]);
-              const goal = `${taskContext.current}\nUser clarification: ${answer}`;
+              const goal = answer;
               taskContext.current = goal;
               setTaskRuns((old) =>
                 old.map((r) =>
@@ -1050,6 +1066,11 @@ export function App() {
             }}
             onResult={(answer) => {
               taskContext.current += `\nObserved result: ${answer}`;
+              rememberWork({
+                status: "completed",
+                question: "",
+                facts: [...workMemory.current.facts, answer],
+              });
               setMood("happy");
               publishPet("happy", answer);
               add(answer);
@@ -1561,6 +1582,7 @@ export function App() {
                           setTaskQuestion(null);
                           setTaskRuns([]);
                           taskContext.current = "";
+                          workMemory.current = workContext();
                           setMessages([]);
                           void clearHistory().catch((e) => setError(String(e)));
                           setLogs([]);

@@ -9,6 +9,23 @@ export function parseAgentReply(raw: string): AgentReply {
   } catch {
     return { text: raw, mood: "idle" };
   }
+  const toolOnly =
+    json &&
+    typeof json === "object" &&
+    ((typeof json.computerTask === "string" &&
+      json.computerTask.trim() &&
+      json.computerTask.length <= 4000) ||
+      (typeof json.appQuery === "string" &&
+        json.appQuery.trim() &&
+        json.appQuery.length <= 200) ||
+      (Array.isArray(json.companionActions) &&
+        json.companionActions.length > 0));
+  const text =
+    typeof json?.text === "string"
+      ? json.text
+      : json?.text === undefined && toolOnly
+        ? ""
+        : null;
   const moods: Mood[] = [
     "idle",
     "angry",
@@ -33,12 +50,12 @@ export function parseAgentReply(raw: string): AgentReply {
   if (
     json &&
     typeof json === "object" &&
-    typeof json.text === "string" &&
-    json.text.trim() &&
-    json.text.length <= 8000
+    text !== null &&
+    (text.trim() || toolOnly) &&
+    text.length <= 8000
   )
     return {
-      text: json.text,
+      text,
       ...(typeof json.computerTask === "string" &&
       json.computerTask.trim() &&
       json.computerTask.length <= 4000

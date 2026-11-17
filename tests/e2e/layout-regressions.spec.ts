@@ -227,7 +227,7 @@ test("gesture composer applies bounded live combinations and voice delivery stay
   expect(voices.haru.instruction).toContain("Warm, reassuring");
 });
 
-test("open vscode for me launches the resolved app and reports only the result", async ({
+test("semantic app launch resolves the installed app and reports only the native result", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -248,7 +248,13 @@ test("open vscode for me launches the resolved app and reports only the result",
         return { ok: true, message: "Opened Visual Studio Code." };
       }
       if (c === "ollama_chat")
-        throw Error("Simple app launching must not be guessed by the LLM");
+        return JSON.stringify({
+          text: "I will request that app.",
+          emotion: "happy",
+          appQuery: "Visual Studio Code",
+          computerTask: "",
+          companionActions: [],
+        });
       return previous(c, a);
     };
     const p = JSON.parse(localStorage.getItem("mivuneko.preferences.v1")!);

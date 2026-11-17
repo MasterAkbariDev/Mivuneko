@@ -1058,6 +1058,7 @@ fn main() {
             computer::computer_open_browser,
             computer::computer_windows,
             computer::computer_editor_workspaces,
+            computer::computer_prepare_task,
             rest_surfaces::pet_rest_surfaces,
             computer::computer_start,
             computer::computer_next,
