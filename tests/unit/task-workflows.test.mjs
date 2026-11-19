@@ -124,3 +124,20 @@ test("app status questions are admitted to semantic task preparation", () => {
   assert.equal(appWindowQuery("check if vscode is open and write code"), null);
   assert.equal(appWindowQuery("is my editor running?"), "editor");
 });
+
+test("a stray closing quote cannot discard a supplied project path", () => {
+  assert.equal(
+    requestedFolder(
+      'could you open vscode for me on J:/Projects/JSPractice" directory?',
+    ),
+    "J:/Projects/JSPractice",
+  );
+  assert.equal(
+    requestedFolder("start my editor in D:/Work/example” folder?"),
+    "D:/Work/example",
+  );
+  assert.equal(
+    requestedFolder('save in "D:/Work/notes with spaces" please'),
+    "D:/Work/notes with spaces",
+  );
+});

@@ -1,3 +1,9 @@
+import { broker } from "./broker";
+import { matchApps } from "../../../packages/shared-schemas/desktop-intent";
+import type {
+  LaunchRequest,
+  AppInfo,
+} from "../../../packages/shared-schemas/index";
 import {
   workContext,
   type WorkContext,
@@ -243,6 +249,83 @@ export function ComputerSession({
       if (ticket === generation.current) setBusy(false);
     }
   }
+  const pendingLaunch = useRef("");
+  async function openNamedApp(query: string) {
+    const ticket = ++generation.current;
+    setBusy(true);
+    setError("");
+    setWorkLabel("Finding the installed app…");
+    try {
+      const apps = await broker.listApps();
+      if (ticket !== generation.current) return;
+      const matches = matchApps(query, apps);
+      if (matches.length !== 1) {
+        setBusy(false);
+        if (matches.length)
+          question(
+            "Which installed app should I open?",
+            matches.slice(0, 5).map((app: AppInfo) => ({
+              label: app.name,
+              value: `Open ${app.name}`,
+            })),
+          );
+        else setError(`No installed app matched ${query}.`);
+        return;
+      }
+      const request: LaunchRequest = await broker.requestLaunch(matches[0].id);
+      if (ticket !== generation.current) {
+        await broker.resolveLaunch(request.id, false).catch(() => {});
+        return;
+      }
+      pendingLaunch.current = request.id;
+      const finish = async (allow: boolean) => {
+        if (ticket !== generation.current) return;
+        setBusy(true);
+        setWorkLabel(
+          allow ? `Opening ${request.app.name}…` : "Cancelling launch…",
+        );
+        try {
+          const result = await broker.resolveLaunch(request.id, allow);
+          pendingLaunch.current = "";
+          if (ticket !== generation.current) return;
+          setLog([{ title: result.message, ok: result.ok }]);
+          setDone(result.ok);
+          if (result.ok) onResult?.(result.message);
+          else {
+            setStopped(true);
+            onContext?.(
+              workContext({
+                ...observedContext.current,
+                status: "stopped",
+                question: "",
+              }),
+            );
+          }
+        } catch (e) {
+          if (ticket === generation.current) setError(String(e));
+        } finally {
+          if (ticket === generation.current) setBusy(false);
+        }
+      };
+      const policy = request.policy ?? settings.current.approvalMode;
+      if (policy === "ask") {
+        setBusy(false);
+        onQuestion?.({
+          kind: "permission",
+          title: `Open ${request.app.name}?`,
+          description: "Launch the installed application.",
+          resolve: (answer) => {
+            void finish(answer === "allow");
+          },
+        });
+      } else await finish(policy === "auto");
+    } catch (e) {
+      if (ticket === generation.current) {
+        setError(String(e));
+        setBusy(false);
+      }
+    }
+  }
   const generation = useRef(0),
     active = useRef("");
   async function call<T>(command: string, args: Record<string, unknown> = {}) {
@@ -309,6 +392,8 @@ export function ComputerSession({
             prepared.question,
             prepared.options?.map((value: string) => ({ label: value, value })),
           );
+        } else if (prepared.kind === "launch") {
+          void openNamedApp(prepared.appQuery);
         } else if (prepared.kind === "browser") {
           const open = () =>
             void openBrowserTask(
@@ -354,11 +439,19 @@ export function ComputerSession({
       disposed = true;
       generation.current++;
       window.removeEventListener("mivuneko-computer-stop", stop);
+      if (pendingLaunch.current) {
+        void broker.resolveLaunch(pendingLaunch.current, false).catch(() => {});
+        pendingLaunch.current = "";
+      }
       if (active.current) void call("computer_stop");
     };
   }, []);
   async function end() {
     generation.current++;
+    if (pendingLaunch.current) {
+      void broker.resolveLaunch(pendingLaunch.current, false).catch(() => {});
+      pendingLaunch.current = "";
+    }
     active.current = "";
     setSession("");
     setBusy(false);

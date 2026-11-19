@@ -1029,7 +1029,6 @@ export function App() {
             onQuestion={(question) => {
               if (question.kind === "question")
                 rememberWork({ status: "waiting", question: question.title });
-              if (question.kind === "question") add(question.title);
               setTaskQuestion({
                 ...question,
                 resolve: (answer) => {

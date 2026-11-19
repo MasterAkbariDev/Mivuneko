@@ -1268,3 +1268,145 @@ test("explanation-only wording with action keywords does not start computer work
     ),
   ).toBe(false);
 });
+
+test("a prepared app launch uses the installed-app broker and its automatic policy", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page.evaluate(() => {
+    const w = window as any,
+      old = w.__TAURI_INTERNALS__.invoke;
+    w.__prepared = {
+      kind: "launch",
+      appQuery: "Studio Edit",
+      context: {
+        goal: "Open the requested editor",
+        request: "Bring up the editor",
+        facts: [],
+        workspace: "",
+        windowId: "",
+      },
+    };
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "list_apps")
+        return [{ id: "installed-editor", name: "Studio Edit" }];
+      if (c === "request_launch") {
+        w.__calls.push({ command: c, args: a });
+        return {
+          id: "bound-launch",
+          app: { id: "installed-editor", name: "Studio Edit" },
+          policy: "auto",
+        };
+      }
+      if (c === "resolve_launch") {
+        w.__calls.push({ command: c, args: a });
+        return { ok: true, message: "Opened Studio Edit." };
+      }
+      return old(c, a);
+    };
+  });
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("Bring up the editor for me");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page.getByText("Opened Studio Edit.", { exact: true }),
+  ).toBeVisible();
+  const calls = await page.evaluate(() => (window as any).__calls);
+  expect(
+    calls.find((c: any) => c.command === "request_launch").args.appId,
+  ).toBe("installed-editor");
+  expect(
+    calls
+      .filter((c: any) => c.command === "resolve_launch")
+      .map((c: any) => c.args),
+  ).toEqual([{ requestId: "bound-launch", allow: true }]);
+  expect(calls.some((c: any) => c.command === "computer_act")).toBe(false);
+});
+test("a launch task honors broker consent and resolves denial without opening an app", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page.evaluate(() => {
+    const w = window as any,
+      old = w.__TAURI_INTERNALS__.invoke;
+    w.__prepared = {
+      kind: "launch",
+      appQuery: "Studio Edit",
+      context: { goal: "Open editor", facts: [] },
+    };
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "list_apps") return [{ id: "editor", name: "Studio Edit" }];
+      if (c === "request_launch")
+        return {
+          id: "ask-launch",
+          app: { id: "editor", name: "Studio Edit" },
+          policy: "ask",
+        };
+      if (c === "resolve_launch") {
+        w.__calls.push({ command: c, args: a });
+        return { ok: false, message: "Launch denied." };
+      }
+      return old(c, a);
+    };
+  });
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("Bring up the editor for me");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Deny", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__calls.filter(
+          (c: any) => c.command === "resolve_launch",
+        ).length,
+    ),
+  ).toBe(0);
+  await page.getByRole("button", { name: "Deny", exact: true }).click();
+  await expect(page.locator(".thinking-trace>summary").last()).toContainText(
+    "Stopped",
+  );
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__calls.find((c: any) => c.command === "resolve_launch")
+          .args,
+    ),
+  ).toEqual({ requestId: "ask-launch", allow: false });
+});
+test("a native clarification is shown once in its card and retained in task memory", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page.evaluate(() => {
+    (window as any).__prepared = {
+      kind: "question",
+      question: "Which format should I use?",
+      options: ["JSON", "YAML"],
+      context: {
+        goal: "Create the requested config",
+        request: "Create a config",
+        workspace: "J:/project",
+        facts: [],
+      },
+    };
+  });
+  await page
+    .getByLabel("Message Mivuneko", { exact: true })
+    .fill("Create a config for me");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Which format should I use?",
+      exact: true,
+    }),
+  ).toHaveCount(1);
+  await expect(
+    page
+      .locator(".message.assistant")
+      .filter({ hasText: "Which format should I use?" }),
+  ).toHaveCount(0);
+});

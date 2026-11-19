@@ -3,7 +3,7 @@ import { terminalTask } from "./computer-intent.ts";
 export function requestedFolder(text: string): string {
   const match =
     /["“']([a-z]:[\\/][^"”'\r\n]+)["”']/i.exec(text) ??
-    /\b([a-z]:[\\/][^\r\n"<>|?*]+?)(?=\s+(?:please|and then|then)\b|$)/i.exec(
+    /\b([a-z]:[\\/][^\r\n"<>|?*]+?)(?=["”']|\s+(?:please|and then|then)\b|$)/i.exec(
       text.trim(),
     );
   if (!match) return "";
