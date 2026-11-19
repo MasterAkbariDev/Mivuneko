@@ -1,3 +1,4 @@
+import { partialText } from "../../apps/desktop/src/partialText.ts";
 import { parseAgentReply } from "../../packages/shared-schemas/agent.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -61,5 +62,25 @@ test("valid tool-only replies do not require a conversational preamble", () => {
       JSON.stringify({ text: "", computerTask: "x".repeat(4001) }),
     ).computerTask,
     undefined,
+  );
+});
+
+test("action-mode streaming waits for an unambiguous chat route", () => {
+  const greeting = '{"text":"Haru is here to help';
+  assert.equal(partialText(greeting, true), "");
+  assert.equal(partialText(greeting), "Haru is here to help");
+  assert.equal(
+    partialText(
+      '{"computerTask":"","appQuery":"Editor","companionActions":[],"text":"I will help',
+      true,
+    ),
+    "",
+  );
+  assert.equal(
+    partialText(
+      '{"computerTask":"","appQuery":"","companionActions":[],"text":"Hello',
+      true,
+    ),
+    "Hello",
   );
 });

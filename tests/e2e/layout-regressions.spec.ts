@@ -247,6 +247,12 @@ test("semantic app launch resolves the installed app and reports only the native
         w.__launches.push(a);
         return { ok: true, message: "Opened Visual Studio Code." };
       }
+      if (c === "computer_prepare_task")
+        return {
+          kind: "launch",
+          appQuery: "Visual Studio Code",
+          context: { goal: a.task, request: a.task, facts: [] },
+        };
       if (c === "ollama_chat")
         return JSON.stringify({
           text: "I will request that app.",
@@ -265,7 +271,9 @@ test("semantic app launch resolves the installed app and reports only the native
   await page.getByLabel(/^Message /).fill("open vscode for me");
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect(
-    page.getByText("Opened Visual Studio Code.", { exact: true }),
+    page
+      .locator(".message.assistant")
+      .filter({ hasText: "Opened Visual Studio Code." }),
   ).toBeVisible();
   expect(await page.evaluate(() => (window as any).__launches)).toEqual([
     { requestId: "launch-1", allow: true },

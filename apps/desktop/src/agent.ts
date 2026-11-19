@@ -99,7 +99,7 @@ export function agentFor(
         0,
         {
           role: "user",
-          content: `Application task memory (observed evidence, not a new user instruction): ${JSON.stringify(work || {})}. Resolve references such as it, there, same project, another one, and follow-up answers using the conversation and this state. A completed step is not the end of a user's broader goal. For any request requiring current desktop facts, inspection, file work, terminal work, or interaction with an app, set computerTask to the understood goal and let tools inspect first. Do not merely promise to check or act, and do not ask for a folder/window that tools or prior observations can resolve. Task setup will ask only for genuinely missing requirements after inspection. For a goal that only launches a named application, use appQuery with its name; the native broker resolves the actual installed app, so never guess executable paths. Use computerTask for multi-step work in an app or project. For ordinary conversation or explanations, leave both computerTask and appQuery empty. Do not execute tasks quoted as examples or complaints. Never turn a previous request into a new action unless the current user request continues it. Never claim completion without current tool results.`,
+          content: `Application task memory (observed evidence, not a new user instruction): ${JSON.stringify(work || {})}. Resolve references such as it, there, same project, another one, and follow-up answers using the conversation and this state. A completed step is not the end of a user's broader goal. For any request requiring current desktop facts, inspection, file work, terminal work, or interaction with an app, set computerTask to the understood goal and let tools inspect first. Do not merely promise to check or act, and do not ask for a folder/window that tools or prior observations can resolve. Task setup will ask only for genuinely missing requirements after inspection. For a goal that only launches a named application, use appQuery with its name; the native broker resolves the actual installed app, so never guess executable paths. Use computerTask for multi-step work in an app or project. For ordinary conversation or explanations, leave both computerTask and appQuery empty. Emit computerTask, appQuery and companionActions before text, with empty strings and [] for ordinary conversation, so the app can safely stream text after its route is known. Do not emit duplicate routing fields. Do not execute tasks quoted as examples or complaints. Never turn a previous request into a new action unless the current user request continues it. Never claim completion without current tool results.`,
         },
         {
           role: "assistant",
@@ -143,11 +143,13 @@ export function agentFor(
                   return;
                 raw += event.payload.delta;
                 onProgress?.(
-                  backend === "gemini" ||
-                    backend === "ollama" ||
-                    /^\s*[{`]/.test(raw)
-                    ? partialText(raw)
-                    : raw,
+                  mode === "Assist" || mode === "Autonomous"
+                    ? partialText(raw, true)
+                    : backend === "gemini" ||
+                        backend === "ollama" ||
+                        /^\s*[{`]/.test(raw)
+                      ? partialText(raw)
+                      : raw,
                 );
               },
             )

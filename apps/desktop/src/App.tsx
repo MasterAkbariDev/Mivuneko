@@ -585,7 +585,11 @@ export function App() {
       c.signal.throwIfAborted();
       markTurn("turn.first_text");
       markTurn("turn.reply_done");
-      if (reply.computerTask && (mode === "Assist" || mode === "Autonomous")) {
+      if (
+        (reply.computerTask ||
+          (reply.appQuery && preferences.backend !== "offline")) &&
+        (mode === "Assist" || mode === "Autonomous")
+      ) {
         setStreaming("");
         launchTask(text, userMessageIndex);
         setMood("idle");

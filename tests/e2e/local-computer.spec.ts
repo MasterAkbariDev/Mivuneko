@@ -20,7 +20,11 @@ test.beforeEach(async ({ page }, testInfo) => {
         unregisterCallback() {},
         invoke: async (command: string, args: any) => {
           w.__calls.push({ command, args });
-          if (command === "plugin:event|listen") return args.handler;
+          if (command === "plugin:event|listen") {
+            if (args.event === "provider-stream")
+              w.__providerStream = callbacks.get(args.handler);
+            return args.handler;
+          }
           if (command === "load_history") return "[]";
           if (command === "get_launch_policy")
             return { enabled: true, mode: "ask", stored: true };
@@ -1408,5 +1412,94 @@ test("a native clarification is shown once in its card and retained in task memo
     page
       .locator(".message.assistant")
       .filter({ hasText: "Which format should I use?" }),
+  ).toHaveCount(0);
+});
+
+test("an app-only model reply cannot discard a project argument or flash its preamble", async ({
+  page,
+}) => {
+  await page.goto("/?view=chat");
+  await page.evaluate(() => {
+    const w = window as any,
+      old = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (c: string, a: any) => {
+      if (c === "ollama_chat") {
+        w.__calls.push({ command: c, args: a });
+        w.__providerStream?.({
+          event: "provider-stream",
+          id: 0,
+          payload: {
+            requestId: a.requestId,
+            delta: '{"text":"Haru is here to help',
+          },
+        });
+        return await new Promise((resolve) => {
+          w.__finishScopedReply = () =>
+            resolve(
+              JSON.stringify({
+                text: "Haru is here to help",
+                appQuery: "Visual Studio Code",
+                computerTask: "",
+              }),
+            );
+        });
+      }
+      if (c === "computer_next")
+        return {
+          revision: w.__step,
+          action: w.__step
+            ? {
+                kind: "finish",
+                reason: "Opened VS Code in J:/Projects/JSPractice.",
+              }
+            : {
+                kind: "open_folder",
+                program: "vscode",
+                path: ".",
+                reason: "Open the requested project",
+              },
+          review: { decision: "allow", summary: "Scoped editor opening" },
+          observation: { image: "", elements: [] },
+        };
+      if (c === "computer_act") {
+        await old(c, a);
+        return { openedFolder: "J:/Projects/JSPractice" };
+      }
+      return old(c, a);
+    };
+  });
+  const request =
+    'could you open vscode for me on J:/Projects/JSPractice" directory?';
+  await page.getByLabel("Message Mivuneko", { exact: true }).fill(request);
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => !!(window as any).__finishScopedReply))
+    .toBe(true);
+  await expect(
+    page.getByText("Haru is here to help", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.locator(".thinking-indicator")).toBeVisible();
+  await page.evaluate(() => (window as any).__finishScopedReply());
+  await expect(
+    page.getByRole("button", { name: "Allow", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
+  await expect(
+    page
+      .locator(".message.assistant")
+      .filter({ hasText: "Opened VS Code in J:/Projects/JSPractice." }),
+  ).toBeVisible();
+  const calls = await page.evaluate(() => (window as any).__calls);
+  const prepared = calls.find(
+    (c: any) => c.command === "computer_prepare_task",
+  );
+  expect(prepared.args.task).toBe(request);
+  expect(prepared.args.explicitWorkspace).toBe("J:/Projects/JSPractice");
+  expect(
+    calls.find((c: any) => c.command === "computer_start").args.workspace,
+  ).toBe("J:/Projects/JSPractice");
+  expect(calls.some((c: any) => c.command === "request_launch")).toBe(false);
+  await expect(
+    page.getByText("Haru is here to help", { exact: true }),
   ).toHaveCount(0);
 });

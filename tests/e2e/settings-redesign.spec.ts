@@ -1591,7 +1591,7 @@ test("streaming uses the same avatar and commits only one final reply", async ({
     const w = window as any;
     w.__emit("provider-stream", {
       requestId: w.__replyRequest.requestId,
-      delta: '{"text":"Hello, I am Haru.',
+      delta: '{"computerTask":"","appQuery":"","text":"Hello, I am Haru.',
     });
   });
   await expect(
