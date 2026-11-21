@@ -732,10 +732,15 @@ fn whisper_config(
     engine: Option<&str>,
 ) -> Result<desktop_core::WhisperConfig, String> {
     let voice_config = voice_json(app);
+    let selected = engine
+        .and_then(|id| id.strip_prefix("whisper:"))
+        .and_then(|name| voice_config["whisperModels"].get(name))
+        .filter(|value| value.is_object())
+        .unwrap_or(&voice_config);
     let path = |env: &str, key: &str| {
         std::env::var_os(env)
             .map(std::path::PathBuf::from)
-            .or_else(|| voice_config[key].as_str().map(std::path::PathBuf::from))
+            .or_else(|| selected[key].as_str().map(std::path::PathBuf::from))
     };
     let binary = path("MIVUNEKO_WHISPER_BIN", "binary").unwrap_or_default();
     let mut model = path("MIVUNEKO_WHISPER_MODEL", "model").unwrap_or_default();
@@ -838,10 +843,19 @@ fn voice_engines(app: tauri::AppHandle) -> Vec<EngineInfo> {
             installed: if e.family.starts_with("Parakeet") {
                 sherpa_install(&voice, &models_dir).is_some()
             } else {
-                models_dir.join(e.file).is_file()
-                    && voice["binary"]
-                        .as_str()
-                        .is_some_and(|b| std::path::Path::new(b).is_file())
+                e.id.strip_prefix("whisper:")
+                    .and_then(|name| voice["whisperModels"].get(name))
+                    .is_some_and(|entry| {
+                        ["model", "binary"].iter().all(|key| {
+                            entry[key]
+                                .as_str()
+                                .is_some_and(|p| std::path::Path::new(p).is_file())
+                        })
+                    })
+                    || (models_dir.join(e.file).is_file()
+                        && voice["binary"]
+                            .as_str()
+                            .is_some_and(|b| std::path::Path::new(b).is_file()))
             },
         })
         .collect()
@@ -1069,6 +1083,7 @@ fn main() {
             local_ai::ollama_analyze_screen,
             local_runtime::local_runtime_status,
             local_runtime::install_local_runtime,
+            local_runtime::local_voice_storage,
             local_runtime::qwen_synthesize,
             local_runtime::cancel_local_voice,
             gemini::configure_gemini,

@@ -10,6 +10,7 @@ const COMMANDS: &[&str] = &[
     "ollama_analyze_screen",
     "local_runtime_status",
     "install_local_runtime",
+    "local_voice_storage",
     "qwen_synthesize",
     "cancel_local_voice",
     "computer_resolve_page",

@@ -10,6 +10,7 @@ use std::{
     },
 };
 use tauri::Manager;
+static STORAGE_BUSY: Mutex<()> = Mutex::new(());
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Config {
     pub python: PathBuf,
@@ -328,6 +329,7 @@ pub fn cancel_local_voice(runtime: tauri::State<'_, std::sync::Arc<Runtime>>) {
 pub async fn install_local_runtime(
     window: tauri::Window,
     app: tauri::AppHandle,
+    storage_root: Option<String>,
 ) -> Result<(), String> {
     use tauri::Emitter;
     if window.label() != "main" {
@@ -340,16 +342,115 @@ pub async fn install_local_runtime(
     #[cfg(windows)]
     {
         tauri::async_runtime::spawn_blocking(move||{
+        let _guard = STORAGE_BUSY.try_lock().map_err(|_| "Voice storage is busy")?;
         use std::os::windows::process::CommandExt;
         let path=helper(&app,"setup-local-runtime.ps1",include_str!("../../../../scripts/setup-local-runtime.ps1"))?;
-        let root=app.path().app_data_dir().map_err(|_|"App data unavailable")?.join("local-runtime");
-        let mut child=Command::new("powershell.exe").creation_flags(0x08000000).args(["-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-File"]).arg(path).arg("-Root").arg(&root).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().map_err(|_|"Could not start the local runtime installer. Install Python 3.12 first.".to_string())?;
+        let data = app.path().app_data_dir().map_err(|_| "App data unavailable")?;
+        let root = if let Some(value) = storage_root.filter(|v| !v.trim().is_empty()) {
+            let path = PathBuf::from(value.trim());
+            if !path.is_absolute() || path.parent().is_none() { return Err("Choose an absolute component folder, not a drive root".into()); }
+            path
+        } else if let Ok(c) = config(&app) {
+            let env = c.python.parent().and_then(|p| p.parent()).ok_or("Invalid Python location")?;
+            if env.parent().and_then(|p| p.parent()).is_some_and(|p| p.file_name().is_some_and(|n| n == "versions")) {
+                env.parent().and_then(|p| p.parent()).and_then(|p| p.parent()).unwrap().to_path_buf()
+            } else { env.parent().ok_or("Invalid runtime location")?.to_path_buf() }
+        } else { data.join("local-runtime") };
+        let manager=helper(&app,"voice-storage.py",include_str!("../../../../scripts/voice-storage.py"))?;
+        let worker=helper(&app,"voice_worker.py",include_str!("../../../../services/local-runtime/worker.py"))?;
+        let mut child=Command::new("powershell.exe").creation_flags(0x08000000).args(["-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-File"]).arg(path).arg("-Root").arg(&root).arg("-ConfigPath").arg(data.join("local-runtime.json")).arg("-StorageManager").arg(manager).arg("-Worker").arg(worker).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().map_err(|_|"Could not start the local runtime installer. Install Python 3.12 first.".to_string())?;
         for line in BufReader::new(child.stdout.take().ok_or("Installer output unavailable")?).lines().map_while(Result::ok){let _=app.emit("local-runtime-progress",json!({"stage":line.chars().take(200).collect::<String>()}));}
         if !child.wait().map_err(|e|e.to_string())?.success(){return Err("Local runtime installation failed. Check Internet access, disk space and Python 3.12.".into());}
-        let data=std::fs::read(root.join("local-runtime.json")).map_err(|e|e.to_string())?;std::fs::write(app.path().app_data_dir().map_err(|e|e.to_string())?.join("local-runtime.json"),data).map_err(|e|e.to_string())?;Ok(())
+        Ok(())
     }).await.map_err(|_|"Runtime installation failed")?
     }
 }
+
+#[tauri::command]
+pub async fn local_voice_storage(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    runtime: tauri::State<'_, std::sync::Arc<Runtime>>,
+    action: String,
+) -> Result<Value, String> {
+    if window.label() != "main"
+        || !["inventory", "cleanup", "remove-expressive"].contains(&action.as_str())
+    {
+        return Err("Manage optional voice storage from Settings".into());
+    }
+    let runtime = runtime.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = STORAGE_BUSY
+            .try_lock()
+            .map_err(|_| "Voice storage is busy")?;
+        let c = config(&app)?;
+        if action != "inventory" {
+            runtime.generation.fetch_add(1, Ordering::SeqCst);
+            let mut voice = runtime.voice.lock().map_err(|_| "Voice runtime busy")?;
+            if let Some(mut worker) = voice.take() {
+                terminate_owned(worker.child.id());
+                let _ = worker.child.wait();
+            }
+            runtime.pid.store(0, Ordering::SeqCst);
+        }
+        storage_operation(&app, &c, &action)
+    })
+    .await
+    .map_err(|_| "Voice storage operation stopped")?
+}
+fn storage_operation(app: &tauri::AppHandle, c: &Config, action: &str) -> Result<Value, String> {
+    let manager = helper(
+        app,
+        "voice-storage.py",
+        include_str!("../../../../scripts/voice-storage.py"),
+    )?;
+    let worker = helper(
+        app,
+        "voice_worker.py",
+        include_str!("../../../../services/local-runtime/worker.py"),
+    )?;
+    let data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "App data unavailable")?;
+    let mut child = command(c)
+        .arg(manager)
+        .arg(action)
+        .arg("--app")
+        .arg(&data)
+        .arg("--config")
+        .arg(data.join("local-runtime.json"))
+        .arg("--worker")
+        .arg(worker)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    let mut reader = BufReader::new(child.stdout.take().ok_or("Storage output unavailable")?);
+    let line =
+        voice_line_with_deadline(&mut reader, child.id(), std::time::Duration::from_secs(900))?;
+    let status = child.wait().map_err(|e| e.to_string())?;
+    let result: Value = serde_json::from_str(&line)
+        .map_err(|_| "Storage verification stopped; no unverified files were removed")?;
+    if !status.success() {
+        return Err(result["error"]
+            .as_str()
+            .unwrap_or("Storage operation failed")
+            .to_owned());
+    }
+    Ok(result)
+}
+
+pub(crate) fn cleanup_after_speech_install(app: &tauri::AppHandle) -> Result<(), String> {
+    let _guard = STORAGE_BUSY
+        .try_lock()
+        .map_err(|_| "Runtime update is busy; clean old speech versions from Settings later")?;
+    if let Ok(c) = config(app) {
+        storage_operation(app, &c, "cleanup")?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn qwen_synthesize(

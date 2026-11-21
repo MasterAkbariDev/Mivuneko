@@ -89,7 +89,8 @@ def run(req):
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
         model = Qwen3TTSModel.from_pretrained(req["modelDir"], device_map=device, dtype=torch.float16 if device.startswith("cuda") else torch.float32, attn_implementation="sdpa")
     instruction = (STYLES.get(req.get("mood"), STYLES["idle"]) + " " + req.get("instruction", ""))[:1600]
-    wavs, sr = model.generate_custom_voice(text=text, language=req.get("language", "English"), speaker=speaker, instruct=instruction, max_new_tokens=1500, do_sample=True, temperature=0.7, top_p=0.9, repetition_penalty=1.05)
+    verifying = req.get("verification") is True
+    wavs, sr = model.generate_custom_voice(text=text, language=req.get("language", "English"), speaker=speaker, instruct=instruction, max_new_tokens=96 if verifying else 1500, do_sample=not verifying, temperature=0.7, top_p=0.9, repetition_penalty=1.05)
     def release_idle():
         with model_lock:
             unload()

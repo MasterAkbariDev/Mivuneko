@@ -1,7 +1,11 @@
 // Runs the same verified installer used by the app, for diagnostics and CI smoke checks.
+#[path = "../src/local_runtime.rs"]
+#[allow(dead_code)]
+mod local_runtime;
 #[path = "../src/project_env.rs"]
 mod project_env;
 #[path = "../src/voice_install.rs"]
+#[allow(dead_code)]
 mod voice_install;
 fn main() {
     project_env::load();

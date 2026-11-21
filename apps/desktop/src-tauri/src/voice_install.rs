@@ -441,7 +441,20 @@ pub fn install(app: &tauri::AppHandle, engine: &str) -> Result<(), String> {
         .map_err(|_| "App storage unavailable")?;
     install_into(root, engine, |stage, n, t| {
         progress(app, engine, stage, n, t)
-    })
+    })?;
+    progress(app, engine, "Cleaning verified old voice components", 0, 0);
+    if let Err(error) = crate::local_runtime::cleanup_after_speech_install(app) {
+        progress(
+            app,
+            engine,
+            &format!("Ready · cleanup deferred: {error}"),
+            1,
+            1,
+        );
+    } else {
+        progress(app, engine, "Ready to use", 1, 1);
+    }
+    Ok(())
 }
 pub fn install_into(
     root: PathBuf,
@@ -471,6 +484,263 @@ pub fn install_into(
             })
             .ok_or("Choose a supported speech model")?
     };
+    // An installation is immutable after activation. Downloads and extraction must
+    // never overwrite a model which a running companion is currently using.
+    let active: serde_json::Value = fs::read(root.join("voice.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default();
+    let versions = root.join("speech/versions");
+    let pending = fs::read_dir(&versions)
+        .ok()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| {
+            let marker: serde_json::Value = fs::read(path.join(".mivuneko-component.json"))
+                .ok()
+                .and_then(|b| serde_json::from_slice(&b).ok())
+                .unwrap_or_default();
+            marker["owner"] == "mivuneko-speech-v1"
+                && marker["engine"] == engine
+                && marker["state"] == "pending"
+                && !contains_path(&active, path)
+        });
+    let candidate = if let Some(path) = pending {
+        path
+    } else {
+        let id = format!(
+            "install-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|_| "Clock unavailable")?
+                .as_nanos()
+        );
+        versions.join(id)
+    };
+    let id = candidate
+        .file_name()
+        .ok_or("Invalid candidate path")?
+        .to_string_lossy();
+    fs::create_dir_all(&candidate).map_err(|_| "Cannot prepare isolated speech installation")?;
+    fs::write(candidate.join(".mivuneko-component.json"), serde_json::to_vec(&serde_json::json!({"owner":"mivuneko-speech-v1","id":id,"engine":engine,"state":"pending"})).unwrap()).map_err(|_| "Cannot mark speech installation")?;
+    if let Ok(bytes) = fs::read(root.join("voice.json")) {
+        fs::write(candidate.join("voice.json"), bytes)
+            .map_err(|_| "Cannot preserve existing speech settings")?;
+    }
+    install_candidate(candidate.clone(), name, &report)?;
+    check()?;
+    report("Verifying speech before activation", 0, 0);
+    let config: serde_json::Value = serde_json::from_slice(
+        &fs::read(candidate.join("voice.json")).map_err(|_| "Candidate settings missing")?,
+    )
+    .map_err(|_| "Invalid candidate settings")?;
+    activate_candidate(&root, &candidate, &config, name)?;
+    report("Ready to use", 1, 1);
+    Ok(())
+}
+
+fn contains_path(value: &serde_json::Value, root: &Path) -> bool {
+    match value {
+        serde_json::Value::String(path) => Path::new(path).starts_with(root),
+        serde_json::Value::Object(values) => {
+            values.values().any(|value| contains_path(value, root))
+        }
+        _ => false,
+    }
+}
+
+fn activate_candidate(
+    root: &Path,
+    candidate: &Path,
+    config: &serde_json::Value,
+    name: &str,
+) -> Result<(), String> {
+    if let Err(error) = verify_candidate(config, name) {
+        for relative in [
+            "speech/kokoro/runtime/.ready",
+            "speech/kokoro/x-kokoro-multi-lang-v1_0/.ready",
+            "speech/parakeet/runtime/x/.ready",
+            "speech/parakeet/models/x/.ready",
+            "speech/runtime/.ready",
+        ] {
+            let _ = fs::remove_file(candidate.join(relative));
+        }
+        return Err(error);
+    }
+    check()?;
+    let temp = root.join("voice.json.part");
+    let data = fs::read(candidate.join("voice.json")).map_err(|_| "Candidate settings missing")?;
+    fs::write(&temp, data).map_err(|_| "Cannot prepare speech activation")?;
+    fs::rename(temp, root.join("voice.json")).map_err(|_| "Cannot activate speech installation")?;
+    if let Ok(bytes) = fs::read(candidate.join(".mivuneko-component.json")) {
+        if let Ok(mut marker) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+            marker["state"] = serde_json::json!("ready");
+            let _ = fs::write(
+                candidate.join(".mivuneko-component.json"),
+                marker.to_string(),
+            );
+        }
+    }
+    // Keep profiles, recordings and models. Only verified installation archives
+    // from this candidate are disposable; failures retain resumable downloads.
+    for relative in [
+        "speech/kokoro/model.tar.bz2",
+        "speech/kokoro/runtime.tar.bz2",
+        "speech/parakeet/model.tar.bz2",
+        "speech/parakeet/runtime.tar.bz2",
+        "speech/runtime/runtime.zip",
+    ] {
+        let _ = fs::remove_file(candidate.join(relative));
+    }
+    Ok(())
+}
+
+fn verify_candidate(config: &serde_json::Value, name: &str) -> Result<(), String> {
+    let worker = desktop_core::VoiceWorker::default();
+    if name == "kokoro" {
+        let root = PathBuf::from(
+            config["tts"]
+                .as_str()
+                .ok_or("Candidate voice location missing")?,
+        );
+        let binary = find(
+            &root.join("runtime"),
+            if cfg!(windows) {
+                "sherpa-onnx-offline-tts.exe"
+            } else {
+                "sherpa-onnx-offline-tts"
+            },
+            7,
+        )
+        .ok_or("Candidate voice engine missing")?;
+        let model = find(&root.join("x-kokoro-multi-lang-v1_0"), "model.onnx", 7)
+            .ok_or("Candidate voice model missing")?;
+        let result = worker.synthesize_phrase(
+            &desktop_core::TtsConfig {
+                worker: binary,
+                model_dir: model.parent().unwrap().to_path_buf(),
+                voices: None,
+                library: None,
+            },
+            "Your companion voice is ready.",
+            0,
+            1.0,
+        )?;
+        return validate_voice_audio(&result);
+    }
+    let model = config["model"]
+        .as_str()
+        .map(PathBuf::from)
+        .unwrap_or_default();
+    let sherpa = if name == "parakeet" {
+        let root = PathBuf::from(
+            config["sherpa"]
+                .as_str()
+                .ok_or("Candidate recognition location missing")?,
+        );
+        let server = find(
+            &root.join("runtime/x"),
+            if cfg!(windows) {
+                "sherpa-onnx-offline-websocket-server.exe"
+            } else {
+                "sherpa-onnx-offline-websocket-server"
+            },
+            7,
+        )
+        .ok_or("Candidate recognition engine missing")?;
+        let encoder = find(&root.join("models/x"), "encoder.int8.onnx", 7)
+            .ok_or("Candidate recognition model missing")?;
+        Some(desktop_core::SherpaConfig {
+            lib_dir: server
+                .parent()
+                .and_then(|p| p.parent())
+                .ok_or("Invalid candidate runtime")?
+                .join("lib"),
+            server,
+            model_dir: encoder.parent().unwrap().to_path_buf(),
+        })
+    } else {
+        None
+    };
+    let config = desktop_core::WhisperConfig {
+        binary: config["binary"]
+            .as_str()
+            .map(PathBuf::from)
+            .unwrap_or_default(),
+        model,
+        server: None,
+        vad_model: None,
+        language: "en".into(),
+        sherpa,
+    };
+    // One second of silent PCM verifies actual model loading and inference, without
+    // recording the user's microphone or retaining any user audio.
+    let mut wav = b"RIFF".to_vec();
+    wav.extend_from_slice(&32036u32.to_le_bytes());
+    wav.extend_from_slice(b"WAVEfmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&16000u32.to_le_bytes());
+    wav.extend_from_slice(&32000u32.to_le_bytes());
+    wav.extend_from_slice(&2u16.to_le_bytes());
+    wav.extend_from_slice(&16u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&32000u32.to_le_bytes());
+    wav.resize(32044, 0);
+    worker
+        .transcribe(&wav, &config, "", worker.ticket())
+        .map(|_| ())
+}
+
+fn validate_voice_audio(wav: &[u8]) -> Result<(), String> {
+    let invalid = "Voice verification returned no usable PCM speech";
+    if wav.len() > 64 * 1024 * 1024
+        || wav.get(..4) != Some(b"RIFF")
+        || wav.get(8..12) != Some(b"WAVE")
+    {
+        return Err(invalid.into());
+    }
+    let mut offset = 12usize;
+    let mut format_ok = false;
+    let mut audio_ok = false;
+    while offset + 8 <= wav.len() {
+        let tag = &wav[offset..offset + 4];
+        let size = u32::from_le_bytes(wav[offset + 4..offset + 8].try_into().unwrap()) as usize;
+        let start = offset + 8;
+        let end = start
+            .checked_add(size)
+            .filter(|end| *end <= wav.len())
+            .ok_or(invalid)?;
+        if tag == b"fmt " && size >= 16 {
+            let pcm = u16::from_le_bytes(wav[start..start + 2].try_into().unwrap());
+            let channels = u16::from_le_bytes(wav[start + 2..start + 4].try_into().unwrap());
+            let rate = u32::from_le_bytes(wav[start + 4..start + 8].try_into().unwrap());
+            let bits = u16::from_le_bytes(wav[start + 14..start + 16].try_into().unwrap());
+            format_ok = pcm == 1
+                && (1..=2).contains(&channels)
+                && (8000..=96000).contains(&rate)
+                && bits == 16;
+        }
+        if tag == b"data" {
+            audio_ok = size > 1000 && wav[start..end].iter().any(|byte| *byte != 0);
+        }
+        offset = end + size % 2;
+    }
+    if format_ok && audio_ok {
+        Ok(())
+    } else {
+        Err(invalid.into())
+    }
+}
+
+fn install_candidate(
+    root: PathBuf,
+    name: &str,
+    report: &impl Fn(&str, u64, u64),
+) -> Result<(), String> {
     let runtime = root.join("speech/runtime");
     let models = root.join("speech/models");
     fs::create_dir_all(&runtime)
@@ -499,7 +769,7 @@ pub fn install_into(
         "whisper-cli"
     };
     let mut binary = find(&runtime, cli_name, 7);
-    if binary.is_none() {
+    if binary.is_none() || !runtime.join(".ready").is_file() {
         report("Downloading recognition engine", 0, 0);
         let archive = runtime.join("runtime.zip");
         if cfg!(all(windows, target_arch = "x86_64")) {
@@ -553,6 +823,8 @@ pub fn install_into(
             return Err("Automatic engine setup supports Windows x64 and macOS. Use Advanced setup for your platform.".into());
         }
         binary = find(&runtime, cli_name, 7);
+        fs::write(runtime.join(".ready"), "whisper-runtime")
+            .map_err(|_| "Cannot finish recognition engine setup")?;
     }
     let binary = binary.ok_or("Recognition engine was not found after setup")?;
     let filename = format!("ggml-{name}.bin");
@@ -594,6 +866,14 @@ pub fn install_into(
     ) {
         config["server"] = serde_json::json!(server);
     }
+    // Keep distinct optional Whisper models selectable across isolated installs.
+    if !config["whisperModels"].is_object() {
+        config["whisperModels"] = serde_json::json!({});
+    }
+    config["whisperModels"][name] = serde_json::json!({
+        "binary": config["binary"], "model": config["model"],
+        "server": config["server"], "language": config["language"]
+    });
     let temp = root.join("voice.json.part");
     fs::write(
         &temp,
@@ -733,5 +1013,29 @@ mod tests {
         )
         .is_err());
         assert!(!dir.path().join("speech").exists());
+    }
+    #[test]
+    fn failed_candidate_preserves_active_speech_configuration_and_downloads() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let active = br#"{"tts":"working-engine","customVoice":"keep-me"}"#;
+        fs::write(root.join("voice.json"), active).unwrap();
+        let candidate = root.join("speech/versions/broken");
+        fs::create_dir_all(&candidate).unwrap();
+        fs::write(candidate.join("voice.json"), br#"{"tts":"missing-engine"}"#).unwrap();
+        let config = serde_json::json!({"tts":"missing-engine"});
+        assert!(activate_candidate(root, &candidate, &config, "kokoro").is_err());
+        assert_eq!(fs::read(root.join("voice.json")).unwrap(), active);
+        assert!(candidate.join("voice.json").exists());
+    }
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "opt-in inference using installed Kokoro and Parakeet; no downloads or microphone recording"]
+    fn installed_speech_components_run_after_upgrade() {
+        let root =
+            PathBuf::from(std::env::var_os("APPDATA").unwrap()).join("dev.mivuneko.companion");
+        let config = serde_json::from_slice(&fs::read(root.join("voice.json")).unwrap()).unwrap();
+        verify_candidate(&config, "kokoro").unwrap();
+        verify_candidate(&config, "parakeet").unwrap();
     }
 }
